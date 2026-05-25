@@ -12,7 +12,13 @@
         #posScreen, #checkoutScreen { min-height: 0; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .buddy-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .buddy-dot.connected { background: #10b981; }
+        .buddy-dot.disconnected { background: #ef4444; }
+        @keyframes pulse-green { 0%,100%{ box-shadow:0 0 0 0 rgba(16,185,129,.4) } 50%{ box-shadow:0 0 0 6px rgba(16,185,129,0) } }
+        .buddy-dot.connected { animation: pulse-green 2s infinite; }
     </style>
+    <script src="{{ asset('js/insabuddy.js') }}"></script>
 </head>
 <body class="bg-gray-100 h-screen flex flex-col overflow-hidden" x-data="posApp()" x-cloak>
 
@@ -20,6 +26,24 @@
 <header class="bg-white shadow px-4 py-2 flex items-center justify-between flex-shrink-0">
     <h1 class="text-lg font-bold text-gray-800">INSA POS</h1>
     <div class="flex items-center gap-3 text-sm text-gray-600">
+        <!-- INSABuddy Status -->
+        <div class="flex items-center gap-1.5 px-2 py-1 rounded-full border"
+             :class="buddyConnected ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'"
+             :title="buddyConnected ? 'INSABuddy connected — hardware features enabled' : 'INSABuddy not detected'">
+            <span class="buddy-dot" :class="buddyConnected ? 'connected' : 'disconnected'"></span>
+            <span class="text-xs font-medium" :class="buddyConnected ? 'text-green-700' : 'text-gray-400'"
+                  x-text="buddyConnected ? 'INSABuddy' : 'No Buddy'"></span>
+        </div>
+        <template x-if="buddyConnected">
+            <div class="flex items-center gap-1">
+                <button @click="buddyScanBarcode()" class="p-1.5 rounded hover:bg-gray-100" title="Scan Barcode">
+                    <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                </button>
+                <button @click="buddyOpenDrawer()" class="p-1.5 rounded hover:bg-gray-100" title="Open Cash Drawer">
+                    <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                </button>
+            </div>
+        </template>
         @auth
         <span class="font-medium">{{ auth()->user()->name }}</span>
         <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">{{ ucfirst(auth()->user()->role) }}</span>
@@ -273,9 +297,17 @@
                 Change: <span class="text-green-600 font-bold" x-text="'₱' + parseFloat(lastSale?.change_due || 0).toFixed(2)"></span>
             </div>
         </div>
-        <button @click="closeReceipt()" class="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">
-            New Transaction
-        </button>
+        <div class="flex gap-3 justify-center">
+            <template x-if="buddyConnected">
+                <button @click="buddyPrintReceipt()" class="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    Print Receipt
+                </button>
+            </template>
+            <button @click="closeReceipt()" class="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">
+                New Transaction
+            </button>
+        </div>
     </div>
 </div>
 
@@ -297,6 +329,7 @@ function posApp() {
         paymentRef: '',
         showReceipt: false,
         lastSale: null,
+        buddyConnected: false,
 
         config: {
             cashierId: {{ auth()->id() ?? 'null' }},
@@ -340,6 +373,53 @@ function posApp() {
         init() {
             this.loadShift();
             this.loadProducts();
+            this.initBuddy();
+        },
+
+        initBuddy() {
+            if (typeof INSABuddy === 'undefined') return;
+            INSABuddy.startPolling(5000, (connected) => {
+                this.buddyConnected = connected;
+            });
+        },
+
+        async buddyScanBarcode() {
+            if (!this.buddyConnected) return;
+            const result = await INSABuddy.scan();
+            if (result && result.success && result.value) {
+                const product = this.products.find(p =>
+                    p.barcode === result.value || p.sku === result.value
+                );
+                if (product) {
+                    this.addToCart(product);
+                } else {
+                    this.searchQuery = result.value;
+                    this.filterProducts();
+                }
+            }
+        },
+
+        async buddyOpenDrawer() {
+            if (!this.buddyConnected) return;
+            await INSABuddy.openDrawer();
+        },
+
+        async buddyPrintReceipt() {
+            if (!this.buddyConnected || !this.lastSale) return;
+            await INSABuddy.printReceipt({
+                storeName: 'INSA POS',
+                branchName: '{{ auth()->user()->branch?->name ?? "" }}',
+                saleNumber: this.lastSale.sale_number,
+                date: new Date().toLocaleString(),
+                cashier: '{{ auth()->user()->name }}',
+                items: this.cart.map(i => ({ name: i.product_name, qty: i.qty, price: i.price })),
+                subtotal: this.cartSubtotal,
+                discount: this.cartDiscount,
+                total: parseFloat(this.lastSale.total),
+                paymentMethod: this.paymentMethod,
+                amountTendered: parseFloat(this.lastSale.amount_tendered || 0),
+                change: parseFloat(this.lastSale.change_due || 0),
+            });
         },
 
         csrfHeader() {
