@@ -97,6 +97,33 @@
     </div>
 </div>
 
+<!-- CAMERA SCANNER MODAL -->
+<div x-show="showCameraScanner" class="fixed inset-0 bg-black/80 z-[150] flex items-center justify-center" x-cloak x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span class="font-bold text-sm lg:text-base text-gray-800">Camera Scanner</span>
+            </div>
+            <button @click="closeCameraScanner()" class="text-gray-400 hover:text-red-500 p-1">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="relative bg-black aspect-video">
+            <video id="cameraScanVideo" class="w-full h-full object-cover" playsinline muted></video>
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div class="w-56 h-36 lg:w-72 lg:h-44 border-2 border-white/60 rounded-xl"></div>
+            </div>
+            <div class="absolute bottom-3 left-0 right-0 text-center text-white/80 text-xs lg:text-sm font-medium">
+                Point camera at barcode or QR code
+            </div>
+        </div>
+        <div class="px-4 py-3 flex gap-2">
+            <button @click="closeCameraScanner()" class="flex-1 py-2.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <!-- TOAST NOTIFICATIONS -->
 <div class="fixed top-2 right-2 xl:top-4 xl:right-4 z-[100] space-y-1.5">
     <template x-for="(toast, i) in toasts" :key="toast.id">
@@ -143,8 +170,7 @@
                   x-text="buddyConnected ? 'INSABuddy' : 'No Buddy'"></span>
         </div>
         <!-- Product QR/Barcode scan -->
-        <button @click="scanProduct()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Scan Product QR/Barcode"
-                :class="buddyConnected || hasNativeBridge ? 'text-blue-600' : 'text-gray-300'"
+        <button @click="scanProduct()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100 text-blue-600" title="Scan Product QR/Barcode"
                 :disabled="_scanning">
             <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
         </button>
@@ -269,6 +295,7 @@
                 <div class="relative flex-1">
                     <input type="text" x-model="retailScanQuery" id="retailScanInput"
                            @keydown.enter.prevent="retailScan()"
+                           @input.debounce.250ms="retailLiveSearch()"
                            :placeholder="retailPreviewMode ? 'Preview mode — scan barcode or type product...' : 'Scan barcode or type product name...'"
                            class="w-full p-3 pl-10 lg:p-4 lg:pl-12 border-2 rounded-xl text-sm lg:text-lg focus:ring-2 focus:outline-none font-medium"
                            :class="retailPreviewMode ? 'border-amber-400 bg-amber-50/50 focus:ring-amber-500 focus:border-amber-500' : 'border-green-400 bg-green-50/50 focus:ring-green-500 focus:border-green-500'">
@@ -278,6 +305,12 @@
                         <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
+                <button @click="scanProduct()" :disabled="_scanning"
+                        class="px-3 lg:px-4 rounded-xl border-2 border-blue-300 bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold text-xs lg:text-sm whitespace-nowrap transition-colors flex items-center gap-1.5"
+                        title="Scan using camera or connected scanner">
+                    <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Scan
+                </button>
                 <button @click="retailPreviewMode = !retailPreviewMode; retailCancel()"
                         class="px-3 lg:px-4 rounded-xl border-2 font-semibold text-xs lg:text-sm whitespace-nowrap transition-colors flex items-center gap-1.5"
                         :class="retailPreviewMode ? 'border-amber-400 bg-amber-100 text-amber-700 hover:bg-amber-200' : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'"
@@ -316,11 +349,11 @@
             </div>
         </template>
 
-        <!-- Multiple Search Results (when name search returns >1, user picks one) -->
+        <!-- Search Results (tap to add) -->
         <div x-show="!retailScanResult && filteredProducts.length > 0" class="mb-3">
-            <div class="text-xs text-gray-500 mb-1.5 font-medium" x-text="filteredProducts.length + ' results — tap to add'"></div>
+            <div class="text-xs text-gray-500 mb-1.5 font-medium" x-text="filteredProducts.length + ' result' + (filteredProducts.length > 1 ? 's' : '') + ' — tap to add'"></div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 lg:max-h-60 overflow-y-auto">
-                <template x-for="product in filteredProducts.slice(0, 12)" :key="product.id">
+                <template x-for="product in filteredProducts.slice(0, 30)" :key="product.id">
                     <button @click="retailAddToCart(product)"
                             class="bg-white rounded-lg shadow border border-gray-200 p-2 lg:p-3 text-left hover:border-green-400 hover:shadow-md transition-all flex items-center gap-2"
                             :class="product.stock <= 0 && 'opacity-40 cursor-not-allowed'"
@@ -986,6 +1019,9 @@ function posApp() {
         retailPreviewMode: false,
         retailScanResult: null,
         retailScanQuery: '',
+        showCameraScanner: false,
+        _cameraStream: null,
+        _cameraScanInterval: null,
         activeShift: null,
         products: [],
         categories: [],
@@ -1104,18 +1140,36 @@ function posApp() {
             this.selectMode(this.posMode === 'cafe' ? 'retail' : 'cafe');
         },
 
+        retailLiveSearch() {
+            const q = this.retailScanQuery.trim();
+            this.retailScanResult = null;
+            if (!q || q.length < 2) { this.filteredProducts = []; return; }
+            const ql = q.toLowerCase();
+            const results = this.products.filter(p =>
+                p.name.toLowerCase().includes(ql) ||
+                (p.sku && p.sku.toLowerCase().includes(ql)) ||
+                (p.barcode && p.barcode.includes(q))
+            );
+            this.filteredProducts = results;
+        },
+
         retailScan() {
             const q = this.retailScanQuery.trim();
             if (!q) { this.retailScanResult = null; return; }
             const exact = this.products.find(p => (p.barcode && p.barcode === q) || (p.sku && p.sku === q));
             if (exact) {
-                if (this.retailPreviewMode) { this.retailScanResult = exact; }
+                if (this.retailPreviewMode) { this.retailScanResult = exact; this.filteredProducts = []; }
                 else { this.retailAddToCart(exact); this.showToast(exact.name + ' added', 'success', 1500); }
                 return;
             }
-            const fuzzy = this.products.filter(p => p.name.toLowerCase().includes(q.toLowerCase()));
+            const ql = q.toLowerCase();
+            const fuzzy = this.products.filter(p =>
+                p.name.toLowerCase().includes(ql) ||
+                (p.sku && p.sku.toLowerCase().includes(ql)) ||
+                (p.barcode && p.barcode.includes(q))
+            );
             if (fuzzy.length === 1) {
-                if (this.retailPreviewMode) { this.retailScanResult = fuzzy[0]; }
+                if (this.retailPreviewMode) { this.retailScanResult = fuzzy[0]; this.filteredProducts = []; }
                 else { this.retailAddToCart(fuzzy[0]); this.showToast(fuzzy[0].name + ' added', 'success', 1500); }
             }
             else if (fuzzy.length > 1) { this.retailScanResult = null; this.filteredProducts = fuzzy; }
@@ -1228,40 +1282,103 @@ function posApp() {
 
         async scanProduct() {
             if (this._scanning) return;
-            if (!this.buddyConnected && !this.hasNativeBridge) { this.showToast('No scanner. Use a HID barcode scanner or connect INSABuddy.', 'warning'); return; }
-            this._scanning = true;
-            this.showToast('Scanning product...', 'info', 2000);
+            if (this.buddyConnected || this.hasNativeBridge) {
+                this._scanning = true;
+                this.showToast('Scanning product...', 'info', 2000);
+                try {
+                    let value = null;
+                    if (this.buddyConnected) {
+                        const r = await INSABuddy.scan();
+                        if (r && r.success && r.value) value = r.value;
+                    } else if (this.hasNativeBridge) {
+                        value = await this._nativeScanAsync();
+                    }
+                    if (value) { this.handleBarcodeScan(value); }
+                    else { this.showToast('No barcode detected. Try again.', 'warning'); }
+                } catch { this.showToast('Scan failed.', 'error'); }
+                finally { this._scanning = false; }
+            } else {
+                this.openCameraScanner('product');
+            }
+        },
+
+        async openCameraScanner(purpose) {
+            if (this.showCameraScanner) return;
+            this._cameraPurpose = purpose || 'product';
             try {
-                let value = null;
-                if (this.buddyConnected) {
-                    const r = await INSABuddy.scan();
-                    if (r && r.success && r.value) value = r.value;
-                } else if (this.hasNativeBridge) {
-                    value = await this._nativeScanAsync();
-                }
-                if (value) { this.handleBarcodeScan(value); }
-                else { this.showToast('No barcode detected. Try again.', 'warning'); }
-            } catch { this.showToast('Scan failed.', 'error'); }
-            finally { this._scanning = false; }
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
+                this._cameraStream = stream;
+                this.showCameraScanner = true;
+                this.$nextTick(() => {
+                    const video = document.getElementById('cameraScanVideo');
+                    if (video) { video.srcObject = stream; video.play(); }
+                    this._startCameraDetection();
+                });
+            } catch (e) {
+                console.error('[camera]', e);
+                this.showToast('Camera not available. Check permissions.', 'error');
+            }
+        },
+
+        _startCameraDetection() {
+            const video = document.getElementById('cameraScanVideo');
+            if (!video) return;
+            const hasBarcodeDetector = typeof BarcodeDetector !== 'undefined';
+            if (!hasBarcodeDetector) {
+                this.showToast('Camera scanning ready — point at a barcode', 'info', 3000);
+            }
+            this._cameraScanInterval = setInterval(async () => {
+                if (!this.showCameraScanner || !video.videoWidth) return;
+                try {
+                    if (hasBarcodeDetector) {
+                        const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'codabar', 'itf', 'qr_code', 'data_matrix'] });
+                        const barcodes = await detector.detect(video);
+                        if (barcodes.length > 0) {
+                            const val = barcodes[0].rawValue;
+                            if (val) { this.closeCameraScanner(); this._handleCameraScanResult(val); return; }
+                        }
+                    }
+                } catch {}
+            }, 400);
+        },
+
+        _handleCameraScanResult(value) {
+            if (this._cameraPurpose === 'rewards') {
+                this.rewardsCardInput = value;
+                this.lookupRewardsCustomer();
+            } else {
+                this.handleBarcodeScan(value);
+            }
+        },
+
+        closeCameraScanner() {
+            this.showCameraScanner = false;
+            if (this._cameraScanInterval) { clearInterval(this._cameraScanInterval); this._cameraScanInterval = null; }
+            if (this._cameraStream) { this._cameraStream.getTracks().forEach(t => t.stop()); this._cameraStream = null; }
+            const video = document.getElementById('cameraScanVideo');
+            if (video) video.srcObject = null;
         },
 
         async scanRewardsCard() {
             if (this._scanning) return;
-            if (!this.buddyConnected && !this.hasNativeBridge) { this.showToast('No scanner. Type the card number manually.', 'warning'); return; }
-            this._scanning = true;
-            this.showToast('Scanning customer card...', 'info', 2000);
-            try {
-                let value = null;
-                if (this.buddyConnected) {
-                    const r = await INSABuddy.scan();
-                    if (r && r.success && r.value) value = r.value;
-                } else if (this.hasNativeBridge) {
-                    value = await this._nativeScanAsync();
-                }
-                if (value) { this.rewardsCardInput = value; await this.lookupRewardsCustomer(); }
-                else { this.showToast('No code detected. Try again or type manually.', 'warning'); }
-            } catch { this.showToast('Scan failed.', 'error'); }
-            finally { this._scanning = false; }
+            if (this.buddyConnected || this.hasNativeBridge) {
+                this._scanning = true;
+                this.showToast('Scanning customer card...', 'info', 2000);
+                try {
+                    let value = null;
+                    if (this.buddyConnected) {
+                        const r = await INSABuddy.scan();
+                        if (r && r.success && r.value) value = r.value;
+                    } else if (this.hasNativeBridge) {
+                        value = await this._nativeScanAsync();
+                    }
+                    if (value) { this.rewardsCardInput = value; await this.lookupRewardsCustomer(); }
+                    else { this.showToast('No code detected. Try again or type manually.', 'warning'); }
+                } catch { this.showToast('Scan failed.', 'error'); }
+                finally { this._scanning = false; }
+            } else {
+                this.openCameraScanner('rewards');
+            }
         },
 
         async lookupRewardsCustomer() {
