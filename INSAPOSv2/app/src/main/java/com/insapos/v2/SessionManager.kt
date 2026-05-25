@@ -41,7 +41,7 @@ class SessionManager(context: Context) {
         return "$protocol://$serverDomain"
     }
 
-    fun getPosUrl(): String = "${getBaseUrl()}/pos"
+    fun getPosUrl(): String = "${getBaseUrl()}/pos/cashier"
 
     fun clear() {
         prefs.edit().clear().apply()
