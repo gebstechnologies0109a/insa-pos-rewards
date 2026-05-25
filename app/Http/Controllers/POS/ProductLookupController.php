@@ -20,13 +20,15 @@ class ProductLookupController extends Controller
             $query->where('category_id', $categoryId);
         }
 
-        $products = $query->orderBy('name')->get()->map(function ($p) use ($branchId) {
-            $stock = \App\Models\Inventory\StockMovement::where('product_id', $p->id)
-                ->where('branch_id', $branchId)
-                ->sum('qty');
-            $p->stock = (float) $stock;
-            return $p;
-        });
+        $stockSub = \App\Models\Inventory\StockMovement::selectRaw('product_id, SUM(qty) as total_stock')
+            ->where('branch_id', $branchId)
+            ->groupBy('product_id');
+
+        $products = $query
+            ->leftJoinSub($stockSub, 'stock_agg', 'products.id', '=', 'stock_agg.product_id')
+            ->select('products.*', \DB::raw('COALESCE(stock_agg.total_stock, 0) as stock'))
+            ->orderBy('products.name')
+            ->get();
 
         $categories = \App\Models\POS\Category::orderBy('name')->get();
 

@@ -7,14 +7,14 @@
     'use strict';
 
     const DB_NAME = 'insapos';
-    const DB_VERSION = 1;
+    const DB_VERSION = 2;
 
     let _db = null;
 
     function getDb() {
         if (_db) return _db;
         _db = new Dexie(DB_NAME);
-        _db.version(DB_VERSION).stores({
+        _db.version(1).stores({
             products:          'id, sku, barcode, category_id, name, updated_at',
             customers:         'id, name, phone, email, updated_at',
             cart:              '++id, product_id',
@@ -22,6 +22,9 @@
             sync_queue:        '++id, type, ref, status, created_at',
             receipts:          '++id, local_tx_id, sale_number, created_at',
             settings:          'key',
+        });
+        _db.version(2).stores({
+            categories:        'id, name',
         });
         return _db;
     }
@@ -66,10 +69,14 @@
 
         async bulkPut(list) {
             try {
-                await getDb().products.bulkPut(list);
+                const CHUNK = 500;
+                const d = getDb();
+                for (let i = 0; i < list.length; i += CHUNK) {
+                    await d.products.bulkPut(list.slice(i, i + CHUNK));
+                }
                 return true;
             } catch (e) {
-                console.error('[db] products.bulkPut failed:', e);
+                console.error('[db] products.bulkPut failed:', e.message || e.name || e);
                 return false;
             }
         },
@@ -87,6 +94,28 @@
                 return await getDb().products.count();
             } catch (e) {
                 return 0;
+            }
+        },
+    };
+
+    // ── Categories ─────────────────────────────────────────────
+
+    const categories = {
+        async getAll() {
+            try {
+                return await getDb().categories.toArray();
+            } catch (e) {
+                return [];
+            }
+        },
+
+        async bulkPut(list) {
+            try {
+                await getDb().categories.bulkPut(list);
+                return true;
+            } catch (e) {
+                console.error('[db] categories.bulkPut failed:', e.message || e);
+                return false;
             }
         },
     };
@@ -386,6 +415,7 @@
 
     window.INSADB = {
         products,
+        categories,
         customers,
         cart,
         transactions,

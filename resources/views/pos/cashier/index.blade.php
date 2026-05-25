@@ -1094,12 +1094,21 @@ function posApp() {
         async loadProducts() {
             const db = window.INSADB;
             try {
-                const res = await fetch('/api/pos/products/all?branch_id=' + (this.config.branchId || '')); const data = await res.json();
-                this.products = data.products || []; this.categories = data.categories || [];
+                const res = await fetch('/api/pos/products/all?branch_id=' + (this.config.branchId || ''));
+                const data = await res.json();
+                this.products = data.products || [];
+                this.categories = data.categories || [];
                 if (db && this.products.length > 0) await db.products.bulkPut(this.products);
+                if (db && this.categories.length > 0) await db.categories.bulkPut(this.categories);
                 this.filterProducts();
-            } catch {
-                if (db) { const cached = await db.products.getAll(); if (cached.length > 0) { this.products = cached; this.showToast('Using cached products (offline)', 'warning'); } }
+            } catch (e) {
+                console.warn('[pos] loadProducts fetch failed, using cache:', e);
+                if (db) {
+                    const cached = await db.products.getAll();
+                    if (cached.length > 0) { this.products = cached; this.showToast('Using cached products (offline)', 'warning'); }
+                    const cachedCats = await db.categories.getAll();
+                    if (cachedCats.length > 0) this.categories = cachedCats;
+                }
                 this.filterProducts();
             }
         },
