@@ -414,52 +414,51 @@
             </table>
         </div>
 
-        <!-- Retail Mode Footer: Customer + Totals + Pay -->
-        <div class="border-t bg-white flex-shrink-0 p-2 lg:p-4 space-y-1.5 lg:space-y-2">
-            <!-- Customer Selection (inline) -->
-            <div class="relative">
-                <div class="flex items-center gap-1.5">
-                    <div class="flex-1 relative">
-                        <input type="text" x-model="customerSearch" @input.debounce.300ms="searchCustomers()"
-                               @focus="showCustomerDropdown = true"
-                               :placeholder="selectedCustomer ? selectedCustomer.name : 'Customer (optional)'"
-                               :class="selectedCustomer ? 'border-green-300 bg-green-50' : 'border-gray-200'"
-                               class="w-full p-1.5 lg:p-2 border rounded-lg text-[11px] lg:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                        <button x-show="selectedCustomer" @click="selectedCustomer = null; customerSearch = ''"
-                                class="absolute right-1.5 top-1.5 lg:right-2 lg:top-2 text-gray-400 hover:text-red-500">
-                            <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        </button>
-                    </div>
-                    <button x-show="cart.length > 0" @click="clearCart()"
-                            class="text-[10px] lg:text-xs text-red-500 hover:text-red-700 px-1.5 py-0.5 rounded hover:bg-red-50 whitespace-nowrap">Clear All</button>
-                </div>
-                <div x-show="showCustomerDropdown && customerResults.length > 0" @click.away="showCustomerDropdown = false"
-                     class="absolute z-20 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-32 lg:max-h-40 overflow-y-auto bottom-full mb-1">
-                    <template x-for="c in customerResults" :key="c.id">
-                        <button @click="selectCustomer(c)"
-                                class="w-full text-left px-2 py-1.5 lg:px-3 lg:py-2 hover:bg-blue-50 border-b last:border-0 text-[11px] lg:text-sm">
-                            <div class="font-medium" x-text="c.name"></div>
-                            <div class="text-[10px] lg:text-xs text-gray-400" x-text="c.phone || c.email || ''"></div>
-                        </button>
-                    </template>
-                </div>
-            </div>
-            <div class="flex items-center justify-between gap-4">
-                <div class="space-y-0.5 text-[11px] lg:text-sm">
-                    <div class="flex justify-between gap-4"><span class="text-gray-500">Subtotal</span><span class="font-medium" x-text="'₱' + cartSubtotal.toFixed(2)"></span></div>
-                    <div class="flex justify-between gap-4">
-                        <span class="text-gray-500 cursor-pointer hover:text-blue-600" @click="showOrderDiscountModal = true">Discount <span class="text-[9px] lg:text-xs">(tap)</span></span>
-                        <span class="text-red-500" x-text="'- ₱' + cartDiscount.toFixed(2)"></span>
+        <!-- Retail Mode Footer: Customer + Totals + Pay (single row) -->
+        <div class="border-t bg-white flex-shrink-0 px-2 py-1.5 lg:px-4 lg:py-2">
+            <div class="flex items-center gap-2 lg:gap-3">
+                <!-- Customer -->
+                <div class="relative w-40 lg:w-52 flex-shrink-0">
+                    <input type="text" x-model="customerSearch" @input.debounce.300ms="searchCustomers()"
+                           @focus="showCustomerDropdown = true"
+                           :placeholder="selectedCustomer ? selectedCustomer.name : 'Customer (optional)'"
+                           :class="selectedCustomer ? 'border-green-300 bg-green-50' : 'border-gray-200'"
+                           class="w-full p-1.5 lg:p-2 border rounded-lg text-[11px] lg:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <button x-show="selectedCustomer" @click="selectedCustomer = null; customerSearch = ''"
+                            class="absolute right-1.5 top-1.5 lg:right-2 lg:top-2 text-gray-400 hover:text-red-500">
+                        <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                    <div x-show="showCustomerDropdown && customerResults.length > 0" @click.away="showCustomerDropdown = false"
+                         class="absolute z-20 w-full bg-white border rounded-lg shadow-lg max-h-32 overflow-y-auto bottom-full mb-1">
+                        <template x-for="c in customerResults" :key="c.id">
+                            <button @click="selectCustomer(c)"
+                                    class="w-full text-left px-2 py-1.5 hover:bg-blue-50 border-b last:border-0 text-[11px] lg:text-sm">
+                                <div class="font-medium" x-text="c.name"></div>
+                                <div class="text-[10px] text-gray-400" x-text="c.phone || c.email || ''"></div>
+                            </button>
+                        </template>
                     </div>
                 </div>
-                <div class="text-right">
-                    <div class="text-[10px] lg:text-xs text-gray-500">Total</div>
-                    <div class="text-xl lg:text-2xl font-extrabold text-blue-700" x-text="'₱' + cartTotal.toFixed(2)"></div>
+                <!-- Clear -->
+                <button x-show="cart.length > 0" @click="clearCart()"
+                        class="text-[10px] lg:text-xs text-red-500 hover:text-red-700 px-1.5 py-0.5 rounded hover:bg-red-50 whitespace-nowrap flex-shrink-0">Clear All</button>
+                <!-- Spacer -->
+                <div class="flex-1"></div>
+                <!-- Subtotal / Discount -->
+                <div class="text-[10px] lg:text-xs text-right flex-shrink-0 hidden sm:block">
+                    <div class="text-gray-500">Sub: <span class="font-medium text-gray-700" x-text="'₱' + cartSubtotal.toFixed(2)"></span></div>
+                    <div class="text-gray-500 cursor-pointer hover:text-blue-600" @click="showOrderDiscountModal = true">Disc: <span class="text-red-500" x-text="'- ₱' + cartDiscount.toFixed(2)"></span></div>
                 </div>
+                <!-- Total -->
+                <div class="text-right flex-shrink-0">
+                    <div class="text-[9px] lg:text-[10px] text-gray-400 uppercase">Total</div>
+                    <div class="text-lg lg:text-2xl font-extrabold text-blue-700 leading-tight" x-text="'₱' + cartTotal.toFixed(2)"></div>
+                </div>
+                <!-- Pay Button -->
                 <button @click="goToCheckout()" :disabled="cart.length === 0"
-                        class="px-6 py-2.5 lg:px-10 lg:py-3 rounded-xl text-white font-bold text-sm lg:text-lg transition-colors whitespace-nowrap"
+                        class="px-5 py-2 lg:px-8 lg:py-2.5 rounded-xl text-white font-bold text-sm lg:text-base transition-colors whitespace-nowrap flex-shrink-0"
                         :class="cart.length > 0 ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'">
-                    Pay
+                    Pay &amp; Complete
                 </button>
             </div>
         </div>
