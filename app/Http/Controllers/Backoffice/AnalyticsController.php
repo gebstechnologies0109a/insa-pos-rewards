@@ -235,7 +235,7 @@ class AnalyticsController extends Controller
         $openShifts = DB::table('pos_shifts')
             ->where('branch_id', $branch)
             ->whereNull('closed_at')
-            ->select('id', 'cashier_id', 'opening_cash', 'opened_at')
+            ->select('id', 'user_id', 'opening_cash', 'opened_at')
             ->get();
 
         $runningShiftIds = $openShifts->pluck('id');
