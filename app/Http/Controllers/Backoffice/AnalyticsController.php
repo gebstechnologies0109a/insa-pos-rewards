@@ -152,18 +152,14 @@ class AnalyticsController extends Controller
             return [Carbon::parse($from)->startOfDay(), Carbon::parse($to)->endOfDay()];
         }
 
-        $map = [
-            '1d'  => 0,   '7d'  => 6,   '14d' => 13, '30d' => 29,
-            '1m'  => null, '2m'  => null, '3m'  => null,
-            '6m'  => null, '12m' => null,
-        ];
+        $dayRanges = ['1d' => 0, '7d' => 6, '14d' => 13, '30d' => 29];
+        if (isset($dayRanges[$range])) {
+            return [$end->copy()->subDays($dayRanges[$range])->startOfDay(), $end->copy()->endOfDay()];
+        }
 
-        if (isset($map[$range])) {
-            if ($map[$range] !== null) {
-                return [$end->copy()->subDays($map[$range])->startOfDay(), $end->copy()->endOfDay()];
-            }
-            $months = (int) filter_var($range, FILTER_SANITIZE_NUMBER_INT);
-            return [$end->copy()->subMonths($months)->startOfDay(), $end->copy()->endOfDay()];
+        $monthRanges = ['1m' => 1, '2m' => 2, '3m' => 3, '6m' => 6, '12m' => 12];
+        if (isset($monthRanges[$range])) {
+            return [$end->copy()->subMonths($monthRanges[$range])->startOfDay(), $end->copy()->endOfDay()];
         }
 
         return [$end->copy()->subDays(6)->startOfDay(), $end->copy()->endOfDay()];
