@@ -144,6 +144,24 @@
                         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         app:cornerRadius="8dp" />
 
+                    <!-- Printer selection dropdown — populated after scanning -->
+                    <Spinner
+                        android:id="@+id/spinnerPrinters"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="8dp"
+                        android:background="@android:drawable/btn_dropdown"
+                        android:visibility="gone" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnConnectPrinter"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Connect Selected Printer"
+                        android:visibility="gone"
+                        app:cornerRadius="8dp" />
+
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnTestPrint"
                         android:layout_width="match_parent"
@@ -197,9 +215,44 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="Scan Barcode / QR"
+                        android:text="Scan Barcode / QR (Camera)"
                         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         app:cornerRadius="8dp" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginVertical="12dp"
+                        android:background="#E5E7EB" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Hardware Barcode Scanner"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_primary" />
+
+                    <TextView
+                        android:id="@+id/tvBarcodeScannerStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Listening for USB/Bluetooth HID scanner input..."
+                        android:textSize="12sp"
+                        android:textColor="@color/text_secondary" />
+
+                    <TextView
+                        android:id="@+id/tvLastBarcode"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Last scan: —"
+                        android:textSize="14sp"
+                        android:fontFamily="monospace"
+                        android:textColor="@color/primary"
+                        android:background="#F3F4F6"
+                        android:padding="12dp" />
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

@@ -10,11 +10,15 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.view.KeyEvent
+import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.insapos.insabuddy.databinding.ActivityMainBinding
+import com.insapos.insabuddy.printers.Printer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -26,6 +30,9 @@ class MainActivity : AppCompatActivity() {
     private var bound = false
     private val logLines = mutableListOf<String>()
 
+    private var scannedPrinters: List<Printer> = emptyList()
+    private val hidScanner = HidScannerDriver()
+
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val localBinder = binder as INSABuddyService.LocalBinder
@@ -34,6 +41,9 @@ class MainActivity : AppCompatActivity() {
 
             service?.scannerBridge?.setActivity(this@MainActivity)
             service?.onLog = { msg -> runOnUiThread { appendLog(msg) } }
+
+            // Wire HID scanner into the service so LocalServer can access last result
+            service?.hidScannerDriver = hidScanner
 
             updateUI()
         }
@@ -62,6 +72,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         setupButtons()
+        setupHidScanner()
         requestPermissions()
     }
 
@@ -79,18 +90,33 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (hidScanner.handleKeyEvent(event)) return true
+        return super.dispatchKeyEvent(event)
+    }
+
     @Deprecated("Use Activity Result API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (service?.scannerBridge?.handleScanResult(requestCode, resultCode, data) == true) {
             val value = service?.scannerBridge?.lastResult
             if (value != null) {
-                appendLog("Scanned: $value")
+                appendLog("Camera scan: $value")
                 Toast.makeText(this, "Scanned: $value", Toast.LENGTH_SHORT).show()
             }
             return
         }
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    private fun setupHidScanner() {
+        hidScanner.onBarcodeScanned = { barcode ->
+            runOnUiThread {
+                binding.tvLastBarcode.text = "Last scan: $barcode"
+                binding.tvBarcodeScannerStatus.text = "Barcode received from HID device"
+                appendLog("HID scanner: $barcode")
+            }
+        }
     }
 
     private fun setupButtons() {
@@ -109,34 +135,73 @@ class MainActivity : AppCompatActivity() {
             }
             appendLog("Scanning for printers...")
             binding.btnScanPrinters.isEnabled = false
+            binding.tvPrinterStatus.text = "Scanning..."
             Thread {
                 try {
                     val printers = service?.printerManager?.scanAll() ?: emptyList()
                     runOnUiThread {
                         binding.btnScanPrinters.isEnabled = true
+                        scannedPrinters = printers
+
                         if (printers.isEmpty()) {
                             appendLog("No printers found")
                             binding.tvPrinterStatus.text = "No printers found"
+                            binding.spinnerPrinters.visibility = View.GONE
+                            binding.btnConnectPrinter.visibility = View.GONE
                         } else {
-                            printers.forEach { p -> appendLog("Found: ${p.type} — ${p.name}") }
-                            binding.tvPrinterStatus.text = "Found ${printers.size} printer(s)"
-                        }
-                    }
-                    // Auto-connect on background thread (Bluetooth connect is blocking)
-                    if (printers.isNotEmpty()) {
-                        val first = printers.first()
-                        val connected = service?.printerManager?.selectPrinter(first)
-                        runOnUiThread {
-                            if (connected == true) {
-                                appendLog("Connected to: ${first.name}")
-                                binding.tvPrinterStatus.text = "Connected: ${first.name}"
-                            }
+                            printers.forEach { p -> appendLog("Found: [${p.type}] ${p.name}") }
+                            binding.tvPrinterStatus.text = "Found ${printers.size} printer(s) — select one below"
+
+                            val names = printers.map { "[${it.type}] ${it.name}" }
+                            val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
+                            binding.spinnerPrinters.adapter = adapter
+                            binding.spinnerPrinters.visibility = View.VISIBLE
+                            binding.btnConnectPrinter.visibility = View.VISIBLE
                         }
                     }
                 } catch (e: Exception) {
                     runOnUiThread {
                         binding.btnScanPrinters.isEnabled = true
                         appendLog("Scan failed: ${e.message}")
+                        binding.tvPrinterStatus.text = "Scan failed"
+                    }
+                }
+            }.start()
+        }
+
+        binding.btnConnectPrinter.setOnClickListener {
+            val idx = binding.spinnerPrinters.selectedItemPosition
+            if (idx < 0 || idx >= scannedPrinters.size) {
+                Toast.makeText(this, "Select a printer first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val printer = scannedPrinters[idx]
+            appendLog("Connecting to: ${printer.name}...")
+            binding.btnConnectPrinter.isEnabled = false
+            binding.btnConnectPrinter.text = "Connecting..."
+
+            Thread {
+                try {
+                    val connected = service?.printerManager?.selectPrinter(printer) ?: false
+                    runOnUiThread {
+                        binding.btnConnectPrinter.isEnabled = true
+                        binding.btnConnectPrinter.text = "Connect Selected Printer"
+                        if (connected) {
+                            appendLog("Connected to: ${printer.name}")
+                            binding.tvPrinterStatus.text = "Connected: ${printer.name}"
+                            Toast.makeText(this, "Printer connected!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            appendLog("Failed to connect to: ${printer.name}")
+                            binding.tvPrinterStatus.text = "Connection failed"
+                            Toast.makeText(this, "Connection failed", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        binding.btnConnectPrinter.isEnabled = true
+                        binding.btnConnectPrinter.text = "Connect Selected Printer"
+                        appendLog("Connect error: ${e.message}")
                     }
                 }
             }.start()
@@ -147,6 +212,7 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "No printer connected", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+            appendLog("Sending test print...")
             Thread {
                 val ok = service?.printerManager?.printText(
                     "================================\n" +
@@ -158,6 +224,7 @@ class MainActivity : AppCompatActivity() {
                 ) ?: false
                 runOnUiThread {
                     appendLog(if (ok) "Test print sent" else "Test print failed")
+                    if (ok) Toast.makeText(this, "Test print sent!", Toast.LENGTH_SHORT).show()
                 }
             }.start()
         }
@@ -182,9 +249,10 @@ class MainActivity : AppCompatActivity() {
                 val result = service?.scannerBridge?.requestScan()
                 runOnUiThread {
                     if (result != null) {
-                        appendLog("Scanned: $result")
+                        appendLog("Camera scan: $result")
+                        binding.tvLastBarcode.text = "Last scan: $result"
                     } else {
-                        appendLog("Scan cancelled or timed out")
+                        appendLog("Camera scan cancelled or timed out")
                     }
                 }
             }.start()
@@ -268,7 +336,7 @@ class MainActivity : AppCompatActivity() {
     private fun appendLog(message: String) {
         val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         logLines.add("[$timestamp] $message")
-        if (logLines.size > 50) logLines.removeAt(0)
+        if (logLines.size > 100) logLines.removeAt(0)
         binding.tvLog.text = logLines.joinToString("\n")
     }
 }

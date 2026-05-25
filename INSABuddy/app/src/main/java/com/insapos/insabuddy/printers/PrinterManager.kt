@@ -81,7 +81,6 @@ class PrinterManager(private val context: Context) {
             if (adapter == null || !adapter.isEnabled) return printers
 
             adapter.bondedDevices?.forEach { device ->
-                // Major device class 0x0600 = Imaging (printers)
                 val majorClass = device.bluetoothClass?.majorDeviceClass ?: 0
                 val deviceName = device.name?.lowercase() ?: ""
                 if (majorClass == 0x0600 ||
@@ -96,6 +95,27 @@ class PrinterManager(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Bluetooth scan failed: ${e.message}")
+        }
+        return printers
+    }
+
+    /**
+     * Returns ALL paired Bluetooth devices so the user can select printers
+     * that don't advertise a printer device class or known name pattern.
+     */
+    @SuppressLint("MissingPermission")
+    fun scanAllBluetoothDevices(): List<BluetoothPrinter> {
+        val printers = mutableListOf<BluetoothPrinter>()
+        try {
+            val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+            val adapter = btManager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
+            if (adapter == null || !adapter.isEnabled) return printers
+
+            adapter.bondedDevices?.forEach { device ->
+                printers.add(BluetoothPrinter(device))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Bluetooth scan all failed: ${e.message}")
         }
         return printers
     }
@@ -127,7 +147,10 @@ class PrinterManager(private val context: Context) {
     fun scanAll(): List<Printer> {
         val all = mutableListOf<Printer>()
         scanBuiltInPrinter()?.let { all.add(it) }
-        all.addAll(scanBluetoothPrinters())
+        // Include all paired Bluetooth devices (not just printer-class ones)
+        // so users can connect to printers that don't advertise the right class
+        val btDevices = scanAllBluetoothDevices()
+        all.addAll(btDevices)
         all.addAll(scanUsbPrinters())
         return all
     }

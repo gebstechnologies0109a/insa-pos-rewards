@@ -13,7 +13,8 @@ class LocalServer(
     private val context: Context,
     private val printerManager: PrinterManager,
     private val scannerBridge: ScannerBridge,
-    private val deviceInfo: DeviceInfo
+    private val deviceInfo: DeviceInfo,
+    private val getHidScanner: (() -> HidScannerDriver?) = { null }
 ) : NanoHTTPD(18181) {
 
     companion object {
@@ -38,6 +39,7 @@ class LocalServer(
             uri == "/print" && method == Method.POST -> handlePrint(session)
             uri == "/drawer/open" && method == Method.POST -> handleDrawerOpen()
             uri == "/scan" && method == Method.POST -> handleScan()
+            uri == "/scan/hid" && method == Method.GET -> handleHidScan()
             uri == "/scan/continuous" && method == Method.POST -> handleContinuousScan(session)
             uri == "/device/info" && method == Method.GET -> handleDeviceInfo()
             uri == "/printer/status" && method == Method.GET -> handlePrinterStatus()
@@ -134,6 +136,18 @@ class LocalServer(
         } catch (e: Exception) {
             jsonError(Response.Status.INTERNAL_ERROR, "Continuous scan error: ${e.message}")
         }
+    }
+
+    private fun handleHidScan(): Response {
+        val hid = getHidScanner()
+        val barcode = hid?.lastBarcode
+        val json = JSONObject().apply {
+            put("success", barcode != null)
+            put("value", barcode ?: "")
+            put("source", "hid")
+            put("listening", hid?.isListening ?: false)
+        }
+        return jsonResponse(json)
     }
 
     private fun handleDeviceInfo(): Response {

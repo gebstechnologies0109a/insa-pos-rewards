@@ -49,6 +49,7 @@ class INSABuddyService : Service() {
     private var reconnectJob: Job? = null
 
     var onLog: ((String) -> Unit)? = null
+    var hidScannerDriver: HidScannerDriver? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -95,7 +96,7 @@ class INSABuddyService : Service() {
     private fun startServer() {
         if (server?.isAlive == true) return
         try {
-            server = LocalServer(applicationContext, printerManager, scannerBridge, deviceInfo).apply {
+            server = LocalServer(applicationContext, printerManager, scannerBridge, deviceInfo, { hidScannerDriver }).apply {
                 this.onLog = { msg -> this@INSABuddyService.log(msg) }
                 start()
             }

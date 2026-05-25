@@ -117,6 +117,14 @@ const INSABuddy = {
     },
 
     /**
+     * Get the last barcode from a USB/Bluetooth HID barcode scanner.
+     * Returns { success, value, source: "hid" } or null on error.
+     */
+    async getHidScan() {
+        return this._get('/scan/hid');
+    },
+
+    /**
      * Enable or disable continuous scanning mode.
      */
     async setContinuousScan(enabled) {
