@@ -130,7 +130,11 @@
                 Opening Cash: &#8369;<span x-text="activeShift ? parseFloat(activeShift.opening_cash).toFixed(2) : '0.00'"></span>
             </div>
         </div>
-        <button @click="doCloseShift()" class="px-5 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700">Close Shift</button>
+        <div class="flex items-center gap-2">
+            <button @click="generateXReading()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">X-Reading</button>
+            <button @click="generateZReading()" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700">Z-Reading</button>
+            <button @click="doCloseShift()" class="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700">Close Shift</button>
+        </div>
     </div>
 </div>
 
@@ -391,6 +395,56 @@
     </div>
 </div>
 
+<!-- X/Z READING RESULT MODAL -->
+<div x-show="showReadingModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <h2 class="text-xl font-bold mb-1 flex items-center gap-2"
+            :class="readingData?.type === 'z' ? 'text-orange-700' : 'text-blue-700'">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <span x-text="readingData?.type === 'z' ? 'Z-Reading #' + readingData.z_count : 'X-Reading'"></span>
+        </h2>
+        <p class="text-xs text-gray-500 mb-4" x-text="readingData?.generated_at"></p>
+
+        <div class="space-y-2 text-sm">
+            <div class="flex justify-between py-2 border-b"><span class="text-gray-600">Total Sales</span><span class="font-bold text-lg" x-text="'₱' + parseFloat(readingData?.total_sales || 0).toFixed(2)"></span></div>
+            <div class="flex justify-between py-1 border-b"><span class="text-gray-600">Transactions</span><span class="font-semibold" x-text="readingData?.transaction_count || 0"></span></div>
+            <div class="flex justify-between py-1 border-b"><span class="text-gray-600">Discounts</span><span class="font-semibold" x-text="'₱' + parseFloat(readingData?.discount_total || 0).toFixed(2)"></span></div>
+            <div class="flex justify-between py-1 border-b"><span class="text-gray-600">Voids</span><span class="font-semibold" x-text="'₱' + parseFloat(readingData?.void_total || 0).toFixed(2)"></span></div>
+        </div>
+
+        <template x-if="readingData?.payment_breakdown">
+            <div class="mt-4">
+                <div class="text-xs font-bold text-gray-500 uppercase mb-2">Payment Breakdown</div>
+                <div class="grid grid-cols-2 gap-1 text-sm">
+                    <template x-for="[method, amount] in Object.entries(readingData.payment_breakdown || {})" :key="method">
+                        <template x-if="amount > 0">
+                            <div class="flex justify-between col-span-2 py-1 px-2 rounded" :class="method === 'cash' ? 'bg-green-50' : 'bg-gray-50'">
+                                <span class="text-gray-600 capitalize" x-text="method.replace('_', ' ')"></span>
+                                <span class="font-medium" x-text="'₱' + parseFloat(amount).toFixed(2)"></span>
+                            </div>
+                        </template>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <template x-if="readingData?.type === 'z'">
+            <div class="mt-3 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-700">
+                Totals have been reset. Z-Count: <strong x-text="readingData.z_count"></strong>
+            </div>
+        </template>
+
+        <div class="mt-5 flex gap-3">
+            <button @click="printReading()" x-show="buddyConnected" class="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">
+                Print
+            </button>
+            <button @click="showReadingModal = false" class="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 <script>
 function posApp() {
@@ -419,6 +473,10 @@ function posApp() {
         showConflictModal: false,
         conflictItems: [],
         conflictLocalId: null,
+
+        // X/Z Reading state
+        showReadingModal: false,
+        readingData: null,
 
         config: {
             cashierId: {{ auth()->id() ?? 'null' }},
@@ -926,6 +984,80 @@ function posApp() {
                     this.showToast(data.message || 'Failed to close shift.', 'error');
                 }
             } catch { this.showToast('Network error closing shift.', 'error'); }
+        },
+
+        // ── X/Z Reading ───────────────────────────────────
+
+        async generateXReading() {
+            this.showToast('Generating X-Reading...', 'info');
+            try {
+                const res = await fetch('/api/pos/x-reading', {
+                    method: 'POST',
+                    headers: this.csrfHeader(),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.readingData = { ...data.reading, type: 'x' };
+                    this.showReadingModal = true;
+                    this.showToast('X-Reading generated', 'success');
+                } else {
+                    this.showToast(data.message || 'Failed to generate X-Reading', 'error');
+                }
+            } catch { this.showToast('Network error generating X-Reading', 'error'); }
+        },
+
+        async generateZReading() {
+            if (!confirm('Generate Z-Reading?\n\nThis is an end-of-day reading that will RESET totals.\nZ-Count will be incremented sequentially.\n\nProceed?')) return;
+            this.showToast('Generating Z-Reading...', 'info');
+            try {
+                const res = await fetch('/api/pos/z-reading', {
+                    method: 'POST',
+                    headers: this.csrfHeader(),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.readingData = { ...data.reading, type: 'z' };
+                    this.showReadingModal = true;
+                    this.showToast('Z-Reading #' + data.reading.z_count + ' generated', 'success');
+                } else {
+                    this.showToast(data.message || 'Failed to generate Z-Reading', 'error');
+                }
+            } catch { this.showToast('Network error generating Z-Reading', 'error'); }
+        },
+
+        async printReading() {
+            if (!this.readingData || !this.buddyConnected) return;
+            const r = this.readingData;
+            const lines = [];
+            const div = '================================';
+            lines.push('\x1B\x61\x01');
+            lines.push(r.type === 'z' ? 'Z - R E A D I N G' : 'X - R E A D I N G');
+            lines.push(r.type === 'z' ? 'Z-Count: #' + r.z_count : 'Cashier Snapshot');
+            lines.push(div);
+            lines.push('\x1B\x61\x00');
+            lines.push('Date: ' + r.generated_at);
+            lines.push(div);
+            lines.push('Total Sales:     ' + parseFloat(r.total_sales).toFixed(2).padStart(14));
+            lines.push('Transactions:    ' + String(r.transaction_count).padStart(14));
+            lines.push('Discounts:       ' + parseFloat(r.discount_total).toFixed(2).padStart(14));
+            lines.push('Voids:           ' + parseFloat(r.void_total).toFixed(2).padStart(14));
+            lines.push(div);
+            lines.push('PAYMENT BREAKDOWN');
+            const pb = r.payment_breakdown || {};
+            for (const [m, a] of Object.entries(pb)) {
+                if (parseFloat(a) > 0) {
+                    const label = m.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    lines.push(label.padEnd(18) + parseFloat(a).toFixed(2).padStart(14));
+                }
+            }
+            lines.push(div);
+            if (r.type === 'z') lines.push('*** TOTALS RESET ***');
+            lines.push('');
+            lines.push('');
+            try {
+                await INSABuddy.printText(lines.join('\n'));
+                this.showToast('Reading printed', 'success');
+            } catch { this.showToast('Print failed', 'error'); }
         },
     };
 }

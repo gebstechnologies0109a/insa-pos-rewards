@@ -14,6 +14,7 @@ class PosSale extends Model
         'sale_number',
         'branch_id',
         'shift_id',
+        'z_reading_id',
         'cashier_id',
         'member_id',
         'subtotal',
@@ -43,5 +44,10 @@ class PosSale extends Model
     public function shift(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(PosShift::class, 'shift_id');
+    }
+
+    public function zReading(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(PosZReading::class, 'z_reading_id');
     }
 }

@@ -4,6 +4,7 @@ use App\Http\Controllers\POS\CustomerLookupController;
 use App\Http\Controllers\POS\PosSaleController;
 use App\Http\Controllers\POS\PosSettingsController;
 use App\Http\Controllers\POS\ProductLookupController;
+use App\Http\Controllers\POS\ReadingController;
 use App\Http\Controllers\POS\ShiftController;
 use App\Http\Controllers\POS\StockInController;
 use App\Http\Controllers\POS\SyncController;
@@ -65,3 +66,7 @@ Route::prefix('shift')->group(function () {
     Route::post('/open', [ShiftController::class, 'open'])->name('pos.shift.open');
     Route::post('/close', [ShiftController::class, 'close'])->name('pos.shift.close');
 });
+
+// ── X/Z Readings ──────────────────────────────────────
+Route::post('/x-reading', [ReadingController::class, 'generateXReading'])->name('pos.x-reading');
+Route::post('/z-reading', [ReadingController::class, 'generateZReading'])->name('pos.z-reading');

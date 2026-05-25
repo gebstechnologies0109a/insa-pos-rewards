@@ -32,6 +32,10 @@
                 <a href="{{ route('backoffice.shifts.variance') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('backoffice.shifts.variance') ? 'bg-gray-800 text-white' : '' }}">Variance Report</a>
                 <a href="{{ route('backoffice.shifts.audit') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('backoffice.shifts.audit') ? 'bg-gray-800 text-white' : '' }}">Audit Trail</a>
 
+                <div class="px-4 pt-3 pb-1 text-xs uppercase text-gray-600 tracking-wider">Readings</div>
+                <a href="{{ route('readings.x') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('readings.x') ? 'bg-gray-800 text-white' : '' }}">X-Reading</a>
+                <a href="{{ route('readings.z') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('readings.z') ? 'bg-gray-800 text-white' : '' }}">Z-Reading</a>
+
                 @if(auth()->user()->canManageUsers())
                 <div class="px-4 pt-3 pb-1 text-xs uppercase text-gray-600 tracking-wider">Administration</div>
                 <a href="{{ route('admin.users.index') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('admin.users.*') ? 'bg-gray-800 text-white' : '' }}">Users</a>

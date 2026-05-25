@@ -14,6 +14,7 @@ use App\Http\Controllers\Backoffice\ShiftExportController;
 use App\Http\Controllers\Backoffice\ShiftManagementController;
 use App\Http\Controllers\Backoffice\ShiftVarianceController;
 use App\Http\Controllers\POS\PosSettingsController;
+use App\Http\Controllers\POS\ReadingController;
 use App\Http\Controllers\Stockman\StockmanController;
 use Illuminate\Support\Facades\Route;
 
@@ -71,6 +72,16 @@ Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
 
     Route::get('/shifts/{shift}/export/pdf', [ShiftExportController::class, 'exportPdf'])
         ->name('shift.export.pdf');
+
+    // ── X/Z Reading Reports ──
+    Route::get('/backoffice/readings/x', [ReadingController::class, 'showXReading'])
+        ->name('readings.x');
+    Route::get('/backoffice/readings/z', [ReadingController::class, 'showZReading'])
+        ->name('readings.z');
+    Route::get('/backoffice/readings/x/export/csv', [ReadingController::class, 'exportXReadingCsv'])
+        ->name('readings.x.export.csv');
+    Route::get('/backoffice/readings/z/export/csv', [ReadingController::class, 'exportZReadingCsv'])
+        ->name('readings.z.export.csv');
 });
 
 Route::middleware(['auth', 'role:owner,admin,manager'])->prefix('admin')->group(function () {
