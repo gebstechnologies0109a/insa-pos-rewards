@@ -108,13 +108,15 @@
             <span class="text-[10px] lg:text-xs font-medium" :class="buddyConnected ? 'text-green-700' : 'text-gray-400'"
                   x-text="buddyConnected ? 'INSABuddy' : 'No Buddy'"></span>
         </div>
-        <!-- Product QR/Barcode scan — works via INSABuddy or INSAPOSv2 native bridge -->
+        <!-- Product QR/Barcode scan -->
         <button @click="scanProduct()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Scan Product QR/Barcode"
-                :class="buddyConnected || hasNativeBridge ? 'text-gray-600' : 'text-gray-300 cursor-not-allowed'">
+                :class="buddyConnected || hasNativeBridge ? 'text-blue-600' : 'text-gray-300'"
+                :disabled="_scanning">
             <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
         </button>
-        <template x-if="buddyConnected">
-            <button @click="buddyOpenDrawer()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Open Cash Drawer">
+        <!-- Cash drawer — for INSABuddy or native bridge -->
+        <template x-if="buddyConnected || hasNativeBridge">
+            <button @click="openCashDrawer()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Open Cash Drawer">
                 <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
             </button>
         </template>
@@ -807,6 +809,8 @@ function posApp() {
         rewardsResults: [],
         rewardsNoMatch: false,
         hasNativeBridge: false,
+        _nativeScanPort: 18182,
+        _scanning: false,
 
         syncStatus: 'offline',
         pendingSyncCount: 0,
@@ -864,6 +868,9 @@ function posApp() {
 
         async init() {
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
+            if (this.hasNativeBridge) {
+                try { this._nativeScanPort = window.INSAPOS.getServicePort() || 18182; } catch { this._nativeScanPort = 18182; }
+            }
             await this.initOffline();
             this.loadShift();
             this.initBuddy();
@@ -915,34 +922,68 @@ function posApp() {
         },
 
         initBuddy() {
-            if (typeof INSABuddy === 'undefined') return;
-            INSABuddy.startPolling(5000, (c) => { this.buddyConnected = c; });
+            if (typeof INSABuddy !== 'undefined') {
+                INSABuddy.detectV2();
+                INSABuddy.startPolling(5000, (c) => { this.buddyConnected = c; });
+            }
         },
 
-        async buddyScanBarcode() { if (!this.buddyConnected) return; const r = await INSABuddy.scan(); if (r && r.success && r.value) this.handleBarcodeScan(r.value); },
         async buddyOpenDrawer() { if (!this.buddyConnected) return; await INSABuddy.openDrawer(); },
 
-        async scanProduct() {
-            if (this.buddyConnected) { this.buddyScanBarcode(); return; }
-            if (this.hasNativeBridge && typeof window.INSAPOS.scanBarcode === 'function') {
-                try { window.INSAPOS.scanBarcode(); } catch {}
+        async openCashDrawer() {
+            if (this.buddyConnected) { this.buddyOpenDrawer(); return; }
+            if (this.hasNativeBridge) {
+                try { await fetch(`http://127.0.0.1:${this._nativeScanPort}/drawer/open`, { method: 'POST', signal: AbortSignal.timeout(5000) }); } catch {}
                 return;
             }
-            this.showToast('No scanner available. Connect INSABuddy or use a HID scanner.', 'warning');
+        },
+
+        async _nativeScanAsync() {
+            try {
+                const res = await fetch(`http://127.0.0.1:${this._nativeScanPort}/scan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(30000) });
+                const data = await res.json();
+                if (data.success && data.value) return data.value;
+                if (data.text) return data.text;
+            } catch {}
+            return null;
+        },
+
+        async scanProduct() {
+            if (this._scanning) return;
+            if (!this.buddyConnected && !this.hasNativeBridge) { this.showToast('No scanner. Use a HID barcode scanner or connect INSABuddy.', 'warning'); return; }
+            this._scanning = true;
+            this.showToast('Scanning product...', 'info', 2000);
+            try {
+                let value = null;
+                if (this.buddyConnected) {
+                    const r = await INSABuddy.scan();
+                    if (r && r.success && r.value) value = r.value;
+                } else if (this.hasNativeBridge) {
+                    value = await this._nativeScanAsync();
+                }
+                if (value) { this.handleBarcodeScan(value); }
+                else { this.showToast('No barcode detected. Try again.', 'warning'); }
+            } catch { this.showToast('Scan failed.', 'error'); }
+            finally { this._scanning = false; }
         },
 
         async scanRewardsCard() {
-            let scannedValue = null;
-            if (this.buddyConnected) {
-                const r = await INSABuddy.scan();
-                if (r && r.success && r.value) scannedValue = r.value;
-            } else if (this.hasNativeBridge && typeof window.INSAPOS.scanBarcode === 'function') {
-                try { window.INSAPOS.scanBarcode(); } catch {}
-                this.showToast('Point camera at customer QR code or barcode', 'info');
-                return;
-            }
-            if (scannedValue) { this.rewardsCardInput = scannedValue; this.lookupRewardsCustomer(); }
-            else if (!this.buddyConnected && !this.hasNativeBridge) { this.showToast('No scanner. Type the card number manually.', 'warning'); }
+            if (this._scanning) return;
+            if (!this.buddyConnected && !this.hasNativeBridge) { this.showToast('No scanner. Type the card number manually.', 'warning'); return; }
+            this._scanning = true;
+            this.showToast('Scanning customer card...', 'info', 2000);
+            try {
+                let value = null;
+                if (this.buddyConnected) {
+                    const r = await INSABuddy.scan();
+                    if (r && r.success && r.value) value = r.value;
+                } else if (this.hasNativeBridge) {
+                    value = await this._nativeScanAsync();
+                }
+                if (value) { this.rewardsCardInput = value; await this.lookupRewardsCustomer(); }
+                else { this.showToast('No code detected. Try again or type manually.', 'warning'); }
+            } catch { this.showToast('Scan failed.', 'error'); }
+            finally { this._scanning = false; }
         },
 
         async lookupRewardsCustomer() {
@@ -952,8 +993,9 @@ function posApp() {
             this.rewardsNoMatch = false;
             try {
                 const res = await fetch('/api/pos/customer/quick-lookup', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({ query: q }) });
+                if (!res.ok) { this.rewardsNoMatch = true; return; }
                 const data = await res.json();
-                const customers = (data.customers || []).map(c => ({ id: c.uuid || c.id, name: c.full_name || c.name || (c.first_name + ' ' + c.last_name), phone: c.phone, email: c.email, card_number: c.card_number, loyalty_points: c.loyalty_points }));
+                const customers = (data.customers || []).map(c => ({ id: c.id, uuid: c.uuid, name: c.full_name || c.name || ((c.first_name || '') + ' ' + (c.last_name || '')).trim(), phone: c.phone, email: c.email, card_number: c.card_number, loyalty_points: c.loyalty_points }));
                 if (customers.length > 0) {
                     this.rewardsResults = customers;
                     if (customers.length === 1) this.selectRewardsCustomer(customers[0]);
@@ -992,7 +1034,7 @@ function posApp() {
             try {
                 const res = await fetch('/api/pos/customer/quick-lookup', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({ query: q }) });
                 const data = await res.json();
-                this.customerResults = (data.customers || []).map(c => ({ id: c.uuid || c.id, name: c.full_name || c.name || (c.first_name + ' ' + c.last_name), phone: c.phone, email: c.email, card_number: c.card_number }));
+                this.customerResults = (data.customers || []).map(c => ({ id: c.id, uuid: c.uuid, name: c.full_name || c.name || ((c.first_name || '') + ' ' + (c.last_name || '')).trim(), phone: c.phone, email: c.email, card_number: c.card_number }));
                 if (this.customerResults.length > 0) this.showCustomerDropdown = true;
             } catch {}
         },

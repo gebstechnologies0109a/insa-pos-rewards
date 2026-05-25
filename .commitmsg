@@ -1,10 +1,23 @@
-INSAPOS v2.2e: New logo, role-gated readings, rewards scan, fix recent txns
+INSAPOS v2.2f: Fix scan lag, broken icons, and comprehensive bug audit
 
-- New INSA POS app icon applied to all 3 Android apps (INSABuddy, INSAPOS, INSAPOSv2)
-- X-Reading/Z-Reading buttons now only visible for owner/admin/manager roles
-- Fixed Recent Transactions: wrong column name (grand_total -> total), added error handling
-- Added customer rewards scan (DIY Biz Rewards) icon in header with modal for QR/barcode/card lookup
-- Product QR/barcode scan button now works independently of INSABuddy (also via INSAPOSv2 native bridge)
-- Added /api/pos/customer/quick-lookup endpoint with auto-type detection
-- Fixed customer search in cart to use the correct API endpoint
-- Bumped INSAPOSv2 to v2.2e (versionCode 5), updated GHA artifact names
+Scan fixes (root cause: blocking @JavascriptInterface calls):
+- Replaced synchronous window.INSAPOS.scanBarcode() with async fetch()
+  to the local HTTP server — eliminates UI freeze during scan
+- Added _scanning lock to prevent duplicate scan triggers
+- Product scan and rewards scan now show immediate "Scanning..." feedback
+- Scan results are properly parsed and handled for both product and customer
+
+Icon/button fixes:
+- Product scan button now always visible (blue when scanner available)
+- Cash drawer button now works with both INSABuddy AND native bridge
+- Removed broken buddyScanBarcode() — unified into scanProduct()
+
+Data integrity fixes:
+- Customer lookup now returns numeric `id` for member_id FK
+- JS customer mappers use numeric id (not uuid) for sale tagging
+- Fixed potential null concatenation in customer name formatting
+
+API fix:
+- CustomerLookupController::formatCustomer() now includes `id` (getKey())
+
+Version: v2.2f (versionCode 6)

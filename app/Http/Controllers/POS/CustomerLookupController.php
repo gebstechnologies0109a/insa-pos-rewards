@@ -88,6 +88,7 @@ class CustomerLookupController extends Controller
     protected function formatCustomer(Customer $customer): array
     {
         return [
+            'id'             => $customer->getKey(),
             'uuid'           => $customer->uuid,
             'card_number'    => $customer->card_number,
             'first_name'     => $customer->first_name,
