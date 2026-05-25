@@ -1096,10 +1096,12 @@ function posApp() {
             try {
                 const res = await fetch('/api/pos/products/all?branch_id=' + (this.config.branchId || ''));
                 const data = await res.json();
-                this.products = data.products || [];
-                this.categories = data.categories || [];
-                if (db && this.products.length > 0) await db.products.bulkPut(this.products);
-                if (db && this.categories.length > 0) await db.categories.bulkPut(this.categories);
+                const rawProducts = data.products || [];
+                const rawCategories = data.categories || [];
+                if (db && rawProducts.length > 0) await db.products.bulkPut(rawProducts);
+                if (db && rawCategories.length > 0) await db.categories.bulkPut(rawCategories);
+                this.products = rawProducts;
+                this.categories = rawCategories;
                 this.filterProducts();
             } catch (e) {
                 console.warn('[pos] loadProducts fetch failed, using cache:', e);
