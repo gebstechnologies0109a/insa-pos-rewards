@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductImportExportController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Backoffice\AnalyticsController;
 use App\Http\Controllers\Backoffice\ShiftAuditController;
 use App\Http\Controllers\Backoffice\ShiftDashboardController;
 use App\Http\Controllers\Backoffice\ShiftExportController;
@@ -45,6 +46,13 @@ Route::middleware(['auth', 'role:stockman,manager,admin,owner'])->prefix('stockm
 Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
     Route::get('/backoffice', [DashboardController::class, 'index'])
         ->name('backoffice.dashboard');
+
+    Route::get('/backoffice/analytics', [AnalyticsController::class, 'index'])
+        ->name('backoffice.analytics');
+    Route::get('/backoffice/analytics/data', [AnalyticsController::class, 'data'])
+        ->name('backoffice.analytics.data');
+    Route::get('/backoffice/analytics/product/{product}', [AnalyticsController::class, 'productDetail'])
+        ->name('backoffice.analytics.product');
 
     Route::get('/backoffice/shifts', [ShiftManagementController::class, 'index'])
         ->name('backoffice.shifts');
