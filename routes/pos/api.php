@@ -43,6 +43,9 @@ Route::prefix('customer')->group(function () {
 Route::post('/sales', [PosSaleController::class, 'store'])
     ->name('pos.sales.store');
 
+Route::get('/sales/recent', [PosSaleController::class, 'recent'])
+    ->name('pos.sales.recent');
+
 Route::post('/stock-in', [StockInController::class, 'store'])
     ->name('pos.stock-in.store');
 

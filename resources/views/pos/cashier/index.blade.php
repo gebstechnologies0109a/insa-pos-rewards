@@ -25,13 +25,18 @@
         .toast-leave { animation: toastOut .3s ease-in forwards; }
         @keyframes toastIn { from { transform: translateY(-20px); opacity:0 } to { transform:translateY(0); opacity:1 } }
         @keyframes toastOut { from { opacity:1 } to { opacity:0; transform:translateY(-20px) } }
+        .modal-overlay { backdrop-filter: blur(2px); }
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
     </style>
     <script src="https://unpkg.com/dexie@4/dist/dexie.min.js"></script>
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/insabuddy.js') }}"></script>
     <script src="{{ asset('js/sync-engine.js') }}"></script>
 </head>
-<body class="bg-gray-100 h-screen flex flex-col overflow-hidden" x-data="posApp()" x-cloak>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden" x-data="posApp()" x-init="init()" x-cloak
+      @keydown.window="handleBarcodeKey($event)">
 
 <!-- TOAST NOTIFICATIONS -->
 <div class="fixed top-4 right-4 z-[100] space-y-2">
@@ -99,6 +104,12 @@
                 </button>
             </div>
         </template>
+
+        <!-- Recent Transactions -->
+        <button @click="showHistoryModal = true; loadRecentSales()" class="p-1.5 rounded hover:bg-gray-100" title="Recent Transactions">
+            <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </button>
+
         @auth
         <span class="font-medium">{{ auth()->user()->name }}</span>
         <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">{{ ucfirst(auth()->user()->role) }}</span>
@@ -120,7 +131,7 @@
             <div class="font-semibold text-yellow-800">No Active Shift</div>
             <div class="text-sm text-yellow-600">Open a shift to start processing sales.</div>
         </div>
-        <button @click="openShift()" class="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">Open Shift</button>
+        <button @click="showShiftOpenModal = true" class="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700">Open Shift</button>
     </div>
     <div x-show="activeShift" class="bg-green-50 border border-green-300 rounded-lg p-3 flex items-center justify-between">
         <div>
@@ -133,7 +144,7 @@
         <div class="flex items-center gap-2">
             <button @click="generateXReading()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">X-Reading</button>
             <button @click="generateZReading()" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700">Z-Reading</button>
-            <button @click="doCloseShift()" class="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700">Close Shift</button>
+            <button @click="showShiftCloseModal = true" class="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700">Close Shift</button>
         </div>
     </div>
 </div>
@@ -144,8 +155,12 @@
     <!-- LEFT: PRODUCTS -->
     <div class="flex-1 flex flex-col min-w-0">
         <div class="flex gap-2 mb-3">
-            <input type="text" x-model="searchQuery" @input.debounce.200ms="filterProducts()" placeholder="Search products..."
-                   class="flex-1 p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <div class="relative flex-1">
+                <input type="text" x-model="searchQuery" @input.debounce.200ms="filterProducts()" placeholder="Search or scan barcode..."
+                       x-ref="searchInput" id="posSearchInput"
+                       class="w-full p-2.5 pl-9 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <svg class="w-4 h-4 text-gray-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
             <select x-model="selectedCategory" @change="filterProducts()" class="p-2.5 border rounded-lg text-sm bg-white">
                 <option value="">All Categories</option>
                 <template x-for="cat in categories" :key="cat.id">
@@ -181,7 +196,38 @@
         <div class="p-4 border-b">
             <div class="flex items-center justify-between">
                 <h2 class="font-bold text-lg">Cart</h2>
-                <span class="text-sm text-gray-500" x-text="cart.length + ' item(s)'"></span>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-500" x-text="cart.length + ' item(s)'"></span>
+                    <button x-show="cart.length > 0" @click="clearCart()"
+                            class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50"
+                            title="Clear entire cart">Clear</button>
+                </div>
+            </div>
+            <!-- Customer Selection -->
+            <div class="mt-2 relative">
+                <div class="flex items-center gap-2">
+                    <div class="flex-1 relative">
+                        <input type="text" x-model="customerSearch" @input.debounce.300ms="searchCustomers()"
+                               @focus="showCustomerDropdown = true"
+                               :placeholder="selectedCustomer ? selectedCustomer.name : 'Customer (optional)'"
+                               :class="selectedCustomer ? 'border-green-300 bg-green-50' : 'border-gray-200'"
+                               class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <button x-show="selectedCustomer" @click="selectedCustomer = null; customerSearch = ''"
+                                class="absolute right-2 top-2 text-gray-400 hover:text-red-500">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                </div>
+                <div x-show="showCustomerDropdown && customerResults.length > 0" @click.away="showCustomerDropdown = false"
+                     class="absolute z-20 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                    <template x-for="c in customerResults" :key="c.id">
+                        <button @click="selectCustomer(c)"
+                                class="w-full text-left px-3 py-2 hover:bg-blue-50 border-b last:border-0 text-sm">
+                            <div class="font-medium" x-text="c.name"></div>
+                            <div class="text-xs text-gray-400" x-text="c.phone || c.email || ''"></div>
+                        </button>
+                    </template>
+                </div>
             </div>
         </div>
 
@@ -195,11 +241,13 @@
                             <button @click="changeQty(idx, -1)" class="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 text-sm font-bold flex items-center justify-center">-</button>
                             <span class="font-bold text-sm w-8 text-center" x-text="item.qty"></span>
                             <button @click="changeQty(idx, 1)" class="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 text-sm font-bold flex items-center justify-center">+</button>
+                            <button @click="openItemDiscount(idx)" class="ml-1 text-xs text-blue-500 hover:text-blue-700 hover:underline"
+                                    x-text="item.discount > 0 ? '-₱' + item.discount.toFixed(2) : 'Disc.'"></button>
                         </div>
                     </div>
                     <div class="text-right flex flex-col items-end justify-between">
                         <button @click="removeItem(idx)" class="text-red-400 hover:text-red-600 text-xs">Remove</button>
-                        <span class="font-bold text-sm" x-text="'₱' + (item.qty * item.price).toFixed(2)"></span>
+                        <span class="font-bold text-sm" x-text="'₱' + ((item.qty * item.price) - (item.discount || 0)).toFixed(2)"></span>
                     </div>
                 </div>
             </template>
@@ -208,8 +256,11 @@
 
         <div class="p-4 border-t space-y-2">
             <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span x-text="'₱' + cartSubtotal.toFixed(2)"></span></div>
-            <div class="flex justify-between text-sm"><span class="text-gray-500">Discount</span><span x-text="'₱' + cartDiscount.toFixed(2)"></span></div>
-            <div class="flex justify-between text-xl font-bold border-t pt-2"><span>Total</span><span x-text="'₱' + cartTotal.toFixed(2)"></span></div>
+            <div class="flex justify-between text-sm">
+                <span class="text-gray-500 cursor-pointer hover:text-blue-600" @click="showOrderDiscountModal = true">Discount <span class="text-xs">(tap)</span></span>
+                <span class="text-red-500" x-text="'- ₱' + cartDiscount.toFixed(2)"></span>
+            </div>
+            <div class="flex justify-between text-xl font-bold border-t pt-2"><span>Total</span><span class="text-blue-700" x-text="'₱' + cartTotal.toFixed(2)"></span></div>
             <button @click="goToCheckout()" :disabled="cart.length === 0"
                     class="w-full py-3 rounded-lg text-white font-bold text-lg mt-2 transition-colors"
                     :class="cart.length > 0 ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'">
@@ -258,6 +309,10 @@
             </table>
         </div>
         <div class="p-4 border-t bg-gray-50">
+            <div x-show="selectedCustomer" class="text-sm text-gray-600 mb-2">
+                Customer: <strong x-text="selectedCustomer?.name"></strong>
+                <span class="text-xs text-gray-400" x-text="selectedCustomer?.phone || ''"></span>
+            </div>
             <div class="grid grid-cols-3 gap-4 text-center">
                 <div>
                     <div class="text-xs text-gray-500 uppercase">Subtotal</div>
@@ -302,8 +357,12 @@
                     <label class="block text-sm font-medium text-gray-600 mb-1">Cash Received</label>
                     <input type="number" x-model.number="amountTendered" step="0.01" min="0"
                            class="w-full p-3 border-2 rounded-lg text-2xl font-bold text-center focus:border-blue-500 focus:outline-none"
-                           placeholder="0.00" @input="calculateChange()">
+                           placeholder="0.00" @input="calculateChange()" x-ref="cashInput">
                     <div class="grid grid-cols-4 gap-2 mt-2">
+                        <button @click="amountTendered = cartTotal; calculateChange()"
+                                class="py-2 text-sm font-medium bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors col-span-1">
+                            Exact
+                        </button>
                         <template x-for="amt in quickCashAmounts" :key="amt">
                             <button @click="amountTendered = amt; calculateChange()"
                                     class="py-2 text-sm font-medium bg-gray-100 rounded hover:bg-gray-200 transition-colors"
@@ -328,21 +387,154 @@
             <button @click="completeSale()" :disabled="!canProceed"
                     class="w-full py-4 rounded-lg text-white font-bold text-xl mt-4 transition-colors"
                     :class="canProceed ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 cursor-not-allowed'">
-                Proceed
+                Complete Sale
             </button>
         </div>
     </div>
 </div>
 
+<!-- ═══════════════ MODALS ═══════════════ -->
+
+<!-- SHIFT OPEN MODAL -->
+<div x-show="showShiftOpenModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" @click.away="showShiftOpenModal = false">
+        <h2 class="text-xl font-bold text-green-700 mb-4">Open Shift</h2>
+        <label class="block text-sm font-medium text-gray-600 mb-2">Opening Cash Amount</label>
+        <div class="relative">
+            <span class="absolute left-3 top-3 text-lg font-bold text-gray-400">₱</span>
+            <input type="number" x-model.number="shiftCashInput" step="0.01" min="0"
+                   class="w-full p-3 pl-8 border-2 rounded-lg text-xl font-bold focus:border-green-500 focus:outline-none"
+                   placeholder="0.00" @keydown.enter="openShift()" x-ref="shiftOpenInput">
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-3">
+            <template x-for="amt in [500, 1000, 2000, 3000, 5000, 10000]" :key="amt">
+                <button @click="shiftCashInput = amt"
+                        class="py-2 text-sm font-medium bg-gray-100 rounded hover:bg-gray-200"
+                        x-text="'₱' + amt.toLocaleString()"></button>
+            </template>
+        </div>
+        <div class="flex gap-3 mt-5">
+            <button @click="openShift()" :disabled="!shiftCashInput || shiftCashInput < 0"
+                    class="flex-1 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                Open Shift
+            </button>
+            <button @click="showShiftOpenModal = false; shiftCashInput = 0" class="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- SHIFT CLOSE MODAL -->
+<div x-show="showShiftCloseModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" @click.away="showShiftCloseModal = false">
+        <h2 class="text-xl font-bold text-red-700 mb-4">Close Shift</h2>
+        <label class="block text-sm font-medium text-gray-600 mb-2">Closing Cash Amount</label>
+        <div class="relative">
+            <span class="absolute left-3 top-3 text-lg font-bold text-gray-400">₱</span>
+            <input type="number" x-model.number="shiftCashInput" step="0.01" min="0"
+                   class="w-full p-3 pl-8 border-2 rounded-lg text-xl font-bold focus:border-red-500 focus:outline-none"
+                   placeholder="0.00" @keydown.enter="doCloseShift()">
+        </div>
+        <div class="flex gap-3 mt-5">
+            <button @click="doCloseShift()" :disabled="shiftCashInput === null || shiftCashInput === '' || shiftCashInput < 0"
+                    class="flex-1 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                Close Shift
+            </button>
+            <button @click="showShiftCloseModal = false; shiftCashInput = 0" class="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- SHIFT CLOSE RESULT MODAL -->
+<div x-show="showShiftResult" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Shift Closed</h2>
+        <div class="space-y-3 text-sm text-left">
+            <div class="flex justify-between py-2 border-b"><span class="text-gray-600">Total Sales</span><span class="font-bold" x-text="'₱' + parseFloat(shiftResultData?.system_sales_total || 0).toFixed(2)"></span></div>
+            <div class="flex justify-between py-2 border-b"><span class="text-gray-600">Opening Cash</span><span class="font-bold" x-text="'₱' + parseFloat(shiftResultData?.opening_cash || 0).toFixed(2)"></span></div>
+            <div class="flex justify-between py-2 border-b"><span class="text-gray-600">Expected in Drawer</span><span class="font-bold" x-text="'₱' + (parseFloat(shiftResultData?.opening_cash || 0) + parseFloat(shiftResultData?.system_sales_total || 0)).toFixed(2)"></span></div>
+            <div class="flex justify-between py-2 border-b"><span class="text-gray-600">Closing Cash</span><span class="font-bold" x-text="'₱' + parseFloat(shiftResultData?.closing_cash || 0).toFixed(2)"></span></div>
+            <div class="flex justify-between py-2" :class="parseFloat(shiftResultData?.cash_variance || 0) >= 0 ? 'text-green-700' : 'text-red-700'">
+                <span class="font-bold">Variance</span>
+                <span class="font-bold text-lg"
+                      x-text="(parseFloat(shiftResultData?.cash_variance || 0) >= 0 ? '+' : '') + '₱' + parseFloat(shiftResultData?.cash_variance || 0).toFixed(2)"></span>
+            </div>
+        </div>
+        <button @click="showShiftResult = false" class="w-full mt-5 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">OK</button>
+    </div>
+</div>
+
+<!-- ITEM DISCOUNT MODAL -->
+<div x-show="showItemDiscountModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6" @click.away="showItemDiscountModal = false">
+        <h2 class="text-lg font-bold text-gray-800 mb-1">Item Discount</h2>
+        <p class="text-sm text-gray-500 mb-4" x-text="discountEditItem?.product_name || ''"></p>
+        <div class="flex gap-2 mb-3">
+            <button @click="discountType = 'amount'"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium border-2 transition-colors"
+                    :class="discountType === 'amount' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'">₱ Amount</button>
+            <button @click="discountType = 'percent'"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium border-2 transition-colors"
+                    :class="discountType === 'percent' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'">% Percent</button>
+        </div>
+        <input type="number" x-model.number="discountValue" step="0.01" min="0"
+               class="w-full p-3 border-2 rounded-lg text-xl font-bold text-center focus:border-blue-500 focus:outline-none"
+               :placeholder="discountType === 'percent' ? '0%' : '0.00'" @keydown.enter="applyItemDiscount()">
+        <div class="grid grid-cols-3 gap-2 mt-2">
+            <template x-for="pct in [5, 10, 15, 20, 25, 50]" :key="pct">
+                <button @click="discountType = 'percent'; discountValue = pct"
+                        class="py-1.5 text-xs font-medium bg-gray-100 rounded hover:bg-gray-200"
+                        x-text="pct + '%'"></button>
+            </template>
+        </div>
+        <div class="flex gap-3 mt-4">
+            <button @click="applyItemDiscount()" class="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">Apply</button>
+            <button @click="discountValue = 0; applyItemDiscount()" class="py-3 px-4 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">Clear</button>
+            <button @click="showItemDiscountModal = false" class="py-3 px-4 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- ORDER-LEVEL DISCOUNT MODAL -->
+<div x-show="showOrderDiscountModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6" @click.away="showOrderDiscountModal = false">
+        <h2 class="text-lg font-bold text-gray-800 mb-4">Order Discount</h2>
+        <div class="flex gap-2 mb-3">
+            <button @click="orderDiscountType = 'amount'"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium border-2 transition-colors"
+                    :class="orderDiscountType === 'amount' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'">₱ Amount</button>
+            <button @click="orderDiscountType = 'percent'"
+                    class="flex-1 py-2 rounded-lg text-sm font-medium border-2 transition-colors"
+                    :class="orderDiscountType === 'percent' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'">% Percent</button>
+        </div>
+        <input type="number" x-model.number="orderDiscountValue" step="0.01" min="0"
+               class="w-full p-3 border-2 rounded-lg text-xl font-bold text-center focus:border-blue-500 focus:outline-none"
+               :placeholder="orderDiscountType === 'percent' ? '0%' : '0.00'" @keydown.enter="applyOrderDiscount()">
+        <div class="grid grid-cols-4 gap-2 mt-2">
+            <template x-for="pct in [5, 10, 15, 20]" :key="pct">
+                <button @click="orderDiscountType = 'percent'; orderDiscountValue = pct"
+                        class="py-1.5 text-xs font-medium bg-gray-100 rounded hover:bg-gray-200"
+                        x-text="pct + '%'"></button>
+            </template>
+        </div>
+        <div class="flex gap-3 mt-4">
+            <button @click="applyOrderDiscount()" class="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">Apply</button>
+            <button @click="orderDiscountValue = 0; applyOrderDiscount()" class="py-3 px-4 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">Clear</button>
+            <button @click="showOrderDiscountModal = false" class="py-3 px-4 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <!-- SUCCESS MODAL -->
-<div x-show="showReceipt" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="closeReceipt()">
+<div x-show="showReceipt" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" @click.self="closeReceipt()">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 text-center">
-        <div class="text-5xl mb-3">&#10003;</div>
+        <div class="w-16 h-16 mx-auto mb-3 rounded-full bg-green-100 flex items-center justify-center">
+            <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        </div>
         <h2 class="text-2xl font-bold text-green-700 mb-2">Sale Complete!</h2>
         <div class="text-gray-600 mb-4">
             <div>Sale #: <span class="font-mono font-bold" x-text="lastSale?.sale_number || lastSale?.local_id?.substring(0,8)"></span></div>
             <div class="text-2xl font-bold mt-2">Total: <span x-text="'₱' + parseFloat(lastSale?.total || 0).toFixed(2)"></span></div>
-            <div x-show="paymentMethod === 'cash'" class="text-xl mt-1">
+            <div x-show="lastSale?.payment_method === 'cash' || paymentMethod === 'cash'" class="text-xl mt-1">
                 Change: <span class="text-green-600 font-bold" x-text="'₱' + parseFloat(lastSale?.change_due || 0).toFixed(2)"></span>
             </div>
             <div x-show="lastSale?.offline" class="mt-2 text-xs text-yellow-600 bg-yellow-50 border border-yellow-200 rounded px-3 py-1 inline-block">
@@ -364,7 +556,7 @@
 </div>
 
 <!-- CONFLICT RESOLUTION MODAL -->
-<div x-show="showConflictModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+<div x-show="showConflictModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
         <h2 class="text-xl font-bold text-yellow-700 mb-4 flex items-center gap-2">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
@@ -395,8 +587,40 @@
     </div>
 </div>
 
+<!-- RECENT TRANSACTIONS MODAL -->
+<div x-show="showHistoryModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" @click.away="showHistoryModal = false">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold text-gray-800">Recent Transactions</h2>
+            <button @click="showHistoryModal = false" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="max-h-80 overflow-y-auto space-y-2">
+            <template x-for="sale in recentSales" :key="sale.id || sale.local_id">
+                <div class="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
+                    <div>
+                        <div class="font-medium text-sm">
+                            #<span x-text="sale.sale_number || sale.local_id?.substring(0,8) || 'N/A'"></span>
+                            <span x-show="sale.status === 'pending' || sale.sync_status === 'pending'" class="ml-1 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">Offline</span>
+                        </div>
+                        <div class="text-xs text-gray-400" x-text="new Date(sale.created_at).toLocaleString()"></div>
+                        <div class="text-xs text-gray-500 capitalize" x-text="(sale.payment_method || 'cash').replace('_', ' ')"></div>
+                    </div>
+                    <div class="text-right">
+                        <div class="font-bold text-blue-700" x-text="'₱' + parseFloat(sale.total || sale.grand_total || 0).toFixed(2)"></div>
+                        <div class="text-xs" :class="sale.status === 'completed' || sale.status === 'synced' ? 'text-green-600' : 'text-yellow-600'"
+                             x-text="sale.status === 'completed' || sale.status === 'synced' ? 'Synced' : (sale.status || 'Pending')"></div>
+                    </div>
+                </div>
+            </template>
+            <div x-show="recentSales.length === 0" class="text-center py-8 text-gray-400 text-sm">No recent transactions.</div>
+        </div>
+    </div>
+</div>
+
 <!-- X/Z READING RESULT MODAL -->
-<div x-show="showReadingModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" x-transition>
+<div x-show="showReadingModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
         <h2 class="text-xl font-bold mb-1 flex items-center gap-2"
             :class="readingData?.type === 'z' ? 'text-orange-700' : 'text-blue-700'">
@@ -445,6 +669,21 @@
     </div>
 </div>
 
+<!-- Z-READING CONFIRMATION MODAL -->
+<div x-show="showZConfirm" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+        <div class="w-16 h-16 mx-auto mb-3 rounded-full bg-orange-100 flex items-center justify-center">
+            <svg class="w-10 h-10 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+        </div>
+        <h2 class="text-xl font-bold text-orange-700 mb-2">Generate Z-Reading?</h2>
+        <p class="text-sm text-gray-600 mb-5">This is an <strong>end-of-day reading</strong> that will <strong>RESET</strong> totals. Z-Count will be incremented sequentially. This cannot be undone.</p>
+        <div class="flex gap-3">
+            <button @click="doGenerateZReading()" class="flex-1 py-3 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700">Proceed</button>
+            <button @click="showZConfirm = false" class="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 <script>
 function posApp() {
@@ -467,6 +706,34 @@ function posApp() {
         toasts: [],
         _toastId: 0,
 
+        // Shift modals
+        showShiftOpenModal: false,
+        showShiftCloseModal: false,
+        showShiftResult: false,
+        shiftCashInput: 0,
+        shiftResultData: null,
+
+        // Discount modals
+        showItemDiscountModal: false,
+        showOrderDiscountModal: false,
+        discountEditIndex: -1,
+        discountEditItem: null,
+        discountType: 'percent',
+        discountValue: 0,
+        orderDiscountType: 'percent',
+        orderDiscountValue: 0,
+        orderDiscountApplied: 0,
+
+        // Customer selection
+        selectedCustomer: null,
+        customerSearch: '',
+        customerResults: [],
+        showCustomerDropdown: false,
+
+        // Transaction history
+        showHistoryModal: false,
+        recentSales: [],
+
         // Sync state
         syncStatus: 'offline',
         pendingSyncCount: 0,
@@ -477,6 +744,11 @@ function posApp() {
         // X/Z Reading state
         showReadingModal: false,
         readingData: null,
+        showZConfirm: false,
+
+        // Barcode scanner keyboard buffer
+        _barcodeBuffer: '',
+        _barcodeTimer: null,
 
         config: {
             cashierId: {{ auth()->id() ?? 'null' }},
@@ -496,18 +768,18 @@ function posApp() {
             return this.cart.reduce((sum, i) => sum + (i.qty * i.price), 0);
         },
         get cartDiscount() {
-            return this.cart.reduce((sum, i) => sum + (i.discount || 0), 0);
+            const itemDiscounts = this.cart.reduce((sum, i) => sum + (i.discount || 0), 0);
+            return itemDiscounts + this.orderDiscountApplied;
         },
         get cartTotal() {
-            return this.cartSubtotal - this.cartDiscount;
+            return Math.max(0, this.cartSubtotal - this.cartDiscount);
         },
         get quickCashAmounts() {
             const total = this.cartTotal;
             const amounts = [50, 100, 200, 500, 1000, 2000];
             const rounded = Math.ceil(total / 100) * 100;
             if (rounded > 0 && !amounts.includes(rounded)) amounts.push(rounded);
-            if (total > 0 && !amounts.includes(Math.ceil(total))) amounts.push(Math.ceil(total));
-            return [...new Set(amounts)].filter(a => a >= total).sort((a, b) => a - b).slice(0, 8);
+            return [...new Set(amounts)].filter(a => a >= total).sort((a, b) => a - b).slice(0, 7);
         },
         get canProceed() {
             if (this.cart.length === 0) return false;
@@ -542,6 +814,11 @@ function posApp() {
             await this.initOffline();
             this.loadShift();
             this.initBuddy();
+
+            // Handle INSAPOSv2 HID barcode callback
+            window.onINSAPOSBarcode = (barcode) => {
+                this.handleBarcodeScan(barcode);
+            };
         },
 
         async initOffline() {
@@ -586,6 +863,46 @@ function posApp() {
             }
         },
 
+        // ── Barcode Scanner (Keyboard HID) ────────────────
+
+        handleBarcodeKey(event) {
+            // Skip if focus is in an input/textarea/select
+            const tag = event.target.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+            // USB/Bluetooth barcode scanners send rapid keystrokes ending with Enter
+            if (event.key === 'Enter') {
+                if (this._barcodeBuffer.length >= 3) {
+                    event.preventDefault();
+                    this.handleBarcodeScan(this._barcodeBuffer);
+                }
+                this._barcodeBuffer = '';
+                clearTimeout(this._barcodeTimer);
+                return;
+            }
+
+            if (event.key.length === 1) {
+                this._barcodeBuffer += event.key;
+                clearTimeout(this._barcodeTimer);
+                this._barcodeTimer = setTimeout(() => { this._barcodeBuffer = ''; }, 100);
+            }
+        },
+
+        handleBarcodeScan(barcode) {
+            if (!barcode || barcode.length < 2) return;
+            const product = this.products.find(p =>
+                (p.barcode && p.barcode === barcode) || (p.sku && p.sku === barcode)
+            );
+            if (product) {
+                this.addToCart(product);
+                this.showToast(product.name + ' added', 'success', 1500);
+            } else {
+                this.searchQuery = barcode;
+                this.filterProducts();
+                this.showToast('Product not found: ' + barcode, 'warning');
+            }
+        },
+
         // ── Toast Notifications ───────────────────────────
 
         showToast(message, type = 'info', duration = 3000) {
@@ -609,15 +926,7 @@ function posApp() {
             if (!this.buddyConnected) return;
             const result = await INSABuddy.scan();
             if (result && result.success && result.value) {
-                const product = this.products.find(p =>
-                    p.barcode === result.value || p.sku === result.value
-                );
-                if (product) {
-                    this.addToCart(product);
-                } else {
-                    this.searchQuery = result.value;
-                    this.filterProducts();
-                }
+                this.handleBarcodeScan(result.value);
             }
         },
 
@@ -634,14 +943,94 @@ function posApp() {
                 saleNumber: this.lastSale.sale_number || this.lastSale.local_id?.substring(0, 8),
                 date: new Date().toLocaleString(),
                 cashier: '{{ auth()->user()->name }}',
-                items: (this.lastSale._cart || this.cart).map(i => ({ name: i.product_name, qty: i.qty, price: i.price })),
+                items: (this.lastSale._cart || this.cart).map(i => ({ name: i.product_name, qty: i.qty, price: i.price, discount: i.discount || 0 })),
                 subtotal: this.cartSubtotal,
                 discount: this.cartDiscount,
                 total: parseFloat(this.lastSale.total),
                 paymentMethod: this.paymentMethod,
                 amountTendered: parseFloat(this.lastSale.amount_tendered || 0),
                 change: parseFloat(this.lastSale.change_due || 0),
+                customer: this.selectedCustomer?.name || null,
             });
+        },
+
+        // ── Customer Selection ────────────────────────────
+
+        async searchCustomers() {
+            const q = this.customerSearch.trim();
+            if (q.length < 2) {
+                this.customerResults = [];
+                return;
+            }
+
+            const db = window.INSADB;
+            if (db) {
+                this.customerResults = await db.customers.search(q);
+                if (this.customerResults.length > 0) {
+                    this.showCustomerDropdown = true;
+                    return;
+                }
+            }
+
+            try {
+                const res = await fetch('/api/pos/customer/lookup', {
+                    method: 'POST',
+                    headers: this.csrfHeader(),
+                    body: JSON.stringify({ query: q }),
+                });
+                const data = await res.json();
+                this.customerResults = data.customers || [];
+                if (this.customerResults.length > 0) this.showCustomerDropdown = true;
+            } catch {
+                // Offline — use local results only
+            }
+        },
+
+        selectCustomer(customer) {
+            this.selectedCustomer = customer;
+            this.customerSearch = customer.name;
+            this.showCustomerDropdown = false;
+            this.customerResults = [];
+        },
+
+        // ── Discount ──────────────────────────────────────
+
+        openItemDiscount(idx) {
+            this.discountEditIndex = idx;
+            this.discountEditItem = this.cart[idx];
+            this.discountValue = this.cart[idx].discount || 0;
+            this.discountType = 'amount';
+            this.showItemDiscountModal = true;
+        },
+
+        applyItemDiscount() {
+            if (this.discountEditIndex < 0 || !this.cart[this.discountEditIndex]) return;
+            const item = this.cart[this.discountEditIndex];
+            const lineTotal = item.qty * item.price;
+
+            if (this.discountType === 'percent') {
+                item.discount = Math.min(lineTotal, (lineTotal * (this.discountValue || 0)) / 100);
+            } else {
+                item.discount = Math.min(lineTotal, Math.max(0, this.discountValue || 0));
+            }
+
+            item.discount = parseFloat(item.discount.toFixed(2));
+            this.showItemDiscountModal = false;
+        },
+
+        applyOrderDiscount() {
+            const subtotal = this.cartSubtotal;
+            const itemDiscounts = this.cart.reduce((sum, i) => sum + (i.discount || 0), 0);
+            const maxDiscount = subtotal - itemDiscounts;
+
+            if (this.orderDiscountType === 'percent') {
+                this.orderDiscountApplied = Math.min(maxDiscount, (subtotal * (this.orderDiscountValue || 0)) / 100);
+            } else {
+                this.orderDiscountApplied = Math.min(maxDiscount, Math.max(0, this.orderDiscountValue || 0));
+            }
+
+            this.orderDiscountApplied = parseFloat(this.orderDiscountApplied.toFixed(2));
+            this.showOrderDiscountModal = false;
         },
 
         // ── Sync Actions ─────────────────────────────────
@@ -757,6 +1146,37 @@ function posApp() {
             this.filteredProducts = result;
         },
 
+        // ── Recent Transactions ───────────────────────────
+
+        async loadRecentSales() {
+            this.recentSales = [];
+
+            const db = window.INSADB;
+            if (db) {
+                const local = await db.transactions.getAll();
+                this.recentSales = local.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20);
+            }
+
+            try {
+                const res = await fetch('/api/pos/sales/recent?limit=20', { headers: this.csrfHeader() });
+                const data = await res.json();
+                if (data.sales && data.sales.length > 0) {
+                    const serverSales = data.sales.map(s => ({
+                        ...s,
+                        status: 'completed',
+                    }));
+                    const localIds = new Set(this.recentSales.map(s => s.local_id).filter(Boolean));
+                    const merged = [...this.recentSales];
+                    for (const s of serverSales) {
+                        if (!localIds.has(s.local_id)) merged.push(s);
+                    }
+                    this.recentSales = merged.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 25);
+                }
+            } catch {
+                // Offline — show local only
+            }
+        },
+
         // ── Cart ──────────────────────────────────────────
 
         addToCart(product) {
@@ -800,6 +1220,14 @@ function posApp() {
             this.cart.splice(idx, 1);
         },
 
+        clearCart() {
+            this.cart = [];
+            this.orderDiscountApplied = 0;
+            this.orderDiscountValue = 0;
+            this.selectedCustomer = null;
+            this.customerSearch = '';
+        },
+
         goToCheckout() {
             if (this.cart.length === 0) return;
             this.amountTendered = 0;
@@ -835,26 +1263,26 @@ function posApp() {
                 branch_id: this.config.branchId,
                 shift_id: this.activeShift.id,
                 cashier_id: this.config.cashierId,
-                member_id: null,
+                member_id: this.selectedCustomer?.id || null,
                 payment_method: this.paymentMethod,
+                payment_ref: this.paymentRef || null,
                 amount_tendered: tendered,
                 items: JSON.parse(JSON.stringify(this.cart)),
                 subtotal: this.cartSubtotal,
                 discount_total: this.cartDiscount,
+                order_discount: this.orderDiscountApplied,
                 total: this.cartTotal,
                 change_due: Math.max(0, tendered - this.cartTotal),
                 status: 'pending',
                 created_at: new Date().toISOString(),
             };
 
-            // Save to IndexedDB first (offline-first)
             if (db) {
                 await db.transactions.add(txData);
                 await db.syncQueue.add({ type: 'transaction_push', ref: localId });
                 this.pendingSyncCount++;
             }
 
-            // Save receipt locally
             const receiptData = {
                 local_tx_id: localId,
                 sale_number: null,
@@ -868,10 +1296,10 @@ function posApp() {
                 payment_method: txData.payment_method,
                 amount_tendered: txData.amount_tendered,
                 change_due: txData.change_due,
+                customer: this.selectedCustomer?.name || null,
             };
             if (db) await db.receipts.add(receiptData);
 
-            // Try immediate server push (non-blocking)
             let serverSale = null;
             try {
                 const res = await fetch('/api/pos/sales', {
@@ -881,10 +1309,13 @@ function posApp() {
                         branch_id: txData.branch_id,
                         shift_id: txData.shift_id,
                         cashier_id: txData.cashier_id,
-                        member_id: null,
+                        member_id: txData.member_id,
                         payment_method: txData.payment_method,
+                        payment_ref: txData.payment_ref,
                         amount_tendered: txData.amount_tendered,
                         items: txData.items,
+                        discount_total: txData.discount_total,
+                        order_discount: txData.order_discount,
                     }),
                 });
                 const data = await res.json();
@@ -896,23 +1327,22 @@ function posApp() {
                     }
                 }
             } catch {
-                // Offline — transaction is queued and will sync later
+                // Offline — queued for sync
             }
 
-            // Build the sale result for the UI
             this.lastSale = serverSale || {
                 local_id: localId,
                 sale_number: null,
                 total: txData.total,
                 amount_tendered: txData.amount_tendered,
                 change_due: txData.change_due,
+                payment_method: txData.payment_method,
                 offline: !serverSale,
                 _cart: txData.items,
             };
 
             this.showReceipt = true;
 
-            // Print via INSABuddy immediately (even offline)
             if (this.buddyConnected) {
                 this.buddyPrintReceipt();
                 if (typeof INSABuddy !== 'undefined' && SyncEngine) {
@@ -927,6 +1357,10 @@ function posApp() {
             this.cart = [];
             this.amountTendered = 0;
             this.changeAmount = 0;
+            this.orderDiscountApplied = 0;
+            this.orderDiscountValue = 0;
+            this.selectedCustomer = null;
+            this.customerSearch = '';
             this.screen = 'pos';
             this.loadProducts();
         },
@@ -934,9 +1368,7 @@ function posApp() {
         // ── Shift Management ──────────────────────────────
 
         async openShift() {
-            const cash = prompt('Enter opening cash amount:');
-            if (cash === null) return;
-            const amount = parseFloat(cash);
+            const amount = parseFloat(this.shiftCashInput);
             if (isNaN(amount) || amount < 0) { this.showToast('Invalid amount.', 'error'); return; }
 
             try {
@@ -948,6 +1380,8 @@ function posApp() {
                 const data = await res.json();
                 if (data.success) {
                     this.activeShift = data.shift;
+                    this.showShiftOpenModal = false;
+                    this.shiftCashInput = 0;
                     this.showToast('Shift opened!', 'success');
                 } else {
                     this.showToast(data.message || 'Failed to open shift.', 'error');
@@ -956,9 +1390,7 @@ function posApp() {
         },
 
         async doCloseShift() {
-            const cash = prompt('Enter closing cash amount:');
-            if (cash === null) return;
-            const amount = parseFloat(cash);
+            const amount = parseFloat(this.shiftCashInput);
             if (isNaN(amount) || amount < 0) { this.showToast('Invalid amount.', 'error'); return; }
 
             try {
@@ -969,17 +1401,13 @@ function posApp() {
                 });
                 const data = await res.json();
                 if (data.success) {
-                    const s = data.shift;
-                    const v = parseFloat(s.cash_variance);
-                    alert(
-                        'Shift closed!\n' +
-                        'Sales: ₱' + parseFloat(s.system_sales_total).toFixed(2) + '\n' +
-                        'Expected: ₱' + (parseFloat(s.opening_cash) + parseFloat(s.system_sales_total)).toFixed(2) + '\n' +
-                        'Closing: ₱' + parseFloat(s.closing_cash).toFixed(2) + '\n' +
-                        'Variance: ' + (v >= 0 ? '+' : '') + '₱' + v.toFixed(2)
-                    );
+                    this.shiftResultData = data.shift;
+                    this.showShiftCloseModal = false;
+                    this.shiftCashInput = 0;
+                    this.showShiftResult = true;
                     this.activeShift = null;
                     this.cart = [];
+                    this.orderDiscountApplied = 0;
                 } else {
                     this.showToast(data.message || 'Failed to close shift.', 'error');
                 }
@@ -1006,8 +1434,12 @@ function posApp() {
             } catch { this.showToast('Network error generating X-Reading', 'error'); }
         },
 
-        async generateZReading() {
-            if (!confirm('Generate Z-Reading?\n\nThis is an end-of-day reading that will RESET totals.\nZ-Count will be incremented sequentially.\n\nProceed?')) return;
+        generateZReading() {
+            this.showZConfirm = true;
+        },
+
+        async doGenerateZReading() {
+            this.showZConfirm = false;
             this.showToast('Generating Z-Reading...', 'info');
             try {
                 const res = await fetch('/api/pos/z-reading', {
