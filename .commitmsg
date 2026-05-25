@@ -1,7 +1,3 @@
-Fix HTTPS and analytics data loading
+Fix HTTPS scheme: only force when request is actually secure
 
-- Force HTTPS scheme in production via URL::forceScheme
-- Trust all proxies for Forge Nginx SSL termination
-- Add X-Requested-With header and credentials to fetch calls
-- Add visible error banner when analytics API fails
-- Check response status before parsing JSON
+Prevents breaking site when SSL certificate is not yet configured.

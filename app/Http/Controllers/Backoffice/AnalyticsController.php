@@ -38,33 +38,44 @@ class AnalyticsController extends Controller
 
     public function data(Request $request): JsonResponse
     {
-        $range  = $request->get('range', '7d');
-        $from   = $request->get('from');
-        $to     = $request->get('to');
-        $branch = auth()->user()->branch_id;
-        $limit  = min((int) $request->get('top', 10), 100);
+        try {
+            $range  = $request->get('range', '7d');
+            $from   = $request->get('from');
+            $to     = $request->get('to');
+            $branch = auth()->user()->branch_id ?? 0;
+            $limit  = min((int) $request->get('top', 10), 100);
 
-        [$start, $end] = $this->resolveRange($range, $from, $to);
+            [$start, $end] = $this->resolveRange($range, $from, $to);
 
-        return response()->json([
-            'range'      => ['start' => $start->toDateString(), 'end' => $end->toDateString(), 'label' => $range],
-            'summary'    => $this->getSummary($branch, $start, $end),
-            'realtime'   => $this->getRealtime($branch),
-            'daily'      => $this->getDailySales($branch, $start, $end),
-            'hourly'     => $this->getHourlySales($branch, $start, $end),
-            'payment'    => $this->getPaymentBreakdown($branch, $start, $end),
-            'topItems'   => $this->getTopItems($branch, $start, $end, $limit),
-            'topCats'    => $this->getTopCategories($branch, $start, $end, $limit),
-            'inventory'  => $this->getInventorySnapshot($branch),
-        ]);
+            return response()->json([
+                'range'      => ['start' => $start->toDateString(), 'end' => $end->toDateString(), 'label' => $range],
+                'summary'    => $this->getSummary($branch, $start, $end),
+                'realtime'   => $this->getRealtime($branch),
+                'daily'      => $this->getDailySales($branch, $start, $end),
+                'hourly'     => $this->getHourlySales($branch, $start, $end),
+                'payment'    => $this->getPaymentBreakdown($branch, $start, $end),
+                'topItems'   => $this->getTopItems($branch, $start, $end, $limit),
+                'topCats'    => $this->getTopCategories($branch, $start, $end, $limit),
+                'inventory'  => $this->getInventorySnapshot($branch),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error'   => $e->getMessage(),
+                'file'    => basename($e->getFile()) . ':' . $e->getLine(),
+                'trace'   => collect($e->getTrace())->take(5)->map(fn ($t) =>
+                    ($t['file'] ?? '?') . ':' . ($t['line'] ?? '?') . ' ' . ($t['function'] ?? '')
+                )->toArray(),
+            ], 500);
+        }
     }
 
     public function productDetail(Request $request, int $productId): JsonResponse
     {
+        try {
         $range  = $request->get('range', '30d');
         $from   = $request->get('from');
         $to     = $request->get('to');
-        $branch = auth()->user()->branch_id;
+        $branch = auth()->user()->branch_id ?? 0;
 
         [$start, $end] = $this->resolveRange($range, $from, $to);
 
@@ -128,6 +139,12 @@ class AnalyticsController extends Controller
             'daily'   => $daily,
             'hourly'  => $hourly,
         ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+                'file'  => basename($e->getFile()) . ':' . $e->getLine(),
+            ], 500);
+        }
     }
 
     private function resolveRange(string $range, ?string $from, ?string $to): array
