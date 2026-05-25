@@ -42,7 +42,7 @@ class PosSaleController extends Controller
             ->whereDate('created_at', now()->toDateString())
             ->orderByDesc('created_at')
             ->limit($limit)
-            ->get(['id', 'sale_number', 'local_id', 'payment_method', 'grand_total as total', 'status', 'created_at']);
+            ->get(['id', 'sale_number', 'local_id', 'payment_method', 'total', 'status', 'created_at']);
 
         return response()->json([
             'success' => true,

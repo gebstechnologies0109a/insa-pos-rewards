@@ -45,6 +45,46 @@ class CustomerLookupController extends Controller
         ]);
     }
 
+    /**
+     * Quick lookup — auto-detects type from a single query string.
+     * Used by the POS cashier UI for both cart customer search and rewards scan.
+     */
+    public function quickLookup(\Illuminate\Http\Request $request): JsonResponse
+    {
+        $query = trim($request->input('query', ''));
+        if (! $query) {
+            return response()->json(['success' => false, 'customers' => []], 422);
+        }
+
+        $customers = collect();
+
+        if (preg_match('/^[0-9a-f]{8}-/i', $query) || str_starts_with($query, 'diybiz:')) {
+            $c = $this->lookupService->resolve('qr', $query);
+            if ($c instanceof Customer) $customers->push($c);
+            elseif ($c instanceof Collection) $customers = $c;
+        }
+
+        if ($customers->isEmpty() && preg_match('/^\d{5,}$/', $query)) {
+            $c = $this->lookupService->resolve('barcode', $query);
+            if ($c) $customers->push($c);
+        }
+
+        if ($customers->isEmpty() && preg_match('/^[\d+() -]{7,}$/', $query)) {
+            $c = $this->lookupService->resolve('phone', $query);
+            if ($c) $customers->push($c);
+        }
+
+        if ($customers->isEmpty()) {
+            $c = $this->lookupService->resolve('search', $query);
+            if ($c instanceof Collection) $customers = $c;
+        }
+
+        return response()->json([
+            'success'   => $customers->isNotEmpty(),
+            'customers' => $customers->map(fn (Customer $c) => $this->formatCustomer($c))->values(),
+        ]);
+    }
+
     protected function formatCustomer(Customer $customer): array
     {
         return [

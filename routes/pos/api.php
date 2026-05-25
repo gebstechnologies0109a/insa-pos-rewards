@@ -38,6 +38,8 @@ Route::get('/customers/all', [SyncController::class, 'allCustomers'])->name('pos
 Route::prefix('customer')->group(function () {
     Route::post('/lookup', [CustomerLookupController::class, 'lookup'])
         ->name('pos.customer.lookup');
+    Route::post('/quick-lookup', [CustomerLookupController::class, 'quickLookup'])
+        ->name('pos.customer.quick-lookup');
 });
 
 Route::post('/sales', [PosSaleController::class, 'store'])

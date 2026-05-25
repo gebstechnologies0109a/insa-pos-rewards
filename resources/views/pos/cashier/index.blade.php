@@ -108,16 +108,22 @@
             <span class="text-[10px] lg:text-xs font-medium" :class="buddyConnected ? 'text-green-700' : 'text-gray-400'"
                   x-text="buddyConnected ? 'INSABuddy' : 'No Buddy'"></span>
         </div>
+        <!-- Product QR/Barcode scan — works via INSABuddy or INSAPOSv2 native bridge -->
+        <button @click="scanProduct()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Scan Product QR/Barcode"
+                :class="buddyConnected || hasNativeBridge ? 'text-gray-600' : 'text-gray-300 cursor-not-allowed'">
+            <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+        </button>
         <template x-if="buddyConnected">
-            <div class="flex items-center gap-0.5">
-                <button @click="buddyScanBarcode()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Scan Barcode">
-                    <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                </button>
-                <button @click="buddyOpenDrawer()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Open Cash Drawer">
-                    <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                </button>
-            </div>
+            <button @click="buddyOpenDrawer()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Open Cash Drawer">
+                <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            </button>
         </template>
+
+        <!-- Customer Rewards Scan -->
+        <button @click="showRewardsModal = true" class="p-1 lg:p-1.5 rounded hover:bg-gray-100 relative" title="Scan Customer Card / QR for DIY Biz Rewards">
+            <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+            <span x-show="selectedCustomer" class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full"></span>
+        </button>
 
         <button @click="showHistoryModal = true; loadRecentSales()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Recent Transactions">
             <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -155,8 +161,10 @@
             </div>
         </div>
         <div class="flex items-center gap-1 lg:gap-2 flex-shrink-0">
+            @if(auth()->user()->hasRole('owner', 'admin', 'manager'))
             <button @click="generateXReading()" class="px-1.5 py-1 lg:px-4 lg:py-2 bg-blue-600 text-white rounded-lg text-[10px] lg:text-sm font-medium hover:bg-blue-700 whitespace-nowrap">X-Reading</button>
             <button @click="generateZReading()" class="px-1.5 py-1 lg:px-4 lg:py-2 bg-orange-600 text-white rounded-lg text-[10px] lg:text-sm font-medium hover:bg-orange-700 whitespace-nowrap">Z-Reading</button>
+            @endif
             <button @click="showShiftCloseModal = true" class="px-1.5 py-1 lg:px-4 lg:py-2 bg-red-600 text-white rounded-lg text-[10px] lg:text-sm font-medium hover:bg-red-700 whitespace-nowrap">Close Shift</button>
         </div>
     </div>
@@ -692,6 +700,62 @@
     </div>
 </div>
 
+<!-- CUSTOMER REWARDS / DIY BIZ REWARDS SCAN MODAL -->
+<div x-show="showRewardsModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[340px] lg:max-w-sm p-4 lg:p-6" @click.away="showRewardsModal = false">
+        <h2 class="text-sm lg:text-lg font-bold text-purple-700 mb-1 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+            DIY Biz Rewards
+        </h2>
+        <p class="text-[10px] lg:text-xs text-gray-500 mb-3">Scan customer QR/barcode or enter card number to tag this sale.</p>
+
+        <div x-show="selectedCustomer" class="mb-3 bg-green-50 border border-green-200 rounded-lg p-2 lg:p-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="font-bold text-xs lg:text-sm text-green-800" x-text="selectedCustomer?.name"></div>
+                    <div class="text-[10px] lg:text-xs text-green-600" x-text="selectedCustomer?.phone || selectedCustomer?.email || selectedCustomer?.card_number || ''"></div>
+                </div>
+                <button @click="selectedCustomer = null; customerSearch = ''; rewardsCardInput = ''" class="text-red-400 hover:text-red-600 text-[10px] lg:text-xs">Remove</button>
+            </div>
+        </div>
+
+        <div x-show="!selectedCustomer">
+            <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-1">Card Number / Phone / Name</label>
+            <input type="text" x-model="rewardsCardInput" @keydown.enter="lookupRewardsCustomer()"
+                   class="w-full p-2 lg:p-3 border-2 rounded-lg text-sm lg:text-base font-medium text-center focus:border-purple-500 focus:outline-none"
+                   placeholder="Scan or type here..." x-ref="rewardsInput">
+
+            <div class="flex gap-1.5 mt-2">
+                <button @click="scanRewardsCard()" :disabled="!buddyConnected && !hasNativeBridge"
+                        class="flex-1 py-2 lg:py-2.5 rounded-lg text-[10px] lg:text-sm font-medium flex items-center justify-center gap-1 transition-colors"
+                        :class="buddyConnected || hasNativeBridge ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'">
+                    <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                    Scan QR/Barcode
+                </button>
+                <button @click="lookupRewardsCustomer()" :disabled="!rewardsCardInput"
+                        class="flex-1 py-2 lg:py-2.5 bg-blue-600 text-white rounded-lg text-[10px] lg:text-sm font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                    Look Up
+                </button>
+            </div>
+
+            <div x-show="rewardsResults.length > 0" class="mt-2 max-h-32 overflow-y-auto border rounded-lg">
+                <template x-for="c in rewardsResults" :key="c.id">
+                    <button @click="selectRewardsCustomer(c)"
+                            class="w-full text-left px-2 py-1.5 hover:bg-purple-50 border-b last:border-0 text-[11px] lg:text-sm">
+                        <div class="font-medium" x-text="c.name"></div>
+                        <div class="text-[10px] lg:text-xs text-gray-400" x-text="[c.card_number, c.phone, c.email].filter(Boolean).join(' · ')"></div>
+                    </button>
+                </template>
+            </div>
+            <div x-show="rewardsNoMatch" class="mt-2 text-center text-[10px] lg:text-xs text-red-500 bg-red-50 rounded p-2">No matching customer found.</div>
+        </div>
+
+        <div class="flex gap-2 mt-4">
+            <button @click="showRewardsModal = false" class="flex-1 py-2 lg:py-3 bg-gray-200 text-gray-700 rounded-lg text-xs lg:text-base font-medium hover:bg-gray-300">Close</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 <script>
 function posApp() {
@@ -737,6 +801,12 @@ function posApp() {
 
         showHistoryModal: false,
         recentSales: [],
+
+        showRewardsModal: false,
+        rewardsCardInput: '',
+        rewardsResults: [],
+        rewardsNoMatch: false,
+        hasNativeBridge: false,
 
         syncStatus: 'offline',
         pendingSyncCount: 0,
@@ -793,6 +863,7 @@ function posApp() {
         },
 
         async init() {
+            this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
             await this.initOffline();
             this.loadShift();
             this.initBuddy();
@@ -851,6 +922,55 @@ function posApp() {
         async buddyScanBarcode() { if (!this.buddyConnected) return; const r = await INSABuddy.scan(); if (r && r.success && r.value) this.handleBarcodeScan(r.value); },
         async buddyOpenDrawer() { if (!this.buddyConnected) return; await INSABuddy.openDrawer(); },
 
+        async scanProduct() {
+            if (this.buddyConnected) { this.buddyScanBarcode(); return; }
+            if (this.hasNativeBridge && typeof window.INSAPOS.scanBarcode === 'function') {
+                try { window.INSAPOS.scanBarcode(); } catch {}
+                return;
+            }
+            this.showToast('No scanner available. Connect INSABuddy or use a HID scanner.', 'warning');
+        },
+
+        async scanRewardsCard() {
+            let scannedValue = null;
+            if (this.buddyConnected) {
+                const r = await INSABuddy.scan();
+                if (r && r.success && r.value) scannedValue = r.value;
+            } else if (this.hasNativeBridge && typeof window.INSAPOS.scanBarcode === 'function') {
+                try { window.INSAPOS.scanBarcode(); } catch {}
+                this.showToast('Point camera at customer QR code or barcode', 'info');
+                return;
+            }
+            if (scannedValue) { this.rewardsCardInput = scannedValue; this.lookupRewardsCustomer(); }
+            else if (!this.buddyConnected && !this.hasNativeBridge) { this.showToast('No scanner. Type the card number manually.', 'warning'); }
+        },
+
+        async lookupRewardsCustomer() {
+            const q = (this.rewardsCardInput || '').trim();
+            if (!q) return;
+            this.rewardsResults = [];
+            this.rewardsNoMatch = false;
+            try {
+                const res = await fetch('/api/pos/customer/quick-lookup', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({ query: q }) });
+                const data = await res.json();
+                const customers = (data.customers || []).map(c => ({ id: c.uuid || c.id, name: c.full_name || c.name || (c.first_name + ' ' + c.last_name), phone: c.phone, email: c.email, card_number: c.card_number, loyalty_points: c.loyalty_points }));
+                if (customers.length > 0) {
+                    this.rewardsResults = customers;
+                    if (customers.length === 1) this.selectRewardsCustomer(customers[0]);
+                } else { this.rewardsNoMatch = true; }
+            } catch { this.showToast('Could not look up customer.', 'error'); }
+        },
+
+        selectRewardsCustomer(c) {
+            this.selectedCustomer = c;
+            this.customerSearch = c.name;
+            this.rewardsCardInput = '';
+            this.rewardsResults = [];
+            this.rewardsNoMatch = false;
+            this.showRewardsModal = false;
+            this.showToast('Customer tagged: ' + c.name, 'success');
+        },
+
         async buddyPrintReceipt() {
             if (!this.buddyConnected || !this.lastSale) return;
             await INSABuddy.printReceipt({
@@ -870,8 +990,9 @@ function posApp() {
             const db = window.INSADB;
             if (db) { this.customerResults = await db.customers.search(q); if (this.customerResults.length > 0) { this.showCustomerDropdown = true; return; } }
             try {
-                const res = await fetch('/api/pos/customer/lookup', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({ query: q }) });
-                const data = await res.json(); this.customerResults = data.customers || [];
+                const res = await fetch('/api/pos/customer/quick-lookup', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({ query: q }) });
+                const data = await res.json();
+                this.customerResults = (data.customers || []).map(c => ({ id: c.uuid || c.id, name: c.full_name || c.name || (c.first_name + ' ' + c.last_name), phone: c.phone, email: c.email, card_number: c.card_number }));
                 if (this.customerResults.length > 0) this.showCustomerDropdown = true;
             } catch {}
         },
@@ -952,15 +1073,25 @@ function posApp() {
 
         async loadRecentSales() {
             this.recentSales = [];
-            const db = window.INSADB;
-            if (db) { const local = await db.transactions.getAll(); this.recentSales = local.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20); }
             try {
-                const res = await fetch('/api/pos/sales/recent?limit=20', { headers: this.csrfHeader() }); const data = await res.json();
-                if (data.sales && data.sales.length > 0) {
-                    const serverSales = data.sales.map(s => ({ ...s, status: 'completed' }));
+                const db = window.INSADB;
+                if (db) {
+                    try {
+                        const local = await db.transactions.getAll();
+                        if (local && local.length) this.recentSales = local.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20);
+                    } catch {}
+                }
+            } catch {}
+            try {
+                const res = await fetch('/api/pos/sales/recent?limit=20', { headers: this.csrfHeader() });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.success && data.sales && data.sales.length > 0) {
+                    const serverSales = data.sales.map(s => ({ ...s, total: parseFloat(s.total || 0), status: s.status || 'completed' }));
+                    if (this.recentSales.length === 0) { this.recentSales = serverSales; return; }
                     const localIds = new Set(this.recentSales.map(s => s.local_id).filter(Boolean));
                     const merged = [...this.recentSales];
-                    for (const s of serverSales) { if (!localIds.has(s.local_id)) merged.push(s); }
+                    for (const s of serverSales) { if (!s.local_id || !localIds.has(s.local_id)) merged.push(s); }
                     this.recentSales = merged.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 25);
                 }
             } catch {}
