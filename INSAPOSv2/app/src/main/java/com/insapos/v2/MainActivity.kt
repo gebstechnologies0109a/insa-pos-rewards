@@ -117,8 +117,8 @@ class MainActivity : AppCompatActivity() {
 
         requestPermissions()
         setupCookies()
-        setupWebView()
         setupConnectivity()
+        setupWebView()
         startPosService()
 
         probeAndLoad()
@@ -225,10 +225,14 @@ class MainActivity : AppCompatActivity() {
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
 
-            cacheMode = if (connectivity.isConnected())
+            cacheMode = try {
+                if (connectivity.isConnected())
+                    android.webkit.WebSettings.LOAD_DEFAULT
+                else
+                    android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+            } catch (_: Exception) {
                 android.webkit.WebSettings.LOAD_DEFAULT
-            else
-                android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+            }
 
             val appUa = "INSAPOSv2/${BuildConfig.VERSION_NAME} Android/${Build.VERSION.RELEASE}"
             userAgentString = "$userAgentString $appUa"
