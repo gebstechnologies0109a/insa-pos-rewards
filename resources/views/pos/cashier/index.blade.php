@@ -263,23 +263,33 @@
 
     <!-- LEFT: RETAIL MODE (Scan & Punch) -->
     <div x-show="posMode === 'retail'" class="flex-1 flex flex-col min-w-0">
-        <!-- Scan Bar -->
+        <!-- Scan Bar + Preview Toggle -->
         <div class="mb-3 lg:mb-4">
-            <div class="relative">
-                <input type="text" x-model="retailScanQuery" id="retailScanInput"
-                       @keydown.enter.prevent="retailScan()"
-                       placeholder="Scan barcode or type product name..."
-                       class="w-full p-3 pl-10 lg:p-4 lg:pl-12 border-2 border-green-400 rounded-xl text-sm lg:text-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:outline-none font-medium bg-green-50/50">
-                <svg class="w-5 h-5 lg:w-6 lg:h-6 text-green-500 absolute left-3 top-3.5 lg:left-4 lg:top-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                <button x-show="retailScanQuery.length > 0" @click="retailCancel()"
-                        class="absolute right-3 top-3 lg:right-4 lg:top-3.5 text-gray-400 hover:text-red-500 p-0.5">
-                    <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            <div class="flex gap-2 items-stretch">
+                <div class="relative flex-1">
+                    <input type="text" x-model="retailScanQuery" id="retailScanInput"
+                           @keydown.enter.prevent="retailScan()"
+                           :placeholder="retailPreviewMode ? 'Preview mode — scan barcode or type product...' : 'Scan barcode or type product name...'"
+                           class="w-full p-3 pl-10 lg:p-4 lg:pl-12 border-2 rounded-xl text-sm lg:text-lg focus:ring-2 focus:outline-none font-medium"
+                           :class="retailPreviewMode ? 'border-amber-400 bg-amber-50/50 focus:ring-amber-500 focus:border-amber-500' : 'border-green-400 bg-green-50/50 focus:ring-green-500 focus:border-green-500'">
+                    <svg class="w-5 h-5 lg:w-6 lg:h-6 absolute left-3 top-3.5 lg:left-4 lg:top-4" :class="retailPreviewMode ? 'text-amber-500' : 'text-green-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                    <button x-show="retailScanQuery.length > 0" @click="retailCancel()"
+                            class="absolute right-3 top-3 lg:right-4 lg:top-3.5 text-gray-400 hover:text-red-500 p-0.5">
+                        <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <button @click="retailPreviewMode = !retailPreviewMode; retailCancel()"
+                        class="px-3 lg:px-4 rounded-xl border-2 font-semibold text-xs lg:text-sm whitespace-nowrap transition-colors flex items-center gap-1.5"
+                        :class="retailPreviewMode ? 'border-amber-400 bg-amber-100 text-amber-700 hover:bg-amber-200' : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'"
+                        :title="retailPreviewMode ? 'Preview ON — scans show product details first' : 'Preview OFF — scans add directly to cart'">
+                    <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                    Preview
                 </button>
             </div>
         </div>
 
-        <!-- Scanned Product Preview -->
-        <template x-if="retailScanResult">
+        <!-- Scanned Product Preview (only when Preview mode is on) -->
+        <template x-if="retailPreviewMode && retailScanResult">
             <div class="bg-white rounded-xl shadow-lg border-2 border-green-300 p-4 lg:p-6 mb-4 animate-in">
                 <div class="flex items-start justify-between gap-4">
                     <div class="flex-1">
@@ -306,7 +316,7 @@
             </div>
         </template>
 
-        <!-- Multiple Search Results (when name search returns >1) -->
+        <!-- Multiple Search Results (when name search returns >1, user picks one) -->
         <div x-show="!retailScanResult && filteredProducts.length > 0" class="mb-3">
             <div class="text-xs text-gray-500 mb-1.5 font-medium" x-text="filteredProducts.length + ' results — tap to add'"></div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 lg:max-h-60 overflow-y-auto">
@@ -973,6 +983,7 @@ function posApp() {
         screen: 'pos',
         posMode: localStorage.getItem('insapos_mode') || '',
         showModeSelect: !localStorage.getItem('insapos_mode'),
+        retailPreviewMode: false,
         retailScanResult: null,
         retailScanQuery: '',
         activeShift: null,
@@ -1098,11 +1109,15 @@ function posApp() {
             if (!q) { this.retailScanResult = null; return; }
             const exact = this.products.find(p => (p.barcode && p.barcode === q) || (p.sku && p.sku === q));
             if (exact) {
-                this.retailScanResult = exact;
+                if (this.retailPreviewMode) { this.retailScanResult = exact; }
+                else { this.retailAddToCart(exact); this.showToast(exact.name + ' added', 'success', 1500); }
                 return;
             }
             const fuzzy = this.products.filter(p => p.name.toLowerCase().includes(q.toLowerCase()));
-            if (fuzzy.length === 1) { this.retailScanResult = fuzzy[0]; }
+            if (fuzzy.length === 1) {
+                if (this.retailPreviewMode) { this.retailScanResult = fuzzy[0]; }
+                else { this.retailAddToCart(fuzzy[0]); this.showToast(fuzzy[0].name + ' added', 'success', 1500); }
+            }
             else if (fuzzy.length > 1) { this.retailScanResult = null; this.filteredProducts = fuzzy; }
             else { this.retailScanResult = null; this.filteredProducts = []; this.showToast('Product not found: ' + q, 'warning'); }
         },
@@ -1168,8 +1183,10 @@ function posApp() {
             if (!barcode || barcode.length < 2) return;
             const product = this.products.find(p => (p.barcode && p.barcode === barcode) || (p.sku && p.sku === barcode));
             if (this.posMode === 'retail') {
-                if (product) { this.retailScanResult = product; this.retailScanQuery = barcode; }
-                else { this.retailScanQuery = barcode; this.retailScan(); }
+                if (product) {
+                    if (this.retailPreviewMode) { this.retailScanResult = product; this.retailScanQuery = barcode; }
+                    else { this.addToCart(product); this.showToast(product.name + ' added', 'success', 1500); }
+                } else { this.retailScanQuery = barcode; this.showToast('Product not found: ' + barcode, 'warning'); }
                 return;
             }
             if (product) { this.addToCart(product); this.showToast(product.name + ' added', 'success', 1500); }
