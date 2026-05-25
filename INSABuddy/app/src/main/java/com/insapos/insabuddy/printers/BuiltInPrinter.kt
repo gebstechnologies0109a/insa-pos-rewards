@@ -18,7 +18,11 @@ class BuiltInPrinter(private val context: Context) : Printer {
         private val IMIN_SERVICE = "com.imin.printerlib.IminPrintUtils"
 
         fun isAvailable(context: Context): Boolean {
-            return getSunmiPrintService(context) != null || getIminPrintService(context) != null
+            return try {
+                getSunmiPrintService(context) != null || getIminPrintService(context) != null
+            } catch (_: Exception) {
+                false
+            }
         }
 
         private fun getSunmiPrintService(context: Context): Any? {

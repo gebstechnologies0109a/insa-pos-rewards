@@ -54,12 +54,22 @@ class INSABuddyService : Service() {
         super.onCreate()
         instance = this
 
+        createNotificationChannel()
+
         printerManager = PrinterManager(applicationContext)
         scannerBridge = ScannerBridge()
         deviceInfo = DeviceInfo(applicationContext)
 
-        printerManager.initialize()
-        createNotificationChannel()
+        // Initialize printer on background thread — Bluetooth/USB I/O is blocking
+        serviceScope.launch {
+            try {
+                printerManager.initialize()
+                log("Printer manager initialized")
+            } catch (e: Exception) {
+                Log.e(TAG, "Printer init failed: ${e.message}")
+                log("Printer init failed: ${e.message}")
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -76,7 +86,7 @@ class INSABuddyService : Service() {
         stopServer()
         reconnectJob?.cancel()
         serviceScope.cancel()
-        printerManager.disconnect()
+        try { printerManager.disconnect() } catch (_: Exception) {}
         instance = null
         log("Service destroyed")
         super.onDestroy()

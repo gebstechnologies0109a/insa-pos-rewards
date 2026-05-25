@@ -108,23 +108,35 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             appendLog("Scanning for printers...")
+            binding.btnScanPrinters.isEnabled = false
             Thread {
-                val printers = service?.printerManager?.scanAll() ?: emptyList()
-                runOnUiThread {
-                    if (printers.isEmpty()) {
-                        appendLog("No printers found")
-                        binding.tvPrinterStatus.text = "No printers found"
-                    } else {
-                        printers.forEach { p -> appendLog("Found: ${p.type} — ${p.name}") }
-                        binding.tvPrinterStatus.text = "Found ${printers.size} printer(s)"
-
-                        // Auto-select first printer
+                try {
+                    val printers = service?.printerManager?.scanAll() ?: emptyList()
+                    runOnUiThread {
+                        binding.btnScanPrinters.isEnabled = true
+                        if (printers.isEmpty()) {
+                            appendLog("No printers found")
+                            binding.tvPrinterStatus.text = "No printers found"
+                        } else {
+                            printers.forEach { p -> appendLog("Found: ${p.type} — ${p.name}") }
+                            binding.tvPrinterStatus.text = "Found ${printers.size} printer(s)"
+                        }
+                    }
+                    // Auto-connect on background thread (Bluetooth connect is blocking)
+                    if (printers.isNotEmpty()) {
                         val first = printers.first()
                         val connected = service?.printerManager?.selectPrinter(first)
-                        if (connected == true) {
-                            appendLog("Connected to: ${first.name}")
-                            binding.tvPrinterStatus.text = "Connected: ${first.name}"
+                        runOnUiThread {
+                            if (connected == true) {
+                                appendLog("Connected to: ${first.name}")
+                                binding.tvPrinterStatus.text = "Connected: ${first.name}"
+                            }
                         }
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        binding.btnScanPrinters.isEnabled = true
+                        appendLog("Scan failed: ${e.message}")
                     }
                 }
             }.start()
@@ -151,8 +163,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnOpenDrawer.setOnClickListener {
-            service?.printerManager?.openDrawer()
-            appendLog("Cash drawer pulse sent")
+            Thread {
+                try {
+                    service?.printerManager?.openDrawer()
+                    runOnUiThread { appendLog("Cash drawer pulse sent") }
+                } catch (e: Exception) {
+                    runOnUiThread { appendLog("Drawer failed: ${e.message}") }
+                }
+            }.start()
         }
 
         binding.btnScanBarcode.setOnClickListener {
