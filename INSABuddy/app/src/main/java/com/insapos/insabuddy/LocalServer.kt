@@ -1,12 +1,16 @@
 package com.insapos.insabuddy
 
+import android.content.Context
 import android.util.Base64
 import android.util.Log
 import com.insapos.insabuddy.printers.PrinterManager
 import fi.iki.elonen.NanoHTTPD
+import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 class LocalServer(
+    private val context: Context,
     private val printerManager: PrinterManager,
     private val scannerBridge: ScannerBridge,
     private val deviceInfo: DeviceInfo
@@ -18,13 +22,16 @@ class LocalServer(
 
     var onLog: ((String) -> Unit)? = null
 
+    private val cacheDir: File get() = File(context.filesDir, "offline_cache").also { it.mkdirs() }
+    private val transactionsFile: File get() = File(cacheDir, "transactions.json")
+    private val receiptsFile: File get() = File(cacheDir, "receipts.json")
+
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri
         val method = session.method
 
         log("${method.name} $uri")
 
-        // Add CORS headers for web access
         val response = when {
             method == Method.OPTIONS -> corsResponse(newFixedLengthResponse(""))
             uri == "/ping" && method == Method.GET -> handlePing()
@@ -36,6 +43,10 @@ class LocalServer(
             uri == "/printer/status" && method == Method.GET -> handlePrinterStatus()
             uri == "/printer/list" && method == Method.GET -> handlePrinterList()
             uri == "/printer/select" && method == Method.POST -> handlePrinterSelect(session)
+            uri == "/receipt/save" && method == Method.POST -> handleReceiptSave(session)
+            uri == "/transaction/save" && method == Method.POST -> handleTransactionSave(session)
+            uri == "/sync/push" && method == Method.POST -> handleSyncPush(session)
+            uri == "/sync/pull" && method == Method.GET -> handleSyncPull()
             else -> jsonError(Response.Status.NOT_FOUND, "Endpoint not found: $uri")
         }
 
@@ -185,6 +196,98 @@ class LocalServer(
             jsonError(Response.Status.INTERNAL_ERROR, "Select error: ${e.message}")
         }
     }
+
+    // ── Offline Cache Endpoints ──────────────────────────────
+
+    private fun handleReceiptSave(session: IHTTPSession): Response {
+        return try {
+            val body = readBody(session)
+            val receipt = JSONObject(body)
+            val arr = readJsonArray(receiptsFile)
+            arr.put(receipt)
+            receiptsFile.writeText(arr.toString())
+            log("Receipt saved (total: ${arr.length()})")
+            jsonResponse(JSONObject().apply {
+                put("success", true)
+                put("count", arr.length())
+            })
+        } catch (e: Exception) {
+            Log.e(TAG, "Receipt save error: ${e.message}")
+            jsonError(Response.Status.INTERNAL_ERROR, "Receipt save error: ${e.message}")
+        }
+    }
+
+    private fun handleTransactionSave(session: IHTTPSession): Response {
+        return try {
+            val body = readBody(session)
+            val tx = JSONObject(body)
+            val localId = tx.optString("local_id", "")
+
+            val arr = readJsonArray(transactionsFile)
+
+            // Idempotency: don't store duplicates
+            var exists = false
+            if (localId.isNotEmpty()) {
+                for (i in 0 until arr.length()) {
+                    if (arr.getJSONObject(i).optString("local_id") == localId) {
+                        exists = true
+                        break
+                    }
+                }
+            }
+
+            if (!exists) {
+                arr.put(tx)
+                transactionsFile.writeText(arr.toString())
+                log("Transaction saved: $localId (total: ${arr.length()})")
+            }
+
+            jsonResponse(JSONObject().apply {
+                put("success", true)
+                put("duplicate", exists)
+                put("count", arr.length())
+            })
+        } catch (e: Exception) {
+            Log.e(TAG, "Transaction save error: ${e.message}")
+            jsonError(Response.Status.INTERNAL_ERROR, "Transaction save error: ${e.message}")
+        }
+    }
+
+    private fun handleSyncPush(session: IHTTPSession): Response {
+        return handleTransactionSave(session)
+    }
+
+    private fun handleSyncPull(): Response {
+        return try {
+            val transactions = readJsonArray(transactionsFile)
+            val receipts = readJsonArray(receiptsFile)
+
+            // Clear after pull
+            transactionsFile.delete()
+            receiptsFile.delete()
+
+            log("Sync pull: ${transactions.length()} tx, ${receipts.length()} receipts")
+
+            jsonResponse(JSONObject().apply {
+                put("success", true)
+                put("transactions", transactions)
+                put("receipts", receipts)
+            })
+        } catch (e: Exception) {
+            Log.e(TAG, "Sync pull error: ${e.message}")
+            jsonError(Response.Status.INTERNAL_ERROR, "Sync pull error: ${e.message}")
+        }
+    }
+
+    private fun readJsonArray(file: File): JSONArray {
+        return try {
+            if (file.exists()) JSONArray(file.readText()) else JSONArray()
+        } catch (e: Exception) {
+            JSONArray()
+        }
+    }
+
+    // ── Utilities ─────────────────────────────────────────────
 
     private fun readBody(session: IHTTPSession): String {
         val contentLength = session.headers["content-length"]?.toIntOrNull() ?: 0

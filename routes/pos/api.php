@@ -6,6 +6,7 @@ use App\Http\Controllers\POS\PosSettingsController;
 use App\Http\Controllers\POS\ProductLookupController;
 use App\Http\Controllers\POS\ShiftController;
 use App\Http\Controllers\POS\StockInController;
+use App\Http\Controllers\POS\SyncController;
 use App\Models\Inventory\StockMovement;
 use Illuminate\Support\Facades\Route;
 
@@ -15,9 +16,19 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 |
 | All POS-specific API endpoints are defined here. These routes are loaded
-| with the "api" middleware group and a "/api/pos" prefix.
+| with the "web" middleware group and a "/api/pos" prefix.
 |
 */
+
+// ── Sync / Offline ────────────────────────────────────
+Route::get('/ping', [SyncController::class, 'ping'])->name('pos.ping')->withoutMiddleware('auth');
+
+Route::prefix('sync')->group(function () {
+    Route::post('/push', [SyncController::class, 'push'])->name('pos.sync.push');
+    Route::get('/pull', [SyncController::class, 'pull'])->name('pos.sync.pull');
+});
+
+Route::get('/customers/all', [SyncController::class, 'allCustomers'])->name('pos.customers.all');
 
 Route::prefix('customer')->group(function () {
     Route::post('/lookup', [CustomerLookupController::class, 'lookup'])

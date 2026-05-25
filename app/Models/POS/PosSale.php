@@ -10,6 +10,7 @@ class PosSale extends Model
     protected $table = 'pos_sales';
 
     protected $fillable = [
+        'local_id',
         'sale_number',
         'branch_id',
         'shift_id',

@@ -85,7 +85,7 @@ class INSABuddyService : Service() {
     private fun startServer() {
         if (server?.isAlive == true) return
         try {
-            server = LocalServer(printerManager, scannerBridge, deviceInfo).apply {
+            server = LocalServer(applicationContext, printerManager, scannerBridge, deviceInfo).apply {
                 this.onLog = { msg -> this@INSABuddyService.log(msg) }
                 start()
             }
