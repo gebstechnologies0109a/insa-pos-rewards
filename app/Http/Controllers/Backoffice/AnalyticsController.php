@@ -14,6 +14,23 @@ use Illuminate\Support\Facades\DB;
 
 class AnalyticsController extends Controller
 {
+    private bool $isSqlite;
+
+    public function __construct()
+    {
+        $this->isSqlite = DB::connection()->getDriverName() === 'sqlite';
+    }
+
+    private function sqlDate(string $col): string
+    {
+        return $this->isSqlite ? "strftime('%Y-%m-%d', {$col})" : "DATE({$col})";
+    }
+
+    private function sqlHour(string $col): string
+    {
+        return $this->isSqlite ? "CAST(strftime('%H', {$col}) AS INTEGER)" : "HOUR({$col})";
+    }
+
     public function index()
     {
         return view('backoffice.analytics.index');
@@ -54,6 +71,8 @@ class AnalyticsController extends Controller
         $product = Product::findOrFail($productId);
 
         $endOfDay = $end->copy()->endOfDay();
+        $dateExpr = $this->sqlDate('pos_sales.created_at');
+        $hourExpr = $this->sqlHour('pos_sales.created_at');
 
         $daily = PosSaleItem::join('pos_sales', 'pos_sale_items.sale_id', '=', 'pos_sales.id')
             ->where('pos_sales.branch_id', $branch)
@@ -61,7 +80,7 @@ class AnalyticsController extends Controller
             ->where('pos_sale_items.product_id', $productId)
             ->whereBetween('pos_sales.created_at', [$start, $endOfDay])
             ->select(
-                DB::raw('DATE(pos_sales.created_at) as date'),
+                DB::raw("{$dateExpr} as date"),
                 DB::raw('SUM(pos_sale_items.qty) as qty'),
                 DB::raw('SUM(pos_sale_items.line_total) as revenue'),
                 DB::raw('SUM(pos_sale_items.discount) as discount'),
@@ -76,7 +95,7 @@ class AnalyticsController extends Controller
             ->where('pos_sale_items.product_id', $productId)
             ->whereBetween('pos_sales.created_at', [$start, $endOfDay])
             ->select(
-                DB::raw('HOUR(pos_sales.created_at) as hour'),
+                DB::raw("{$hourExpr} as hour"),
                 DB::raw('SUM(pos_sale_items.qty) as qty'),
                 DB::raw('SUM(pos_sale_items.line_total) as revenue'),
             )
@@ -110,8 +129,6 @@ class AnalyticsController extends Controller
             'hourly'  => $hourly,
         ]);
     }
-
-    // --- Private helpers ---
 
     private function resolveRange(string $range, ?string $from, ?string $to): array
     {
@@ -147,21 +164,19 @@ class AnalyticsController extends Controller
 
     private function getSummary(int $branch, Carbon $start, Carbon $end): array
     {
-        $q = $this->salesQuery($branch, $start, $end);
-
-        $row = $q->select(
+        $row = $this->salesQuery($branch, $start, $end)->select(
             DB::raw('COUNT(*) as tx_count'),
             DB::raw('COALESCE(SUM(total), 0) as revenue'),
             DB::raw('COALESCE(SUM(discount_total), 0) as discounts'),
             DB::raw('COALESCE(AVG(total), 0) as avg_ticket'),
         )->first();
 
-        $prevDays = $start->diffInDays($end) ?: 1;
+        $prevDays  = max($start->diffInDays($end), 1);
         $prevStart = $start->copy()->subDays($prevDays + 1);
         $prevEnd   = $start->copy()->subDay();
         $prevRev   = PosSale::where('branch_id', $branch)
             ->where('status', 'completed')
-            ->whereBetween('created_at', [$prevStart, $prevEnd->endOfDay()])
+            ->whereBetween('created_at', [$prevStart, $prevEnd->copy()->endOfDay()])
             ->sum('total');
 
         $growth = $prevRev > 0 ? round((($row->revenue - $prevRev) / $prevRev) * 100, 1) : null;
@@ -213,20 +228,24 @@ class AnalyticsController extends Controller
                 ->where('status', 'completed')
                 ->sum('total');
 
-        $lowStockSub = DB::table('stock_movements')
-            ->join('products', 'stock_movements.product_id', '=', 'products.id')
-            ->where('stock_movements.branch_id', $branch)
-            ->where('products.active', true)
-            ->select('stock_movements.product_id', DB::raw('SUM(stock_movements.qty) as total_qty'))
-            ->groupBy('stock_movements.product_id')
-            ->havingRaw('SUM(stock_movements.qty) <= 10');
-        $lowStock = DB::table(DB::raw("({$lowStockSub->toSql()}) as sub"))
-            ->mergeBindings($lowStockSub)
-            ->count();
+        $lowStock = 0;
+        try {
+            $lowStockRows = DB::table('stock_movements')
+                ->join('products', 'stock_movements.product_id', '=', 'products.id')
+                ->where('stock_movements.branch_id', $branch)
+                ->where('products.active', true)
+                ->select('stock_movements.product_id', DB::raw('SUM(stock_movements.qty) as total_qty'))
+                ->groupBy('stock_movements.product_id')
+                ->havingRaw('SUM(stock_movements.qty) <= 10')
+                ->get();
+            $lowStock = $lowStockRows->count();
+        } catch (\Throwable $e) {
+            // stock_movements table may not exist yet
+        }
 
         return [
-            'today_tx'       => (int) $todaySales->tx_count,
-            'today_revenue'  => round((float) $todaySales->revenue, 2),
+            'today_tx'       => (int) ($todaySales->tx_count ?? 0),
+            'today_revenue'  => round((float) ($todaySales->revenue ?? 0), 2),
             'open_shifts'    => $openShifts->count(),
             'running_sales'  => round((float) $shiftSales, 2),
             'low_stock_count'=> $lowStock,
@@ -235,9 +254,11 @@ class AnalyticsController extends Controller
 
     private function getDailySales(int $branch, Carbon $start, Carbon $end): array
     {
+        $dateExpr = $this->sqlDate('created_at');
+
         return $this->salesQuery($branch, $start, $end)
             ->select(
-                DB::raw('DATE(created_at) as date'),
+                DB::raw("{$dateExpr} as date"),
                 DB::raw('COUNT(*) as tx_count'),
                 DB::raw('COALESCE(SUM(total), 0) as revenue'),
                 DB::raw('COALESCE(SUM(discount_total), 0) as discounts'),
@@ -250,9 +271,11 @@ class AnalyticsController extends Controller
 
     private function getHourlySales(int $branch, Carbon $start, Carbon $end): array
     {
+        $hourExpr = $this->sqlHour('created_at');
+
         return $this->salesQuery($branch, $start, $end)
             ->select(
-                DB::raw('HOUR(created_at) as hour'),
+                DB::raw("{$hourExpr} as hour"),
                 DB::raw('COUNT(*) as tx_count'),
                 DB::raw('COALESCE(SUM(total), 0) as revenue'),
             )
@@ -323,21 +346,25 @@ class AnalyticsController extends Controller
 
     private function getInventorySnapshot(int $branch): array
     {
-        return DB::table('stock_movements')
-            ->join('products', 'stock_movements.product_id', '=', 'products.id')
-            ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
-            ->where('stock_movements.branch_id', $branch)
-            ->where('products.active', true)
-            ->select(
-                'products.id', 'products.name', 'products.sku',
-                'categories.name as category',
-                DB::raw('SUM(stock_movements.qty) as stock'),
-            )
-            ->groupBy('products.id', 'products.name', 'products.sku', 'categories.name')
-            ->havingRaw('SUM(stock_movements.qty) <= 10')
-            ->orderBy('stock')
-            ->limit(20)
-            ->get()
-            ->toArray();
+        try {
+            return DB::table('stock_movements')
+                ->join('products', 'stock_movements.product_id', '=', 'products.id')
+                ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
+                ->where('stock_movements.branch_id', $branch)
+                ->where('products.active', true)
+                ->select(
+                    'products.id', 'products.name', 'products.sku',
+                    'categories.name as category',
+                    DB::raw('SUM(stock_movements.qty) as stock'),
+                )
+                ->groupBy('products.id', 'products.name', 'products.sku', 'categories.name')
+                ->havingRaw('SUM(stock_movements.qty) <= 10')
+                ->orderBy('stock')
+                ->limit(20)
+                ->get()
+                ->toArray();
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 }
