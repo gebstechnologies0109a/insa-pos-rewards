@@ -236,8 +236,21 @@ class MainActivity : AppCompatActivity() {
             webView.loadUrl(BASE_URL)
         }
 
-        // Send logs to server after a delay
-        webView.postDelayed({ flushLogsToServer() }, 5000)
+        // Periodic log flush every 15 seconds
+        startLogFlushTimer()
+    }
+
+    private val logFlushHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val logFlushRunnable = object : Runnable {
+        override fun run() {
+            flushLogsToServer()
+            logFlushHandler.postDelayed(this, 15_000)
+        }
+    }
+
+    private fun startLogFlushTimer() {
+        logFlushHandler.removeCallbacks(logFlushRunnable)
+        logFlushHandler.postDelayed(logFlushRunnable, 5_000)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -270,6 +283,12 @@ class MainActivity : AppCompatActivity() {
         webView.onPause()
         CookieManager.getInstance().flush()
         flushLogsToServer()
+    }
+
+    override fun onDestroy() {
+        logFlushHandler.removeCallbacks(logFlushRunnable)
+        flushLogsToServer()
+        super.onDestroy()
     }
 
     private fun goImmersive() {
@@ -354,8 +373,8 @@ class MainActivity : AppCompatActivity() {
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.setRequestProperty("Accept", "application/json")
-                conn.connectTimeout = 5000
-                conn.readTimeout = 5000
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
                 conn.doOutput = true
 
                 OutputStreamWriter(conn.outputStream).use {
@@ -364,16 +383,20 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val code = conn.responseCode
+                val responseBody = try {
+                    if (code in 200..299) conn.inputStream.bufferedReader().readText()
+                    else conn.errorStream?.bufferedReader()?.readText() ?: "no body"
+                } catch (_: Exception) { "read error" }
                 conn.disconnect()
 
-                if (code == 200 || code == 201) {
-                    Log.d(TAG, "Flushed ${entries.size} logs to server")
+                if (code in 200..299) {
+                    Log.d(TAG, "Flushed ${entries.size} logs to server (HTTP $code)")
                 } else {
-                    Log.w(TAG, "Log flush got HTTP $code")
+                    Log.w(TAG, "Log flush HTTP $code: $responseBody")
                     synchronized(logBuffer) { logBuffer.addAll(0, entries) }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Log flush failed: ${e.message}")
+                Log.w(TAG, "Log flush failed: ${e.javaClass.simpleName}: ${e.message}")
                 synchronized(logBuffer) { logBuffer.addAll(0, entries) }
             }
         }.start()

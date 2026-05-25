@@ -20,6 +20,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
         ]);
+
+        $middleware->validateCsrfTokens(except: [
+            'api/pos/device-log',
+            'api/pos/device-log/*',
+            'api/pos/ping',
+            'api/pos/sync/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
