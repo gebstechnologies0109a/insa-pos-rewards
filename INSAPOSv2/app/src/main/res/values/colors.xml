@@ -7,5 +7,5 @@
     <color name="black">#000000</color>
     <color name="offline_bg">#263238</color>
     <color name="offline_text">#90A4AE</color>
-    <color name="ic_launcher_background">#000000</color>
+    <color name="ic_launcher_background">#00000000</color>
 </resources>

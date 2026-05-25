@@ -1,0 +1,12 @@
+INSAPOS v2.2d: Fix content cutoff on small screens, transparent logo
+
+- Payment panel: scrollable content with pinned "Complete Sale" button
+- Cart panel: pinned footer so "Pay & Complete" never gets cut off
+- Order review: pinned summary bar with flex-shrink-0
+- Payment methods: 3-column grid on small screens (was 2)
+- Shift bar: compact spacing with truncation on small screens
+- Modals: max-height with overflow-y-auto for small viewports
+- Body: dynamic viewport height (100dvh) for Android WebView
+- Safe area padding for system bars
+- Regenerated all app icons with transparent background
+- Bumped to v2.2d (versionCode 4), updated GHA artifact names

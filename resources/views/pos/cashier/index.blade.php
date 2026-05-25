@@ -48,13 +48,19 @@
         @media (min-width: 1024px) { html { font-size: 14px; } }
         @media (min-width: 1280px) { html { font-size: 15px; } }
         @media (min-width: 1920px) { html { font-size: 16px; } }
+
+        /* Safe area for Android system bars and notch devices */
+        body { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+        /* Prevent modal overflow on small screens */
+        .modal-overlay > div { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; }
     </style>
     <script src="https://unpkg.com/dexie@4/dist/dexie.min.js"></script>
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/insabuddy.js') }}"></script>
     <script src="{{ asset('js/sync-engine.js') }}"></script>
 </head>
-<body class="bg-gray-100 h-screen flex flex-col overflow-hidden" x-data="posApp()" x-init="init()" x-cloak
+<body class="bg-gray-100 flex flex-col overflow-hidden" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
 
 <!-- TOAST NOTIFICATIONS -->
@@ -140,18 +146,18 @@
         </div>
         <button @click="showShiftOpenModal = true" class="px-3 py-1.5 lg:px-5 lg:py-2 bg-green-600 text-white rounded-lg text-xs lg:text-base font-medium hover:bg-green-700">Open Shift</button>
     </div>
-    <div x-show="activeShift" class="bg-green-50 border border-green-300 rounded-lg p-2 lg:p-3 flex items-center justify-between">
-        <div>
-            <div class="font-semibold text-green-800 text-xs lg:text-base">Shift Active</div>
-            <div class="text-[11px] lg:text-sm text-green-600">
+    <div x-show="activeShift" class="bg-green-50 border border-green-300 rounded-lg p-1.5 lg:p-3 flex items-center justify-between gap-2">
+        <div class="min-w-0 flex-shrink">
+            <div class="font-semibold text-green-800 text-[11px] lg:text-base">Shift Active</div>
+            <div class="text-[10px] lg:text-sm text-green-600 truncate">
                 Opened: <span x-text="activeShift ? new Date(activeShift.opened_at).toLocaleTimeString() : ''"></span> &middot;
                 Opening Cash: &#8369;<span x-text="activeShift ? parseFloat(activeShift.opening_cash).toFixed(2) : '0.00'"></span>
             </div>
         </div>
-        <div class="flex items-center gap-1 lg:gap-2">
-            <button @click="generateXReading()" class="px-2 py-1 lg:px-4 lg:py-2 bg-blue-600 text-white rounded-lg text-[11px] lg:text-sm font-medium hover:bg-blue-700">X-Reading</button>
-            <button @click="generateZReading()" class="px-2 py-1 lg:px-4 lg:py-2 bg-orange-600 text-white rounded-lg text-[11px] lg:text-sm font-medium hover:bg-orange-700">Z-Reading</button>
-            <button @click="showShiftCloseModal = true" class="px-2 py-1 lg:px-4 lg:py-2 bg-red-600 text-white rounded-lg text-[11px] lg:text-sm font-medium hover:bg-red-700">Close Shift</button>
+        <div class="flex items-center gap-1 lg:gap-2 flex-shrink-0">
+            <button @click="generateXReading()" class="px-1.5 py-1 lg:px-4 lg:py-2 bg-blue-600 text-white rounded-lg text-[10px] lg:text-sm font-medium hover:bg-blue-700 whitespace-nowrap">X-Reading</button>
+            <button @click="generateZReading()" class="px-1.5 py-1 lg:px-4 lg:py-2 bg-orange-600 text-white rounded-lg text-[10px] lg:text-sm font-medium hover:bg-orange-700 whitespace-nowrap">Z-Reading</button>
+            <button @click="showShiftCloseModal = true" class="px-1.5 py-1 lg:px-4 lg:py-2 bg-red-600 text-white rounded-lg text-[10px] lg:text-sm font-medium hover:bg-red-700 whitespace-nowrap">Close Shift</button>
         </div>
     </div>
 </div>
@@ -199,8 +205,8 @@
     </div>
 
     <!-- RIGHT: CART -->
-    <div class="w-56 lg:w-80 xl:w-96 bg-white rounded-lg shadow flex flex-col flex-shrink-0">
-        <div class="p-2 lg:p-4 border-b">
+    <div class="w-56 lg:w-80 xl:w-96 bg-white rounded-lg shadow flex flex-col flex-shrink-0 overflow-hidden">
+        <div class="p-2 lg:p-4 border-b flex-shrink-0">
             <div class="flex items-center justify-between">
                 <h2 class="font-bold text-sm lg:text-lg">Cart</h2>
                 <div class="flex items-center gap-1.5 lg:gap-2">
@@ -260,15 +266,16 @@
             <div x-show="cart.length === 0" class="text-center py-6 lg:py-8 text-gray-300 text-[11px] lg:text-sm">Cart is empty. Tap products to add.</div>
         </div>
 
-        <div class="p-2 lg:p-4 border-t space-y-1 lg:space-y-2">
+        <!-- Pinned cart footer — always visible -->
+        <div class="p-2 lg:p-4 border-t bg-white flex-shrink-0 space-y-0.5 lg:space-y-2">
             <div class="flex justify-between text-[11px] lg:text-sm"><span class="text-gray-500">Subtotal</span><span x-text="'₱' + cartSubtotal.toFixed(2)"></span></div>
             <div class="flex justify-between text-[11px] lg:text-sm">
                 <span class="text-gray-500 cursor-pointer hover:text-blue-600" @click="showOrderDiscountModal = true">Discount <span class="text-[9px] lg:text-xs">(tap)</span></span>
                 <span class="text-red-500" x-text="'- ₱' + cartDiscount.toFixed(2)"></span>
             </div>
-            <div class="flex justify-between text-base lg:text-xl font-bold border-t pt-1.5 lg:pt-2"><span>Total</span><span class="text-blue-700" x-text="'₱' + cartTotal.toFixed(2)"></span></div>
+            <div class="flex justify-between text-base lg:text-xl font-bold border-t pt-1 lg:pt-2"><span>Total</span><span class="text-blue-700" x-text="'₱' + cartTotal.toFixed(2)"></span></div>
             <button @click="goToCheckout()" :disabled="cart.length === 0"
-                    class="w-full py-2 lg:py-3 rounded-lg text-white font-bold text-sm lg:text-lg mt-1 lg:mt-2 transition-colors"
+                    class="w-full py-2 lg:py-3 rounded-lg text-white font-bold text-sm lg:text-lg transition-colors"
                     :class="cart.length > 0 ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'">
                 Pay &amp; Complete
             </button>
@@ -280,8 +287,8 @@
 <div x-show="screen === 'checkout'" id="checkoutScreen" class="flex flex-1 overflow-hidden p-2 gap-2 lg:p-4 lg:gap-4">
 
     <!-- LEFT: ORDER REVIEW -->
-    <div class="flex-1 bg-white rounded-lg shadow flex flex-col min-w-0">
-        <div class="p-2 lg:p-4 border-b flex items-center justify-between">
+    <div class="flex-1 bg-white rounded-lg shadow flex flex-col min-w-0 overflow-hidden">
+        <div class="p-2 lg:p-4 border-b flex items-center justify-between flex-shrink-0">
             <h2 class="font-bold text-sm lg:text-xl">Order Review</h2>
             <button @click="screen = 'pos'" class="text-blue-600 hover:underline text-[11px] lg:text-sm">&larr; Back to POS</button>
         </div>
@@ -314,7 +321,8 @@
                 </tbody>
             </table>
         </div>
-        <div class="p-2 lg:p-4 border-t bg-gray-50">
+        <!-- Pinned order summary — always visible -->
+        <div class="p-2 lg:p-4 border-t bg-gray-50 flex-shrink-0">
             <div x-show="selectedCustomer" class="text-[11px] lg:text-sm text-gray-600 mb-1 lg:mb-2">
                 Customer: <strong x-text="selectedCustomer?.name"></strong>
                 <span class="text-[10px] lg:text-xs text-gray-400" x-text="selectedCustomer?.phone || ''"></span>
@@ -337,61 +345,67 @@
     </div>
 
     <!-- RIGHT: PAYMENT PANEL -->
-    <div class="w-64 lg:w-96 bg-white rounded-lg shadow flex flex-col flex-shrink-0">
-        <div class="p-2 lg:p-4 border-b">
-            <h3 class="font-bold text-sm lg:text-lg mb-2 lg:mb-3">Payment Method</h3>
-            <div class="grid grid-cols-2 gap-1.5 lg:gap-2">
-                <template x-for="m in paymentMethods" :key="m.value">
-                    <button @click="paymentMethod = m.value"
-                            class="p-2 lg:p-3 rounded-lg border-2 text-[11px] lg:text-sm font-medium transition-all text-center"
-                            :class="paymentMethod === m.value ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-gray-300 text-gray-600'">
-                        <div class="text-sm lg:text-lg mb-0.5" x-text="m.icon"></div>
-                        <div x-text="m.label"></div>
-                    </button>
-                </template>
+    <div class="w-64 lg:w-96 bg-white rounded-lg shadow flex flex-col flex-shrink-0 overflow-hidden">
+        <!-- Scrollable content area -->
+        <div class="flex-1 overflow-y-auto">
+            <div class="p-2 lg:p-4 border-b">
+                <h3 class="font-bold text-sm lg:text-lg mb-1.5 lg:mb-3">Payment Method</h3>
+                <div class="grid grid-cols-3 lg:grid-cols-2 gap-1 lg:gap-2">
+                    <template x-for="m in paymentMethods" :key="m.value">
+                        <button @click="paymentMethod = m.value"
+                                class="p-1.5 lg:p-3 rounded-lg border-2 text-[10px] lg:text-sm font-medium transition-all text-center"
+                                :class="paymentMethod === m.value ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-gray-300 text-gray-600'">
+                            <div class="text-xs lg:text-lg mb-0.5" x-text="m.icon"></div>
+                            <div x-text="m.label"></div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <div class="p-2 lg:p-4">
+                <div class="space-y-2 lg:space-y-4">
+                    <div>
+                        <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-0.5 lg:mb-1">Amount Due</label>
+                        <div class="text-xl lg:text-3xl font-bold text-blue-700" x-text="'₱' + cartTotal.toFixed(2)"></div>
+                    </div>
+
+                    <div x-show="paymentMethod === 'cash'">
+                        <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-0.5 lg:mb-1">Cash Received</label>
+                        <input type="number" x-model.number="amountTendered" step="0.01" min="0"
+                               class="w-full p-2 lg:p-3 border-2 rounded-lg text-lg lg:text-2xl font-bold text-center focus:border-blue-500 focus:outline-none"
+                               placeholder="0.00" @input="calculateChange()" x-ref="cashInput">
+                        <div class="grid grid-cols-4 gap-1 lg:gap-2 mt-1 lg:mt-2">
+                            <button @click="amountTendered = cartTotal; calculateChange()"
+                                    class="py-1 lg:py-2 text-[10px] lg:text-sm font-medium bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors">
+                                Exact
+                            </button>
+                            <template x-for="amt in quickCashAmounts" :key="amt">
+                                <button @click="amountTendered = amt; calculateChange()"
+                                        class="py-1 lg:py-2 text-[10px] lg:text-sm font-medium bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                                        x-text="'₱' + amt"></button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div x-show="paymentMethod !== 'cash'">
+                        <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-0.5 lg:mb-1">Reference Number (optional)</label>
+                        <input type="text" x-model="paymentRef" class="w-full p-2 lg:p-3 border rounded-lg text-xs lg:text-sm" placeholder="Transaction ref...">
+                    </div>
+
+                    <div x-show="paymentMethod === 'cash' && amountTendered > 0" class="bg-green-50 border border-green-200 rounded-lg p-1.5 lg:p-4 text-center">
+                        <div class="text-[10px] lg:text-sm text-green-600 font-medium">Change</div>
+                        <div class="text-lg lg:text-3xl font-bold" :class="changeAmount >= 0 ? 'text-green-700' : 'text-red-600'"
+                             x-text="'₱' + Math.abs(changeAmount).toFixed(2)"></div>
+                        <div x-show="changeAmount < 0" class="text-[10px] lg:text-xs text-red-500 mt-0.5">Insufficient amount</div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="p-2 lg:p-4 flex-1 flex flex-col">
-            <div class="space-y-2 lg:space-y-4 flex-1">
-                <div>
-                    <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-0.5 lg:mb-1">Amount Due</label>
-                    <div class="text-xl lg:text-3xl font-bold text-blue-700" x-text="'₱' + cartTotal.toFixed(2)"></div>
-                </div>
-
-                <div x-show="paymentMethod === 'cash'">
-                    <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-0.5 lg:mb-1">Cash Received</label>
-                    <input type="number" x-model.number="amountTendered" step="0.01" min="0"
-                           class="w-full p-2 lg:p-3 border-2 rounded-lg text-lg lg:text-2xl font-bold text-center focus:border-blue-500 focus:outline-none"
-                           placeholder="0.00" @input="calculateChange()" x-ref="cashInput">
-                    <div class="grid grid-cols-4 gap-1 lg:gap-2 mt-1.5 lg:mt-2">
-                        <button @click="amountTendered = cartTotal; calculateChange()"
-                                class="py-1.5 lg:py-2 text-[10px] lg:text-sm font-medium bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors">
-                            Exact
-                        </button>
-                        <template x-for="amt in quickCashAmounts" :key="amt">
-                            <button @click="amountTendered = amt; calculateChange()"
-                                    class="py-1.5 lg:py-2 text-[10px] lg:text-sm font-medium bg-gray-100 rounded hover:bg-gray-200 transition-colors"
-                                    x-text="'₱' + amt"></button>
-                        </template>
-                    </div>
-                </div>
-
-                <div x-show="paymentMethod !== 'cash'">
-                    <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-0.5 lg:mb-1">Reference Number (optional)</label>
-                    <input type="text" x-model="paymentRef" class="w-full p-2 lg:p-3 border rounded-lg text-xs lg:text-sm" placeholder="Transaction ref...">
-                </div>
-
-                <div x-show="paymentMethod === 'cash' && amountTendered > 0" class="bg-green-50 border border-green-200 rounded-lg p-2 lg:p-4 text-center">
-                    <div class="text-[11px] lg:text-sm text-green-600 font-medium">Change</div>
-                    <div class="text-xl lg:text-3xl font-bold" :class="changeAmount >= 0 ? 'text-green-700' : 'text-red-600'"
-                         x-text="'₱' + Math.abs(changeAmount).toFixed(2)"></div>
-                    <div x-show="changeAmount < 0" class="text-[10px] lg:text-xs text-red-500 mt-0.5">Insufficient amount</div>
-                </div>
-            </div>
-
+        <!-- Pinned bottom button — always visible -->
+        <div class="p-2 lg:p-4 border-t bg-white flex-shrink-0">
             <button @click="completeSale()" :disabled="!canProceed"
-                    class="w-full py-3 lg:py-4 rounded-lg text-white font-bold text-base lg:text-xl mt-2 lg:mt-4 transition-colors"
+                    class="w-full py-2.5 lg:py-4 rounded-lg text-white font-bold text-sm lg:text-xl transition-colors"
                     :class="canProceed ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 cursor-not-allowed'">
                 Complete Sale
             </button>
