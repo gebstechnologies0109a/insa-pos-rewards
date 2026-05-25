@@ -21,6 +21,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.CookieManager
+import android.webkit.PermissionRequest
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -172,6 +173,10 @@ class MainActivity : AppCompatActivity() {
     private fun requestPermissions() {
         val needed = mutableListOf<String>()
 
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED
+        ) needed.add(Manifest.permission.CAMERA)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
                 != PackageManager.PERMISSION_GRANTED
@@ -308,6 +313,32 @@ class MainActivity : AppCompatActivity() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 if (newProgress < 100) {
                     showStatus("Loading $newProgress%...")
+                }
+            }
+
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                request?.let { req ->
+                    val granted = req.resources.filter { resource ->
+                        when (resource) {
+                            PermissionRequest.RESOURCE_VIDEO_CAPTURE -> {
+                                ContextCompat.checkSelfPermission(
+                                    this@MainActivity, Manifest.permission.CAMERA
+                                ) == PackageManager.PERMISSION_GRANTED
+                            }
+                            PermissionRequest.RESOURCE_AUDIO_CAPTURE -> false
+                            else -> false
+                        }
+                    }.toTypedArray()
+
+                    runOnUiThread {
+                        if (granted.isNotEmpty()) {
+                            req.grant(granted)
+                            Log.i(TAG, "WebView permission granted: ${granted.joinToString()}")
+                        } else {
+                            req.deny()
+                            Log.w(TAG, "WebView permission denied — camera not permitted")
+                        }
+                    }
                 }
             }
         }
