@@ -59,12 +59,9 @@ class AnalyticsController extends Controller
                 'inventory'  => $this->getInventorySnapshot($branch),
             ]);
         } catch (\Throwable $e) {
+            report($e);
             return response()->json([
-                'error'   => $e->getMessage(),
-                'file'    => basename($e->getFile()) . ':' . $e->getLine(),
-                'trace'   => collect($e->getTrace())->take(5)->map(fn ($t) =>
-                    ($t['file'] ?? '?') . ':' . ($t['line'] ?? '?') . ' ' . ($t['function'] ?? '')
-                )->toArray(),
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred loading analytics data.',
             ], 500);
         }
     }
@@ -140,9 +137,9 @@ class AnalyticsController extends Controller
             'hourly'  => $hourly,
         ]);
         } catch (\Throwable $e) {
+            report($e);
             return response()->json([
-                'error' => $e->getMessage(),
-                'file'  => basename($e->getFile()) . ':' . $e->getLine(),
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred loading product analytics.',
             ], 500);
         }
     }

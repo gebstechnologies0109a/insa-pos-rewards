@@ -285,8 +285,12 @@ function analyticsApp() {
                     credentials: 'same-origin',
                 });
                 if (!res.ok) {
-                    const text = await res.text();
-                    this.errorMsg = 'Server returned ' + res.status + ': ' + text.substring(0, 200);
+                    let msg = 'Server returned ' + res.status;
+                    try {
+                        const errJson = await res.json();
+                        msg += ': ' + (errJson.error || JSON.stringify(errJson).substring(0, 200));
+                    } catch { msg += ' (could not parse response)'; }
+                    this.errorMsg = msg;
                     this.loading = false;
                     return;
                 }
