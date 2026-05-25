@@ -1,5 +1,7 @@
-Fix analytics: use database-agnostic DATE/HOUR functions for SQLite+MySQL
+Fix HTTPS and analytics data loading
 
-HOUR() and DATE() are MySQL-only. Added driver detection to use
-strftime() on SQLite and native functions on MySQL. Also added
-try-catch around stock_movements queries for resilience.
+- Force HTTPS scheme in production via URL::forceScheme
+- Trust all proxies for Forge Nginx SSL termination
+- Add X-Requested-With header and credentials to fetch calls
+- Add visible error banner when analytics API fails
+- Check response status before parsing JSON
