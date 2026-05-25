@@ -10,7 +10,9 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import com.insapos.v2.db.OfflineDatabase
 import com.insapos.v2.printers.PrinterManager
+import com.insapos.v2.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +33,10 @@ class PosService : Service() {
         private set
     var localServer: PosLocalServer? = null
         private set
+    var offlineDb: OfflineDatabase? = null
+        private set
+    var syncEngine: SyncEngine? = null
+        private set
     var hidScannerDriver: HidScannerDriver? = null
 
     inner class LocalBinder : Binder() {
@@ -43,6 +49,13 @@ class PosService : Service() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
+
+        try {
+            offlineDb = OfflineDatabase(this)
+            Log.i(TAG, "Offline database initialized")
+        } catch (e: Exception) {
+            Log.e(TAG, "Offline DB init failed", e)
+        }
 
         scope.launch {
             try {
@@ -58,7 +71,9 @@ class PosService : Service() {
             localServer = PosLocalServer(
                 context = this,
                 getPrinterManager = { printerManager },
-                getHidScanner = { hidScannerDriver }
+                getHidScanner = { hidScannerDriver },
+                getDatabase = { offlineDb },
+                getSyncEngine = { syncEngine }
             )
             localServer?.start()
             Log.i(TAG, "Local server started on port ${PosLocalServer.PORT}")
@@ -67,9 +82,19 @@ class PosService : Service() {
         }
     }
 
+    fun startSyncEngine(connectivity: ConnectivityMonitor) {
+        if (syncEngine != null) return
+        val db = offlineDb ?: return
+        val session = SessionManager(this)
+        syncEngine = SyncEngine(this, db, session, connectivity).also { it.start() }
+        Log.i(TAG, "Sync engine started")
+    }
+
     override fun onDestroy() {
+        syncEngine?.stop()
         localServer?.stop()
         printerManager?.release()
+        offlineDb?.close()
         super.onDestroy()
     }
 

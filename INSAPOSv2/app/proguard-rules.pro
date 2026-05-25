@@ -11,5 +11,9 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
+# Offline DB & Sync
+-keep class com.insapos.v2.db.** { *; }
+-keep class com.insapos.v2.sync.** { *; }
+
 # Printer reflections (BuiltInPrinter)
 -keepclassmembers class android.os.** { *; }

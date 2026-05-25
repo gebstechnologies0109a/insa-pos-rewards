@@ -48,6 +48,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusBar: LinearLayout
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
+    private lateinit var syncBadge: LinearLayout
+    private lateinit var tvSyncBadge: TextView
+    private lateinit var tvOfflineStats: TextView
     private lateinit var session: SessionManager
     private lateinit var connectivity: ConnectivityMonitor
 
@@ -65,8 +68,13 @@ class MainActivity : AppCompatActivity() {
             val service = (binder as PosService.LocalBinder).getService()
             posService = service
             service.hidScannerDriver = hidScanner
+            service.startSyncEngine(connectivity)
             serviceBound = true
-            Log.i(TAG, "PosService bound")
+            Log.i(TAG, "PosService bound with sync engine")
+
+            service.syncEngine?.onSyncStatusChanged = { status ->
+                runOnUiThread { updateSyncBadge() }
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -90,6 +98,9 @@ class MainActivity : AppCompatActivity() {
         statusBar = findViewById(R.id.statusBar)
         statusDot = findViewById(R.id.statusDot)
         statusText = findViewById(R.id.statusText)
+        syncBadge = findViewById(R.id.syncBadge)
+        tvSyncBadge = findViewById(R.id.tvSyncBadge)
+        tvOfflineStats = findViewById(R.id.tvOfflineStats)
 
         val versionText = findViewById<TextView>(R.id.versionText)
         versionText.text = "v${BuildConfig.VERSION_NAME}"
@@ -213,6 +224,11 @@ class MainActivity : AppCompatActivity() {
             javaScriptCanOpenWindowsAutomatically = true
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+
+            cacheMode = if (connectivity.isConnected())
+                android.webkit.WebSettings.LOAD_DEFAULT
+            else
+                android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
 
             val appUa = "INSAPOSv2/${BuildConfig.VERSION_NAME} Android/${Build.VERSION.RELEASE}"
             userAgentString = "$userAgentString $appUa"
@@ -340,6 +356,8 @@ class MainActivity : AppCompatActivity() {
             context = this,
             onOnline = {
                 Log.i(TAG, "Network online")
+                updateSyncBadge()
+                posService?.syncEngine?.syncNow()
                 if (isOfflineShown) {
                     handler.postDelayed({
                         if (connectivity.isConnected()) {
@@ -348,10 +366,17 @@ class MainActivity : AppCompatActivity() {
                         }
                     }, 2000)
                 }
+                webView.evaluateJavascript(
+                    "if(window.onINSAPOSConnectivity) window.onINSAPOSConnectivity(true);", null
+                )
             },
             onOffline = {
                 Log.w(TAG, "Network offline")
+                updateSyncBadge()
                 showOffline()
+                webView.evaluateJavascript(
+                    "if(window.onINSAPOSConnectivity) window.onINSAPOSConnectivity(false);", null
+                )
             }
         )
         connectivity.start()
@@ -362,11 +387,49 @@ class MainActivity : AppCompatActivity() {
     private fun showOffline() {
         isOfflineShown = true
         offlineOverlay.visibility = View.VISIBLE
+        updateOfflineStats()
     }
 
     private fun hideOffline() {
         isOfflineShown = false
         offlineOverlay.visibility = View.GONE
+    }
+
+    private fun updateOfflineStats() {
+        val db = posService?.offlineDb ?: return
+        Thread {
+            val stats = db.getOfflineStats()
+            val products = stats.optInt("products", 0)
+            val txns = stats.optInt("transactions", 0)
+            val unsynced = stats.optInt("unsynced_transactions", 0)
+            runOnUiThread {
+                tvOfflineStats.text = when {
+                    products > 0 -> "$products products cached · $txns transactions ($unsynced pending sync)"
+                    else -> "No offline data yet — connect to sync"
+                }
+            }
+        }.start()
+    }
+
+    private fun updateSyncBadge() {
+        val db = posService?.offlineDb ?: return
+        Thread {
+            val unsynced = db.getUnsyncedCount()
+            val queueCount = db.getSyncQueueCount()
+            val total = unsynced + queueCount
+            runOnUiThread {
+                if (total > 0) {
+                    syncBadge.visibility = View.VISIBLE
+                    tvSyncBadge.text = "$total pending"
+                    val dot = findViewById<View>(R.id.syncDot)
+                    dot.setBackgroundColor(
+                        if (connectivity.isConnected()) 0xFFFF9800.toInt() else 0xFFF44336.toInt()
+                    )
+                } else {
+                    syncBadge.visibility = View.GONE
+                }
+            }
+        }.start()
     }
 
     private fun showStatus(text: String) {
@@ -385,16 +448,21 @@ class MainActivity : AppCompatActivity() {
             .replace("'", "\\'")
             .replace("\n", "")
 
+        val isOnline = connectivity.isConnected()
+
         val js = """
             (function() {
                 window.INSAPOS_DEVICE = JSON.parse('$deviceInfo');
                 window.INSAPOS_SERVICE_PORT = ${PosLocalServer.PORT};
+                window.INSAPOS_OFFLINE_CAPABLE = true;
+                window.INSAPOS_ONLINE = $isOnline;
                 if (window.onINSAPOSReady) window.onINSAPOSReady(window.INSAPOS_DEVICE);
                 document.dispatchEvent(new CustomEvent('insapos:ready', { detail: window.INSAPOS_DEVICE }));
             })();
         """.trimIndent()
 
         webView.evaluateJavascript(js, null)
+        handler.postDelayed({ updateSyncBadge() }, 2000)
     }
 
     // --- Service ---

@@ -2,7 +2,9 @@ package com.insapos.v2
 
 import android.content.Context
 import android.util.Log
+import com.insapos.v2.db.OfflineDatabase
 import com.insapos.v2.printers.PrinterManager
+import com.insapos.v2.sync.SyncEngine
 import fi.iki.elonen.NanoHTTPD
 import org.json.JSONArray
 import org.json.JSONObject
@@ -11,6 +13,8 @@ class PosLocalServer(
     private val context: Context,
     private val getPrinterManager: () -> PrinterManager?,
     private val getHidScanner: () -> HidScannerDriver?,
+    private val getDatabase: () -> OfflineDatabase?,
+    private val getSyncEngine: () -> SyncEngine?,
     private val launchCameraScan: (() -> Unit)? = null
 ) : NanoHTTPD("127.0.0.1", PORT) {
 
@@ -46,6 +50,15 @@ class PosLocalServer(
                 uri == "/printer/select" && method == Method.POST -> handlePrinterSelect(session)
                 uri == "/scan" -> handleCameraScan()
                 uri == "/scan/hid" -> handleHidScan()
+                // Offline data endpoints
+                uri == "/offline/products" -> handleGetProducts(session)
+                uri == "/offline/products/barcode" -> handleProductByBarcode(session)
+                uri == "/offline/customers" -> handleGetCustomers()
+                uri == "/offline/transaction" && method == Method.POST -> handleSaveTransaction(session)
+                uri == "/offline/receipt" && method == Method.POST -> handleSaveReceipt(session)
+                uri == "/offline/stats" -> handleOfflineStats()
+                uri == "/offline/sync/status" -> handleSyncStatus()
+                uri == "/offline/sync/now" && method == Method.POST -> handleSyncNow()
                 else -> json404("Unknown endpoint: $uri")
             }
             cors(resp, headers)
@@ -157,6 +170,77 @@ class PosLocalServer(
             put("ok", barcode.isNotBlank())
             put("code", barcode)
         })
+    }
+
+    // --- Offline data handlers ---
+
+    private fun handleGetProducts(session: IHTTPSession): Response {
+        val db = getDatabase() ?: return jsonError("Database not ready")
+        val query = session.parms?.get("q")
+        val products = if (!query.isNullOrBlank()) db.searchProducts(query) else db.getProducts()
+        return jsonOk(JSONObject().put("ok", true).put("products", products).put("count", products.length()))
+    }
+
+    private fun handleProductByBarcode(session: IHTTPSession): Response {
+        val db = getDatabase() ?: return jsonError("Database not ready")
+        val barcode = session.parms?.get("code") ?: return jsonError("Barcode required")
+        val product = db.getProductByBarcode(barcode)
+        return jsonOk(JSONObject().apply {
+            put("ok", product != null)
+            put("product", product ?: JSONObject.NULL)
+        })
+    }
+
+    private fun handleGetCustomers(): Response {
+        val db = getDatabase() ?: return jsonError("Database not ready")
+        val customers = db.getCustomers()
+        return jsonOk(JSONObject().put("ok", true).put("customers", customers).put("count", customers.length()))
+    }
+
+    private fun handleSaveTransaction(session: IHTTPSession): Response {
+        val db = getDatabase() ?: return jsonError("Database not ready")
+        val body = readBody(session)
+        val txn = JSONObject(body)
+        if (!txn.has("local_id")) {
+            txn.put("local_id", java.util.UUID.randomUUID().toString())
+        }
+        val id = db.saveTransaction(txn)
+        db.enqueueSyncAction("push-transaction", "transactions_local", txn.getString("local_id"), txn)
+        return jsonOk(JSONObject().put("ok", true).put("local_db_id", id).put("local_id", txn.getString("local_id")))
+    }
+
+    private fun handleSaveReceipt(session: IHTTPSession): Response {
+        val db = getDatabase() ?: return jsonError("Database not ready")
+        val body = readBody(session)
+        val json = JSONObject(body)
+        val txnId = json.optString("transaction_local_id", "")
+        if (txnId.isBlank()) return jsonError("transaction_local_id required")
+        db.saveReceipt(txnId, json.optString("json", ""), json.optString("text", ""), json.optString("html", ""))
+        return jsonOk(JSONObject().put("ok", true))
+    }
+
+    private fun handleOfflineStats(): Response {
+        val db = getDatabase() ?: return jsonError("Database not ready")
+        val stats = db.getOfflineStats()
+        stats.put("ok", true)
+        return jsonOk(stats)
+    }
+
+    private fun handleSyncStatus(): Response {
+        val sync = getSyncEngine()
+        val db = getDatabase()
+        return jsonOk(JSONObject().apply {
+            put("ok", true)
+            put("status", sync?.lastSyncStatus?.name ?: "UNKNOWN")
+            put("unsynced_count", db?.getUnsyncedCount() ?: 0)
+            put("sync_queue_count", db?.getSyncQueueCount() ?: 0)
+        })
+    }
+
+    private fun handleSyncNow(): Response {
+        val sync = getSyncEngine() ?: return jsonError("Sync engine not ready")
+        sync.syncNow()
+        return jsonOk(JSONObject().put("ok", true).put("triggered", true))
     }
 
     // --- Helpers ---

@@ -99,6 +99,52 @@ class AndroidBridge(private val context: Context) {
     fun getServicePort(): Int = PosLocalServer.PORT
 
     @JavascriptInterface
+    fun isOfflineCapable(): Boolean = true
+
+    @JavascriptInterface
+    fun getOfflineStats(): String {
+        return try {
+            val url = "http://127.0.0.1:${PosLocalServer.PORT}/offline/stats"
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 3000
+            val response = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            response
+        } catch (e: Exception) {
+            JSONObject().put("ok", false).put("error", e.message).toString()
+        }
+    }
+
+    @JavascriptInterface
+    fun getSyncStatus(): String {
+        return try {
+            val url = "http://127.0.0.1:${PosLocalServer.PORT}/offline/sync/status"
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 3000
+            val response = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            response
+        } catch (e: Exception) {
+            JSONObject().put("ok", false).put("error", e.message).toString()
+        }
+    }
+
+    @JavascriptInterface
+    fun triggerSync(): String {
+        return try {
+            val url = "http://127.0.0.1:${PosLocalServer.PORT}/offline/sync/now"
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 3000
+            val response = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            response
+        } catch (e: Exception) {
+            JSONObject().put("ok", false).put("error", e.message).toString()
+        }
+    }
+
+    @JavascriptInterface
     fun log(level: String, message: String) {
         when (level.lowercase()) {
             "error" -> Log.e(TAG, message)
