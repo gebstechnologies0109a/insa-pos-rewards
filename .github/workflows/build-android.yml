@@ -6,6 +6,7 @@ on:
     paths:
       - 'INSABuddy/**'
       - 'INSAPOS/**'
+      - 'INSAPOSv2/**'
       - '.github/workflows/build-android.yml'
   workflow_dispatch:
 
@@ -90,4 +91,56 @@ jobs:
         with:
           name: INSAPOS-debug
           path: INSAPOS/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 90
+
+  build-insaposv2:
+    name: Build INSAPOSv2 APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Install required SDK platforms
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Create Gradle Wrapper
+        working-directory: INSAPOSv2
+        run: gradle wrapper --gradle-version 8.11.1
+
+      - name: Build Debug APK
+        working-directory: INSAPOSv2
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Build Release APK
+        working-directory: INSAPOSv2
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Upload INSAPOSv2 Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: INSAPOSv2-debug
+          path: INSAPOSv2/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 90
+
+      - name: Upload INSAPOSv2 Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: INSAPOSv2-release
+          path: INSAPOSv2/app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 90
