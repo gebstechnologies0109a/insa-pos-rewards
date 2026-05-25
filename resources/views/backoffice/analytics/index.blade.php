@@ -31,6 +31,9 @@
     </div>
 </div>
 
+<!-- ERROR BANNER -->
+<div x-show="errorMsg" class="bg-red-100 border border-red-300 text-red-800 rounded-lg p-4 mb-6 text-sm" x-text="errorMsg"></div>
+
 <!-- REAL-TIME STRIP -->
 <div class="grid grid-cols-5 gap-4 mb-6">
     <div class="bg-gradient-to-br from-green-500 to-green-700 rounded-lg shadow p-4 text-white">
@@ -261,6 +264,7 @@ function analyticsApp() {
         showProductModal: false,
         pdLoading: false,
         pd: { product: null, totals: null, daily: [], hourly: [] },
+        errorMsg: '',
 
         _dailyChart: null,
         _hourlyChart: null,
@@ -272,12 +276,20 @@ function analyticsApp() {
 
         async load() {
             this.loading = true;
+            this.errorMsg = '';
             const params = new URLSearchParams({ range: this.range, top: this.topLimit });
             if (this.range === 'custom') { params.set('from', this.customFrom); params.set('to', this.customTo); }
             try {
                 const res = await fetch('/backoffice/analytics/data?' + params, {
-                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' }
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+                    credentials: 'same-origin',
                 });
+                if (!res.ok) {
+                    const text = await res.text();
+                    this.errorMsg = 'Server returned ' + res.status + ': ' + text.substring(0, 200);
+                    this.loading = false;
+                    return;
+                }
                 const d = await res.json();
                 this.s = d.summary;
                 this.rt = d.realtime;
@@ -288,7 +300,10 @@ function analyticsApp() {
                 this.payment = d.payment;
                 this.inv = d.inventory;
                 this.$nextTick(() => { this.renderCharts(); });
-            } catch (e) { console.error('Analytics load error', e); }
+            } catch (e) {
+                console.error('Analytics load error', e);
+                this.errorMsg = 'Failed to load analytics: ' + e.message;
+            }
             this.loading = false;
         },
 
