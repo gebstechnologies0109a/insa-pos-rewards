@@ -1271,10 +1271,9 @@ function posApp() {
 
         async _nativeScanAsync() {
             try {
-                const res = await fetch(`http://127.0.0.1:${this._nativeScanPort}/scan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(30000) });
+                const res = await fetch(`http://127.0.0.1:${this._nativeScanPort}/scan`, { signal: AbortSignal.timeout(30000) });
                 const data = await res.json();
-                if (data.success && data.value) return data.value;
-                if (data.text) return data.text;
+                if (data.ok && data.code) return data.code;
             } catch {}
             return null;
         },

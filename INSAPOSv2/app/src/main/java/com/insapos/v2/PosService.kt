@@ -38,6 +38,7 @@ class PosService : Service() {
     var syncEngine: SyncEngine? = null
         private set
     var hidScannerDriver: HidScannerDriver? = null
+    var onCameraScanRequested: (() -> Unit)? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): PosService = this@PosService
@@ -73,7 +74,8 @@ class PosService : Service() {
                 getPrinterManager = { printerManager },
                 getHidScanner = { hidScannerDriver },
                 getDatabase = { offlineDb },
-                getSyncEngine = { syncEngine }
+                getSyncEngine = { syncEngine },
+                launchCameraScan = { onCameraScanRequested?.invoke() }
             )
             localServer?.start()
             Log.i(TAG, "Local server started on port ${PosLocalServer.PORT}")

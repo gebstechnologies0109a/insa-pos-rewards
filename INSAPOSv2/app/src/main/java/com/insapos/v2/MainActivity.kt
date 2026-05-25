@@ -33,9 +33,12 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.activity.result.ActivityResultLauncher
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 class MainActivity : AppCompatActivity() {
 
@@ -64,11 +67,29 @@ class MainActivity : AppCompatActivity() {
 
     private var hidScanner: HidScannerDriver? = null
 
+    private val barcodeLauncher: ActivityResultLauncher<ScanOptions> =
+        registerForActivityResult(ScanContract()) { result ->
+            val code = result.contents
+            Log.i(TAG, "ZXing scan result: $code")
+            if (code != null) {
+                posService?.localServer?.lastCameraScanResult = code
+                handler.post {
+                    webView.evaluateJavascript(
+                        "if(window.onINSAPOSBarcode) window.onINSAPOSBarcode('${code.replace("'", "\\'")}');",
+                        null
+                    )
+                }
+            } else {
+                posService?.localServer?.lastCameraScanResult = ""
+            }
+        }
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val service = (binder as PosService.LocalBinder).getService()
             posService = service
             service.hidScannerDriver = hidScanner
+            service.onCameraScanRequested = { launchCameraScanner() }
             service.startSyncEngine(connectivity)
             serviceBound = true
             Log.i(TAG, "PosService bound with sync engine")
@@ -498,6 +519,28 @@ class MainActivity : AppCompatActivity() {
 
         webView.evaluateJavascript(js, null)
         handler.postDelayed({ updateSyncBadge() }, 2000)
+    }
+
+    // --- Camera barcode scanner ---
+
+    private fun launchCameraScanner() {
+        runOnUiThread {
+            try {
+                val options = ScanOptions().apply {
+                    setDesiredBarcodeFormats(ScanOptions.ALL_CODE_TYPES)
+                    setPrompt("Point camera at barcode or QR code")
+                    setCameraId(0)
+                    setBeepEnabled(true)
+                    setBarcodeImageEnabled(false)
+                    setOrientationLocked(false)
+                }
+                barcodeLauncher.launch(options)
+                Log.i(TAG, "ZXing camera scanner launched")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch camera scanner", e)
+                posService?.localServer?.lastCameraScanResult = ""
+            }
+        }
     }
 
     // --- Service ---
