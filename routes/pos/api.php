@@ -20,6 +20,10 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+// ── Device Logging (no auth — device may not have session) ──
+Route::post('/device-log', [\App\Http\Controllers\DeviceLogController::class, 'store'])->name('pos.device-log');
+Route::post('/device-log/clear', [\App\Http\Controllers\DeviceLogController::class, 'clear'])->name('pos.device-log.clear');
+
 // ── Sync / Offline ────────────────────────────────────
 Route::get('/ping', [SyncController::class, 'ping'])->name('pos.ping')->withoutMiddleware('auth');
 

@@ -92,6 +92,12 @@ Route::middleware(['auth', 'role:owner,admin,manager'])->prefix('admin')->group(
 });
 
 // ── Admin-only (owner, admin) ────────────────────
+// ── Device Logs (admin/owner only) ────────────────
+Route::middleware(['auth', 'role:owner,admin'])->group(function () {
+    Route::get('/insaposlogs', [\App\Http\Controllers\DeviceLogController::class, 'index'])
+        ->name('admin.device-logs');
+});
+
 Route::middleware(['auth', 'role:owner,admin'])->prefix('admin')->group(function () {
     Route::resource('branches', BranchController::class)
         ->names('admin.branches')
