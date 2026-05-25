@@ -129,46 +129,75 @@
 
                     <TextView
                         android:id="@+id/tvPrinterStatus"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="No printer connected"
                         android:textSize="14sp"
                         android:textColor="@color/text_secondary" />
 
+                    <!-- Step 1: Scan -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnScanPrinters"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
-                        android:text="Scan for Printers"
+                        android:text="Step 1: Scan for Printers"
+                        app:icon="@android:drawable/ic_menu_search"
                         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         app:cornerRadius="8dp" />
 
-                    <!-- Printer selection dropdown — populated after scanning -->
-                    <Spinner
-                        android:id="@+id/spinnerPrinters"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="8dp"
-                        android:background="@android:drawable/btn_dropdown"
-                        android:visibility="gone" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnConnectPrinter"
+                    <!-- Step 2: Select from dropdown -->
+                    <LinearLayout
+                        android:id="@+id/printerSelectionGroup"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="Connect Selected Printer"
+                        android:orientation="vertical"
                         android:visibility="gone"
-                        app:cornerRadius="8dp" />
+                        android:layout_marginTop="12dp">
 
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Step 2: Select a printer"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/text_primary"
+                            android:layout_marginBottom="6dp" />
+
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/spinner_border"
+                            android:padding="4dp">
+
+                            <Spinner
+                                android:id="@+id/spinnerPrinters"
+                                android:layout_width="match_parent"
+                                android:layout_height="48dp"
+                                android:spinnerMode="dropdown"
+                                android:popupBackground="@android:color/white" />
+                        </FrameLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnConnectPrinter"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="Select &amp; Connect Printer"
+                            app:backgroundTint="@color/primary"
+                            app:cornerRadius="8dp" />
+
+                    </LinearLayout>
+
+                    <!-- Step 3: Test Print (only enabled when connected) -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnTestPrint"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="Test Print"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_marginTop="12dp"
+                        android:text="Step 3: Test Print"
+                        android:enabled="false"
+                        app:backgroundTint="#4CAF50"
                         app:cornerRadius="8dp" />
 
                 </LinearLayout>

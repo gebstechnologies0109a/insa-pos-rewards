@@ -135,19 +135,21 @@ class MainActivity : AppCompatActivity() {
             }
             appendLog("Scanning for printers...")
             binding.btnScanPrinters.isEnabled = false
-            binding.tvPrinterStatus.text = "Scanning..."
+            binding.btnScanPrinters.text = "Scanning..."
+            binding.tvPrinterStatus.text = "Scanning for printers..."
+
             Thread {
                 try {
                     val printers = service?.printerManager?.scanAll() ?: emptyList()
                     runOnUiThread {
                         binding.btnScanPrinters.isEnabled = true
+                        binding.btnScanPrinters.text = "Step 1: Scan for Printers"
                         scannedPrinters = printers
 
                         if (printers.isEmpty()) {
                             appendLog("No printers found")
-                            binding.tvPrinterStatus.text = "No printers found"
-                            binding.spinnerPrinters.visibility = View.GONE
-                            binding.btnConnectPrinter.visibility = View.GONE
+                            binding.tvPrinterStatus.text = "No printers found — make sure Bluetooth is on and devices are paired"
+                            binding.printerSelectionGroup.visibility = View.GONE
                         } else {
                             printers.forEach { p -> appendLog("Found: [${p.type}] ${p.name}") }
                             binding.tvPrinterStatus.text = "Found ${printers.size} printer(s) — select one below"
@@ -155,15 +157,15 @@ class MainActivity : AppCompatActivity() {
                             val names = printers.map { "[${it.type}] ${it.name}" }
                             val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
                             binding.spinnerPrinters.adapter = adapter
-                            binding.spinnerPrinters.visibility = View.VISIBLE
-                            binding.btnConnectPrinter.visibility = View.VISIBLE
+                            binding.printerSelectionGroup.visibility = View.VISIBLE
                         }
                     }
                 } catch (e: Exception) {
                     runOnUiThread {
                         binding.btnScanPrinters.isEnabled = true
+                        binding.btnScanPrinters.text = "Step 1: Scan for Printers"
                         appendLog("Scan failed: ${e.message}")
-                        binding.tvPrinterStatus.text = "Scan failed"
+                        binding.tvPrinterStatus.text = "Scan failed: ${e.message}"
                     }
                 }
             }.start()
@@ -172,7 +174,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnConnectPrinter.setOnClickListener {
             val idx = binding.spinnerPrinters.selectedItemPosition
             if (idx < 0 || idx >= scannedPrinters.size) {
-                Toast.makeText(this, "Select a printer first", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Select a printer from the dropdown first", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -186,22 +188,25 @@ class MainActivity : AppCompatActivity() {
                     val connected = service?.printerManager?.selectPrinter(printer) ?: false
                     runOnUiThread {
                         binding.btnConnectPrinter.isEnabled = true
-                        binding.btnConnectPrinter.text = "Connect Selected Printer"
+                        binding.btnConnectPrinter.text = "Select & Connect Printer"
                         if (connected) {
                             appendLog("Connected to: ${printer.name}")
-                            binding.tvPrinterStatus.text = "Connected: ${printer.name}"
-                            Toast.makeText(this, "Printer connected!", Toast.LENGTH_SHORT).show()
+                            binding.tvPrinterStatus.text = "✓ Connected: ${printer.name}"
+                            binding.btnTestPrint.isEnabled = true
+                            Toast.makeText(this, "Printer connected! You can now test print.", Toast.LENGTH_SHORT).show()
                         } else {
                             appendLog("Failed to connect to: ${printer.name}")
-                            binding.tvPrinterStatus.text = "Connection failed"
+                            binding.tvPrinterStatus.text = "✗ Connection failed — try another printer"
+                            binding.btnTestPrint.isEnabled = false
                             Toast.makeText(this, "Connection failed", Toast.LENGTH_SHORT).show()
                         }
                     }
                 } catch (e: Exception) {
                     runOnUiThread {
                         binding.btnConnectPrinter.isEnabled = true
-                        binding.btnConnectPrinter.text = "Connect Selected Printer"
+                        binding.btnConnectPrinter.text = "Select & Connect Printer"
                         appendLog("Connect error: ${e.message}")
+                        binding.btnTestPrint.isEnabled = false
                     }
                 }
             }.start()
@@ -209,22 +214,34 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnTestPrint.setOnClickListener {
             if (service?.printerManager?.currentPrinter?.isConnected() != true) {
-                Toast.makeText(this, "No printer connected", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "No printer connected — scan and select a printer first", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             appendLog("Sending test print...")
+            binding.btnTestPrint.isEnabled = false
+            binding.btnTestPrint.text = "Printing..."
+
             Thread {
                 val ok = service?.printerManager?.printText(
                     "================================\n" +
-                    "       INSABuddy Test Print     \n" +
+                    "    INSABuddy v${BuildConfig.VERSION_NAME}    \n" +
+                    "       Test Print               \n" +
                     "================================\n" +
                     "Printer is working correctly!\n" +
                     "Date: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}\n" +
+                    "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n" +
                     "================================\n"
                 ) ?: false
                 runOnUiThread {
-                    appendLog(if (ok) "Test print sent" else "Test print failed")
-                    if (ok) Toast.makeText(this, "Test print sent!", Toast.LENGTH_SHORT).show()
+                    binding.btnTestPrint.isEnabled = true
+                    binding.btnTestPrint.text = "Step 3: Test Print"
+                    if (ok) {
+                        appendLog("Test print sent successfully")
+                        Toast.makeText(this, "Test print sent!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        appendLog("Test print failed")
+                        Toast.makeText(this, "Test print failed", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }.start()
         }
@@ -326,10 +343,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         val printerStatus = service?.printerManager?.getStatus()
-        binding.tvPrinterStatus.text = if (printerStatus?.connected == true) {
-            "Connected: ${printerStatus.name}"
+        if (printerStatus?.connected == true) {
+            binding.tvPrinterStatus.text = "✓ Connected: ${printerStatus.name}"
+            binding.btnTestPrint.isEnabled = true
         } else {
-            "No printer connected"
+            binding.tvPrinterStatus.text = "No printer connected"
+            binding.btnTestPrint.isEnabled = false
         }
     }
 
