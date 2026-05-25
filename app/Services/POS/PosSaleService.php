@@ -1,0 +1,101 @@
+<?php
+
+namespace App\Services\POS;
+
+use App\Events\POS\SaleCompleted;
+use App\Models\Inventory\StockMovement;
+use App\Models\POS\PosSale;
+use App\Models\POS\PosSaleItem;
+use App\Services\Inventory\InventoryService;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+class PosSaleService
+{
+    public function __construct(
+        protected InventoryService $inventory,
+    ) {}
+
+    public function createSale(array $data): PosSale
+    {
+        return DB::transaction(function () use ($data) {
+            $items = $data['items'];
+
+            foreach ($items as $item) {
+                $stock = $this->inventory->getStockOnHand($data['branch_id'], $item['product_id']);
+
+                if ($stock < $item['qty']) {
+                    throw new \Exception("Insufficient stock for product ID {$item['product_id']}");
+                }
+            }
+
+            $subtotal = 0;
+            $discountTotal = 0;
+
+            foreach ($items as $item) {
+                $lineSubtotal = $item['qty'] * $item['price'];
+                $lineDiscount = $item['discount'] ?? 0;
+                $subtotal += $lineSubtotal;
+                $discountTotal += $lineDiscount;
+            }
+
+            $total = $subtotal - $discountTotal;
+
+            $sale = PosSale::create([
+                'sale_number'     => $this->generateSaleNumber(),
+                'branch_id'       => $data['branch_id'],
+                'shift_id'        => $data['shift_id'] ?? null,
+                'cashier_id'      => $data['cashier_id'],
+                'member_id'       => $data['member_id'] ?? null,
+                'subtotal'        => $subtotal,
+                'discount_total'  => $discountTotal,
+                'total'           => $total,
+                'payment_method'  => $data['payment_method'],
+                'amount_tendered' => $data['amount_tendered'],
+                'change_due'      => max(0, $data['amount_tendered'] - $total),
+                'status'          => 'completed',
+                'sold_at'         => Carbon::now(),
+            ]);
+
+            foreach ($items as $item) {
+                $lineSubtotal = $item['qty'] * $item['price'];
+                $lineDiscount = $item['discount'] ?? 0;
+                $lineTotal = $lineSubtotal - $lineDiscount;
+
+                PosSaleItem::create([
+                    'sale_id'      => $sale->id,
+                    'product_id'   => $item['product_id'],
+                    'product_name' => $item['product_name'],
+                    'sku'          => $item['sku'] ?? null,
+                    'barcode'      => $item['barcode'] ?? null,
+                    'qty'          => $item['qty'],
+                    'price'        => $item['price'],
+                    'discount'     => $lineDiscount,
+                    'line_total'   => $lineTotal,
+                ]);
+
+                StockMovement::create([
+                    'branch_id'        => $data['branch_id'],
+                    'shift_id'         => $data['shift_id'] ?? null,
+                    'product_id'       => $item['product_id'],
+                    'type'             => 'sale',
+                    'qty'              => -1 * $item['qty'],
+                    'reference_id'     => $sale->id,
+                    'reference_number' => $sale->sale_number,
+                ]);
+            }
+
+            $sale->load('items');
+
+            event(new SaleCompleted($sale));
+
+            return $sale;
+        });
+    }
+
+    protected function generateSaleNumber(): string
+    {
+        return 'S' . now()->format('YmdHis') . Str::upper(Str::random(4));
+    }
+}
