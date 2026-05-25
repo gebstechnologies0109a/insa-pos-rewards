@@ -38,8 +38,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "INSAPOS"
-        private const val BASE_URL = "https://insapos.diybizrewards.com"
-        private const val LOG_ENDPOINT = "$BASE_URL/api/pos/device-log"
+        private const val DOMAIN = "insapos.diybizrewards.com"
         private const val MAX_LOCAL_LOGS = 200
     }
 
@@ -50,6 +49,13 @@ class MainActivity : AppCompatActivity() {
 
     private val logBuffer = mutableListOf<JSONObject>()
     private var deviceId: String = "unknown"
+
+    // Track which protocol works — start with HTTPS, fall back to HTTP
+    private var useHttps = true
+    private var hasTriedFallback = false
+
+    private val baseUrl: String get() = if (useHttps) "https://$DOMAIN" else "http://$DOMAIN"
+    private val logEndpoint: String get() = "$baseUrl/api/pos/device-log"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,14 +75,12 @@ class MainActivity : AppCompatActivity() {
         debugOverlay = findViewById(R.id.debugOverlay)
         debugText = findViewById(R.id.debugText)
 
-        // Show debug overlay immediately
         debugOverlay.visibility = View.VISIBLE
         debugLog("INFO", "App started")
         debugLog("INFO", "Device: ${Build.MANUFACTURER} ${Build.MODEL}")
         debugLog("INFO", "Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         debugLog("INFO", "Device ID: $deviceId")
         debugLog("INFO", "Network: ${getNetworkType()}")
-        debugLog("INFO", "Target URL: $BASE_URL")
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             WebView.setWebContentsDebuggingEnabled(true)
@@ -124,9 +128,9 @@ class MainActivity : AppCompatActivity() {
                 debugLog("PAGE", "Finished: $url")
                 loadingOverlay.visibility = View.GONE
 
-                // Hide debug overlay after successful page load (user can tap to show)
                 if (url != null && !url.startsWith("data:")) {
                     debugOverlay.visibility = View.GONE
+                    hasTriedFallback = false
                 }
 
                 CookieManager.getInstance().flush()
@@ -144,9 +148,26 @@ class MainActivity : AppCompatActivity() {
                 debugLog("ERROR", "onReceivedError [main=$isMain] code=$code desc=$desc url=$url")
 
                 if (isMain) {
+                    val isSSLError = desc?.contains("SSL") == true ||
+                                     desc?.contains("ssl") == true ||
+                                     desc?.contains("UNRECOGNIZED_NAME") == true ||
+                                     desc?.contains("CERTIFICATE") == true
+
+                    if (isSSLError && useHttps && !hasTriedFallback) {
+                        hasTriedFallback = true
+                        useHttps = false
+                        debugLog("FALLBACK", "HTTPS failed with SSL error, falling back to HTTP")
+                        debugLog("FALLBACK", "New URL: $baseUrl")
+                        view?.loadUrl(baseUrl)
+                        return
+                    }
+
                     loadingOverlay.visibility = View.GONE
                     debugOverlay.visibility = View.VISIBLE
-                    view?.loadData(errorPageHtml("$desc (code: $code)"), "text/html", "UTF-8")
+                    view?.loadData(
+                        errorPageHtml("$desc (code: $code)"),
+                        "text/html", "UTF-8"
+                    )
                 }
             }
 
@@ -173,8 +194,7 @@ class MainActivity : AppCompatActivity() {
                 val errUrl = error?.url ?: "?"
                 debugLog("SSL", "SSL error type=$errType url=$errUrl")
 
-                // Accept SSL for our domain
-                if (errUrl.contains("insapos.diybizrewards.com") || errUrl.contains("127.0.0.1")) {
+                if (errUrl.contains(DOMAIN) || errUrl.contains("127.0.0.1")) {
                     debugLog("SSL", "Proceeding despite SSL error for trusted domain")
                     handler?.proceed()
                 } else {
@@ -188,7 +208,7 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
                 debugLog("NAV", "shouldOverrideUrlLoading: $url")
-                if (url.contains("insapos.diybizrewards.com") ||
+                if (url.contains(DOMAIN) ||
                     url.startsWith("http://127.0.0.1") ||
                     url.startsWith("http://localhost")
                 ) {
@@ -219,25 +239,47 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Tap the debug overlay 3 times to toggle visibility
-        var tapCount = 0
-        var lastTap = 0L
         webView.setOnLongClickListener {
             debugOverlay.visibility = if (debugOverlay.visibility == View.VISIBLE) View.GONE else View.VISIBLE
             true
         }
 
-        debugLog("INFO", "Loading URL: $BASE_URL")
+        // Probe HTTPS on a background thread; load whichever works
+        probeAndLoad()
 
-        if (savedInstanceState != null) {
-            webView.restoreState(savedInstanceState)
-            debugLog("INFO", "Restored WebView state")
-        } else {
-            webView.loadUrl(BASE_URL)
-        }
-
-        // Periodic log flush every 15 seconds
         startLogFlushTimer()
+    }
+
+    /**
+     * Quickly test HTTPS, fall back to HTTP if TLS handshake fails.
+     */
+    private fun probeAndLoad() {
+        debugLog("PROBE", "Testing HTTPS connectivity to $DOMAIN...")
+        Thread {
+            val httpsWorks = try {
+                val conn = URL("https://$DOMAIN").openConnection() as HttpURLConnection
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                conn.requestMethod = "HEAD"
+                conn.instanceFollowRedirects = true
+                val code = conn.responseCode
+                conn.disconnect()
+                debugLog("PROBE", "HTTPS probe got HTTP $code")
+                code in 200..399
+            } catch (e: Exception) {
+                debugLog("PROBE", "HTTPS probe failed: ${e.javaClass.simpleName}: ${e.message}")
+                false
+            }
+
+            useHttps = httpsWorks
+            val url = baseUrl
+            debugLog("PROBE", "Using ${if (useHttps) "HTTPS" else "HTTP"}: $url")
+
+            runOnUiThread {
+                debugLog("INFO", "Loading URL: $url")
+                webView.loadUrl(url)
+            }
+        }.start()
     }
 
     private val logFlushHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -357,52 +399,60 @@ class MainActivity : AppCompatActivity() {
         }
 
         Thread {
-            try {
-                val body = JSONObject().apply {
-                    put("device_id", deviceId)
-                    put("device_model", "${Build.MANUFACTURER} ${Build.MODEL}")
-                    put("app_version", BuildConfig.VERSION_NAME)
-                    put("android_version", Build.VERSION.RELEASE)
-                    put("message", "batch")
-                    put("logs", JSONArray().apply {
-                        entries.forEach { put(it) }
-                    })
-                }
-
-                val conn = URL(LOG_ENDPOINT).openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.setRequestProperty("Accept", "application/json")
-                conn.connectTimeout = 10000
-                conn.readTimeout = 10000
-                conn.doOutput = true
-
-                OutputStreamWriter(conn.outputStream).use {
-                    it.write(body.toString())
-                    it.flush()
-                }
-
-                val code = conn.responseCode
-                val responseBody = try {
-                    if (code in 200..299) conn.inputStream.bufferedReader().readText()
-                    else conn.errorStream?.bufferedReader()?.readText() ?: "no body"
-                } catch (_: Exception) { "read error" }
-                conn.disconnect()
-
-                if (code in 200..299) {
-                    Log.d(TAG, "Flushed ${entries.size} logs to server (HTTP $code)")
-                } else {
-                    Log.w(TAG, "Log flush HTTP $code: $responseBody")
-                    synchronized(logBuffer) { logBuffer.addAll(0, entries) }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Log flush failed: ${e.javaClass.simpleName}: ${e.message}")
-                synchronized(logBuffer) { logBuffer.addAll(0, entries) }
+            // Try both HTTPS and HTTP for the log endpoint
+            val endpoints = if (useHttps) {
+                listOf("https://$DOMAIN/api/pos/device-log", "http://$DOMAIN/api/pos/device-log")
+            } else {
+                listOf("http://$DOMAIN/api/pos/device-log", "https://$DOMAIN/api/pos/device-log")
             }
+
+            val body = JSONObject().apply {
+                put("device_id", deviceId)
+                put("device_model", "${Build.MANUFACTURER} ${Build.MODEL}")
+                put("app_version", BuildConfig.VERSION_NAME)
+                put("android_version", Build.VERSION.RELEASE)
+                put("message", "batch")
+                put("logs", JSONArray().apply {
+                    entries.forEach { put(it) }
+                })
+            }
+
+            for (endpoint in endpoints) {
+                try {
+                    val conn = URL(endpoint).openConnection() as HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    conn.setRequestProperty("Accept", "application/json")
+                    conn.connectTimeout = 10000
+                    conn.readTimeout = 10000
+                    conn.doOutput = true
+
+                    OutputStreamWriter(conn.outputStream).use {
+                        it.write(body.toString())
+                        it.flush()
+                    }
+
+                    val code = conn.responseCode
+                    conn.disconnect()
+
+                    if (code in 200..299) {
+                        Log.d(TAG, "Flushed ${entries.size} logs via $endpoint (HTTP $code)")
+                        return@Thread
+                    } else {
+                        Log.w(TAG, "Log flush to $endpoint got HTTP $code")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Log flush to $endpoint failed: ${e.javaClass.simpleName}: ${e.message}")
+                }
+            }
+
+            // All endpoints failed — put entries back
+            synchronized(logBuffer) { logBuffer.addAll(0, entries) }
         }.start()
     }
 
     private fun errorPageHtml(detail: String): String {
+        val retryUrl = baseUrl
         return """
             <!DOCTYPE html>
             <html>
@@ -425,8 +475,8 @@ class MainActivity : AppCompatActivity() {
                     <h1>INSA POS</h1>
                     <p>Unable to connect to the server.</p>
                     <div class="err">$detail</div>
-                    <p style="font-size:13px">Long-press the WebView to show debug logs.</p>
-                    <button onclick="window.location.href='$BASE_URL'">Retry</button>
+                    <p style="font-size:13px">Long-press the page to show debug logs.</p>
+                    <button onclick="window.location.href='$retryUrl'">Retry</button>
                 </div>
             </body>
             </html>
