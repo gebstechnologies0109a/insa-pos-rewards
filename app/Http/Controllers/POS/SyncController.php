@@ -146,13 +146,18 @@ class SyncController extends Controller
         if ($since) {
             $query->where('updated_at', '>', $since);
         }
-        $products = $query->get()->map(function ($p) use ($branchId) {
-            $stock = 0;
-            if ($branchId) {
-                $stock = (float) StockMovement::where('branch_id', $branchId)
-                    ->where('product_id', $p->id)
-                    ->sum('qty');
-            }
+
+        if ($branchId) {
+            $stockSub = StockMovement::selectRaw('product_id, SUM(qty) as total_stock')
+                ->where('branch_id', $branchId)
+                ->groupBy('product_id');
+            $query->leftJoinSub($stockSub, 'stock_agg', 'products.id', '=', 'stock_agg.product_id')
+                ->select('products.*', \DB::raw('COALESCE(stock_agg.total_stock, 0) as stock'));
+        } else {
+            $query->select('products.*', \DB::raw('0 as stock'));
+        }
+
+        $products = $query->get()->map(function ($p) {
             return [
                 'id'          => $p->id,
                 'name'        => $p->name,
@@ -161,7 +166,7 @@ class SyncController extends Controller
                 'price'       => $p->price,
                 'category_id' => $p->category_id,
                 'category'    => $p->category?->name,
-                'stock'       => $stock,
+                'stock'       => (float) $p->stock,
                 'updated_at'  => $p->updated_at?->toIso8601String(),
             ];
         });

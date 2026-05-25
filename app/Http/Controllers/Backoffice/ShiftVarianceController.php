@@ -60,7 +60,8 @@ class ShiftVarianceController extends Controller
         $branchId = $request->input('branch_id', $user->branch_id);
 
         if ($request->input('export') === 'csv') {
-            return $this->exportCsv($shifts);
+            $allShifts = (clone $query)->orderByDesc('closed_at')->get();
+            return $this->exportCsv($allShifts);
         }
 
         return view('backoffice.shifts.variance', compact(

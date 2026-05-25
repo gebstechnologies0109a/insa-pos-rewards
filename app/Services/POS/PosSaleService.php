@@ -31,15 +31,17 @@ class PosSaleService
             }
 
             $subtotal = 0;
-            $discountTotal = 0;
+            $itemDiscountTotal = 0;
 
             foreach ($items as $item) {
                 $lineSubtotal = $item['qty'] * $item['price'];
                 $lineDiscount = $item['discount'] ?? 0;
                 $subtotal += $lineSubtotal;
-                $discountTotal += $lineDiscount;
+                $itemDiscountTotal += $lineDiscount;
             }
 
+            $orderDiscount = (float) ($data['order_discount'] ?? 0);
+            $discountTotal = $itemDiscountTotal + $orderDiscount;
             $total = $subtotal - $discountTotal;
 
             $sale = PosSale::create([

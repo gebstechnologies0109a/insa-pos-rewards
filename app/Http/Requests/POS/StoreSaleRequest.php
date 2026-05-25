@@ -32,6 +32,10 @@ class StoreSaleRequest extends FormRequest
             'items.*.qty'          => 'required|numeric|min:0.001',
             'items.*.price'        => 'required|numeric|min:0',
             'items.*.discount'     => 'nullable|numeric|min:0',
+
+            'discount_total'       => 'nullable|numeric|min:0',
+            'order_discount'       => 'nullable|numeric|min:0',
+            'payment_ref'          => 'nullable|string|max:255',
         ];
     }
 }
