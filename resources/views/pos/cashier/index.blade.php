@@ -54,6 +54,10 @@
 
         /* Prevent modal overflow on small screens */
         .modal-overlay > div { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; }
+
+        /* Retail mode scan result animation */
+        .animate-in { animation: slideUp .2s ease-out; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
     </style>
     <script src="https://unpkg.com/dexie@4/dist/dexie.min.js"></script>
     <script src="{{ asset('js/db.js') }}"></script>
@@ -62,6 +66,36 @@
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
+
+<!-- MODE SELECTION OVERLAY -->
+<div x-show="showModeSelect" class="fixed inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 z-[200] flex items-center justify-center" x-cloak>
+    <div class="text-center max-w-2xl mx-auto px-6">
+        <div class="mb-2">
+            <span class="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">INSA POS</span>
+        </div>
+        <p class="text-blue-200 text-sm lg:text-lg mb-10">Select your register mode to get started</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 lg:gap-8">
+            <!-- Cafe / Resto Mode -->
+            <button @click="selectMode('cafe')"
+                    class="group bg-white/10 hover:bg-white/20 backdrop-blur-sm border-2 border-white/20 hover:border-orange-400 rounded-2xl p-6 lg:p-10 transition-all duration-200 text-left">
+                <div class="w-14 h-14 lg:w-16 lg:h-16 rounded-xl bg-orange-500/20 flex items-center justify-center mb-4">
+                    <svg class="w-8 h-8 lg:w-9 lg:h-9 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"></path></svg>
+                </div>
+                <h3 class="text-xl lg:text-2xl font-bold text-white mb-2">Cafe / Resto</h3>
+                <p class="text-blue-200 text-xs lg:text-sm leading-relaxed">All products displayed in a grid. Tap to add to cart. Best for cafes, restaurants, and food service.</p>
+            </button>
+            <!-- Retail Mode -->
+            <button @click="selectMode('retail')"
+                    class="group bg-white/10 hover:bg-white/20 backdrop-blur-sm border-2 border-white/20 hover:border-green-400 rounded-2xl p-6 lg:p-10 transition-all duration-200 text-left">
+                <div class="w-14 h-14 lg:w-16 lg:h-16 rounded-xl bg-green-500/20 flex items-center justify-center mb-4">
+                    <svg class="w-8 h-8 lg:w-9 lg:h-9 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                </div>
+                <h3 class="text-xl lg:text-2xl font-bold text-white mb-2">Retail</h3>
+                <p class="text-blue-200 text-xs lg:text-sm leading-relaxed">Scan or type barcodes to add items. Products only appear when punched. Best for retail, grocery, and convenience stores.</p>
+            </button>
+        </div>
+    </div>
+</div>
 
 <!-- TOAST NOTIFICATIONS -->
 <div class="fixed top-2 right-2 xl:top-4 xl:right-4 z-[100] space-y-1.5">
@@ -131,6 +165,19 @@
             <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         </button>
 
+        <!-- Mode Toggle -->
+        <button @click="toggleMode()" class="flex items-center gap-1 px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full text-[10px] lg:text-xs font-semibold border transition-colors"
+                :class="posMode === 'cafe' ? 'bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100' : 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'"
+                :title="posMode === 'cafe' ? 'Switch to Retail Mode' : 'Switch to Cafe/Resto Mode'">
+            <template x-if="posMode === 'cafe'">
+                <svg class="w-3 h-3 lg:w-3.5 lg:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"></path></svg>
+            </template>
+            <template x-if="posMode === 'retail'">
+                <svg class="w-3 h-3 lg:w-3.5 lg:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+            </template>
+            <span x-text="posMode === 'cafe' ? 'Cafe' : 'Retail'"></span>
+        </button>
+
         @auth
         <span class="font-medium hidden lg:inline">{{ auth()->user()->name }}</span>
         <span class="px-1.5 py-0.5 rounded text-[10px] lg:text-xs font-medium bg-blue-100 text-blue-800">{{ ucfirst(auth()->user()->role) }}</span>
@@ -175,8 +222,8 @@
 <!-- ═══════════ MAIN POS SCREEN ═══════════ -->
 <div x-show="screen === 'pos'" id="posScreen" class="flex flex-1 overflow-hidden p-2 gap-2 lg:p-4 lg:gap-4" :class="!activeShift && 'opacity-40 pointer-events-none'">
 
-    <!-- LEFT: PRODUCTS -->
-    <div class="flex-1 flex flex-col min-w-0">
+    <!-- LEFT: PRODUCTS (Cafe Mode) -->
+    <div x-show="posMode === 'cafe'" class="flex-1 flex flex-col min-w-0">
         <div class="flex gap-1.5 lg:gap-2 mb-2 lg:mb-3">
             <div class="relative flex-1">
                 <input type="text" x-model="searchQuery" @input.debounce.200ms="filterProducts()" placeholder="Search or scan barcode..."
@@ -214,8 +261,169 @@
         </div>
     </div>
 
-    <!-- RIGHT: CART -->
-    <div class="w-56 lg:w-80 xl:w-96 bg-white rounded-lg shadow flex flex-col flex-shrink-0 overflow-hidden">
+    <!-- LEFT: RETAIL MODE (Scan & Punch) -->
+    <div x-show="posMode === 'retail'" class="flex-1 flex flex-col min-w-0">
+        <!-- Scan Bar -->
+        <div class="mb-3 lg:mb-4">
+            <div class="relative">
+                <input type="text" x-model="retailScanQuery" id="retailScanInput"
+                       @keydown.enter.prevent="retailScan()"
+                       placeholder="Scan barcode or type product name..."
+                       class="w-full p-3 pl-10 lg:p-4 lg:pl-12 border-2 border-green-400 rounded-xl text-sm lg:text-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 focus:outline-none font-medium bg-green-50/50">
+                <svg class="w-5 h-5 lg:w-6 lg:h-6 text-green-500 absolute left-3 top-3.5 lg:left-4 lg:top-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                <button x-show="retailScanQuery.length > 0" @click="retailCancel()"
+                        class="absolute right-3 top-3 lg:right-4 lg:top-3.5 text-gray-400 hover:text-red-500 p-0.5">
+                    <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Scanned Product Preview -->
+        <template x-if="retailScanResult">
+            <div class="bg-white rounded-xl shadow-lg border-2 border-green-300 p-4 lg:p-6 mb-4 animate-in">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex-1">
+                        <div class="text-lg lg:text-2xl font-bold text-gray-800" x-text="retailScanResult.name"></div>
+                        <div class="text-sm lg:text-base text-gray-400 mt-1" x-text="retailScanResult.sku + (retailScanResult.barcode ? ' · ' + retailScanResult.barcode : '')"></div>
+                        <div class="flex items-center gap-3 mt-3">
+                            <span class="text-2xl lg:text-3xl font-extrabold text-blue-700" x-text="'₱' + parseFloat(retailScanResult.price).toFixed(2)"></span>
+                            <span class="text-sm lg:text-base px-2 py-1 rounded-lg"
+                                  :class="retailScanResult.stock > 10 ? 'bg-green-100 text-green-700' : (retailScanResult.stock > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700')"
+                                  x-text="retailScanResult.stock > 0 ? retailScanResult.stock + ' in stock' : 'Out of stock'"></span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <button @click="retailAddToCart(retailScanResult)" :disabled="retailScanResult.stock <= 0"
+                                class="px-5 py-2.5 lg:px-8 lg:py-3 bg-green-600 text-white rounded-xl text-sm lg:text-base font-bold hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
+                            Add to Cart
+                        </button>
+                        <button @click="retailCancel()"
+                                class="px-5 py-2 lg:px-8 lg:py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm lg:text-base font-medium hover:bg-gray-200 transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Multiple Search Results (when name search returns >1) -->
+        <div x-show="!retailScanResult && filteredProducts.length > 0" class="mb-3">
+            <div class="text-xs text-gray-500 mb-1.5 font-medium" x-text="filteredProducts.length + ' results — tap to add'"></div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 lg:max-h-60 overflow-y-auto">
+                <template x-for="product in filteredProducts.slice(0, 12)" :key="product.id">
+                    <button @click="retailAddToCart(product)"
+                            class="bg-white rounded-lg shadow border border-gray-200 p-2 lg:p-3 text-left hover:border-green-400 hover:shadow-md transition-all flex items-center gap-2"
+                            :class="product.stock <= 0 && 'opacity-40 cursor-not-allowed'"
+                            :disabled="product.stock <= 0">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-xs lg:text-sm truncate" x-text="product.name"></div>
+                            <div class="text-[10px] lg:text-xs text-gray-400" x-text="product.sku"></div>
+                        </div>
+                        <span class="font-bold text-blue-700 text-xs lg:text-sm whitespace-nowrap" x-text="'₱' + parseFloat(product.price).toFixed(2)"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <!-- Punched Items List (the cart view for retail mode) -->
+        <div class="flex-1 overflow-y-auto bg-white rounded-xl shadow">
+            <div x-show="cart.length === 0" class="flex flex-col items-center justify-center h-full py-16 text-gray-300">
+                <svg class="w-16 h-16 lg:w-20 lg:h-20 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                <div class="text-sm lg:text-base font-medium">Scan or type a barcode to begin</div>
+                <div class="text-xs lg:text-sm mt-1">Items will appear here as they are punched</div>
+            </div>
+            <table x-show="cart.length > 0" class="w-full text-xs lg:text-sm">
+                <thead class="bg-gray-50 sticky top-0 border-b">
+                    <tr>
+                        <th class="text-left p-2 lg:p-3 font-semibold text-gray-600 w-8">#</th>
+                        <th class="text-left p-2 lg:p-3 font-semibold text-gray-600">Item</th>
+                        <th class="text-center p-2 lg:p-3 font-semibold text-gray-600 w-20">Qty</th>
+                        <th class="text-right p-2 lg:p-3 font-semibold text-gray-600 w-24">Price</th>
+                        <th class="text-right p-2 lg:p-3 font-semibold text-gray-600 w-28">Total</th>
+                        <th class="w-8"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(item, idx) in cart" :key="item.product_id">
+                        <tr class="border-b hover:bg-blue-50/50">
+                            <td class="p-2 lg:p-3 text-gray-400 font-mono" x-text="idx + 1"></td>
+                            <td class="p-2 lg:p-3">
+                                <div class="font-medium" x-text="item.product_name"></div>
+                                <div class="text-[10px] lg:text-xs text-gray-400" x-text="item.sku || item.barcode || ''"></div>
+                            </td>
+                            <td class="p-2 lg:p-3 text-center">
+                                <div class="flex items-center justify-center gap-1">
+                                    <button @click="changeQty(idx, -1)" class="w-5 h-5 lg:w-6 lg:h-6 rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold flex items-center justify-center">-</button>
+                                    <span class="font-bold w-6 lg:w-8 text-center" x-text="item.qty"></span>
+                                    <button @click="changeQty(idx, 1)" class="w-5 h-5 lg:w-6 lg:h-6 rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold flex items-center justify-center">+</button>
+                                </div>
+                            </td>
+                            <td class="p-2 lg:p-3 text-right font-mono" x-text="'₱' + item.price.toFixed(2)"></td>
+                            <td class="p-2 lg:p-3 text-right font-mono font-bold" x-text="'₱' + ((item.qty * item.price) - (item.discount || 0)).toFixed(2)"></td>
+                            <td class="p-2 lg:p-3">
+                                <button @click="removeItem(idx)" class="text-red-400 hover:text-red-600">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Retail Mode Footer: Customer + Totals + Pay -->
+        <div class="border-t bg-white flex-shrink-0 p-2 lg:p-4 space-y-1.5 lg:space-y-2">
+            <!-- Customer Selection (inline) -->
+            <div class="relative">
+                <div class="flex items-center gap-1.5">
+                    <div class="flex-1 relative">
+                        <input type="text" x-model="customerSearch" @input.debounce.300ms="searchCustomers()"
+                               @focus="showCustomerDropdown = true"
+                               :placeholder="selectedCustomer ? selectedCustomer.name : 'Customer (optional)'"
+                               :class="selectedCustomer ? 'border-green-300 bg-green-50' : 'border-gray-200'"
+                               class="w-full p-1.5 lg:p-2 border rounded-lg text-[11px] lg:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <button x-show="selectedCustomer" @click="selectedCustomer = null; customerSearch = ''"
+                                class="absolute right-1.5 top-1.5 lg:right-2 lg:top-2 text-gray-400 hover:text-red-500">
+                            <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                    <button x-show="cart.length > 0" @click="clearCart()"
+                            class="text-[10px] lg:text-xs text-red-500 hover:text-red-700 px-1.5 py-0.5 rounded hover:bg-red-50 whitespace-nowrap">Clear All</button>
+                </div>
+                <div x-show="showCustomerDropdown && customerResults.length > 0" @click.away="showCustomerDropdown = false"
+                     class="absolute z-20 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-32 lg:max-h-40 overflow-y-auto bottom-full mb-1">
+                    <template x-for="c in customerResults" :key="c.id">
+                        <button @click="selectCustomer(c)"
+                                class="w-full text-left px-2 py-1.5 lg:px-3 lg:py-2 hover:bg-blue-50 border-b last:border-0 text-[11px] lg:text-sm">
+                            <div class="font-medium" x-text="c.name"></div>
+                            <div class="text-[10px] lg:text-xs text-gray-400" x-text="c.phone || c.email || ''"></div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+            <div class="flex items-center justify-between gap-4">
+                <div class="space-y-0.5 text-[11px] lg:text-sm">
+                    <div class="flex justify-between gap-4"><span class="text-gray-500">Subtotal</span><span class="font-medium" x-text="'₱' + cartSubtotal.toFixed(2)"></span></div>
+                    <div class="flex justify-between gap-4">
+                        <span class="text-gray-500 cursor-pointer hover:text-blue-600" @click="showOrderDiscountModal = true">Discount <span class="text-[9px] lg:text-xs">(tap)</span></span>
+                        <span class="text-red-500" x-text="'- ₱' + cartDiscount.toFixed(2)"></span>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-[10px] lg:text-xs text-gray-500">Total</div>
+                    <div class="text-xl lg:text-2xl font-extrabold text-blue-700" x-text="'₱' + cartTotal.toFixed(2)"></div>
+                </div>
+                <button @click="goToCheckout()" :disabled="cart.length === 0"
+                        class="px-6 py-2.5 lg:px-10 lg:py-3 rounded-xl text-white font-bold text-sm lg:text-lg transition-colors whitespace-nowrap"
+                        :class="cart.length > 0 ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'">
+                    Pay
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT: CART (Cafe mode only; Retail mode has built-in item list + footer) -->
+    <div x-show="posMode === 'cafe'" class="w-56 lg:w-80 xl:w-96 bg-white rounded-lg shadow flex flex-col flex-shrink-0 overflow-hidden">
         <div class="p-2 lg:p-4 border-b flex-shrink-0">
             <div class="flex items-center justify-between">
                 <h2 class="font-bold text-sm lg:text-lg">Cart</h2>
@@ -273,7 +481,7 @@
                     </div>
                 </div>
             </template>
-            <div x-show="cart.length === 0" class="text-center py-6 lg:py-8 text-gray-300 text-[11px] lg:text-sm">Cart is empty. Tap products to add.</div>
+            <div x-show="cart.length === 0" class="text-center py-6 lg:py-8 text-gray-300 text-[11px] lg:text-sm" x-text="posMode === 'retail' ? 'Cart is empty. Scan items to add.' : 'Cart is empty. Tap products to add.'"></div>
         </div>
 
         <!-- Pinned cart footer — always visible -->
@@ -763,6 +971,10 @@
 function posApp() {
     return {
         screen: 'pos',
+        posMode: localStorage.getItem('insapos_mode') || '',
+        showModeSelect: !localStorage.getItem('insapos_mode'),
+        retailScanResult: null,
+        retailScanQuery: '',
         activeShift: null,
         products: [],
         categories: [],
@@ -866,6 +1078,50 @@ function posApp() {
             return 'Click to sync now.';
         },
 
+        selectMode(mode) {
+            this.posMode = mode;
+            this.showModeSelect = false;
+            localStorage.setItem('insapos_mode', mode);
+            if (mode === 'retail') { this.filteredProducts = []; this.searchQuery = ''; this.selectedCategory = ''; }
+            else { this.filterProducts(); }
+            this.$nextTick(() => {
+                if (mode === 'retail') { const el = document.getElementById('retailScanInput'); if (el) el.focus(); }
+            });
+        },
+
+        toggleMode() {
+            this.selectMode(this.posMode === 'cafe' ? 'retail' : 'cafe');
+        },
+
+        retailScan() {
+            const q = this.retailScanQuery.trim();
+            if (!q) { this.retailScanResult = null; return; }
+            const exact = this.products.find(p => (p.barcode && p.barcode === q) || (p.sku && p.sku === q));
+            if (exact) {
+                this.retailScanResult = exact;
+                return;
+            }
+            const fuzzy = this.products.filter(p => p.name.toLowerCase().includes(q.toLowerCase()));
+            if (fuzzy.length === 1) { this.retailScanResult = fuzzy[0]; }
+            else if (fuzzy.length > 1) { this.retailScanResult = null; this.filteredProducts = fuzzy; }
+            else { this.retailScanResult = null; this.filteredProducts = []; this.showToast('Product not found: ' + q, 'warning'); }
+        },
+
+        retailAddToCart(product) {
+            this.addToCart(product);
+            this.retailScanResult = null;
+            this.retailScanQuery = '';
+            this.filteredProducts = [];
+            this.$nextTick(() => { const el = document.getElementById('retailScanInput'); if (el) el.focus(); });
+        },
+
+        retailCancel() {
+            this.retailScanResult = null;
+            this.retailScanQuery = '';
+            this.filteredProducts = [];
+            this.$nextTick(() => { const el = document.getElementById('retailScanInput'); if (el) el.focus(); });
+        },
+
         async init() {
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
             if (this.hasNativeBridge) {
@@ -911,6 +1167,11 @@ function posApp() {
         handleBarcodeScan(barcode) {
             if (!barcode || barcode.length < 2) return;
             const product = this.products.find(p => (p.barcode && p.barcode === barcode) || (p.sku && p.sku === barcode));
+            if (this.posMode === 'retail') {
+                if (product) { this.retailScanResult = product; this.retailScanQuery = barcode; }
+                else { this.retailScanQuery = barcode; this.retailScan(); }
+                return;
+            }
             if (product) { this.addToCart(product); this.showToast(product.name + ' added', 'success', 1500); }
             else { this.searchQuery = barcode; this.filterProducts(); this.showToast('Product not found: ' + barcode, 'warning'); }
         },
@@ -1118,6 +1379,7 @@ function posApp() {
         async refreshProductsFromDB() { const db = window.INSADB; if (!db) return; const cached = await db.products.getAll(); if (cached.length > 0) { this.products = cached; this.filterProducts(); } },
 
         filterProducts() {
+            if (this.posMode === 'retail') { this.filteredProducts = []; return; }
             let result = this.products;
             if (this.selectedCategory) result = result.filter(p => p.category_id == this.selectedCategory);
             if (this.searchQuery.trim()) { const q = this.searchQuery.toLowerCase(); result = result.filter(p => p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.barcode && p.barcode.includes(q))); }
@@ -1208,6 +1470,7 @@ function posApp() {
         closeReceipt() {
             this.showReceipt = false; this.lastSale = null; this.cart = []; this.amountTendered = 0; this.changeAmount = 0;
             this.orderDiscountApplied = 0; this.orderDiscountValue = 0; this.selectedCustomer = null; this.customerSearch = '';
+            this.retailScanResult = null; this.retailScanQuery = '';
             this.screen = 'pos'; this.loadProducts();
         },
 
