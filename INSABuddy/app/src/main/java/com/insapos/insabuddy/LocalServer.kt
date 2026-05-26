@@ -214,7 +214,7 @@ class LocalServer(
 
     private fun handlePrinterTest(): Response {
         return try {
-            val printer = printerManager.getActivePrinter()
+            val printer = printerManager.currentPrinter
                 ?: return jsonError(Response.Status.BAD_REQUEST, "No printer selected")
             val testPage = buildString {
                 append("\u001B@")
