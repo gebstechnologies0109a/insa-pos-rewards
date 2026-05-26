@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\POS\CustomerLookupController;
-use App\Http\Controllers\POS\InvoiceSettingsController;
 use App\Http\Controllers\POS\PosSaleController;
 use App\Http\Controllers\POS\PosSettingsController;
 use App\Http\Controllers\POS\ProductLookupController;
@@ -72,10 +71,6 @@ Route::prefix('shift')->group(function () {
     Route::post('/open', [ShiftController::class, 'open'])->name('pos.shift.open');
     Route::post('/close', [ShiftController::class, 'close'])->name('pos.shift.close');
 });
-
-// ── Invoice Settings ─────────────────────────────────
-Route::get('/invoice-settings', [InvoiceSettingsController::class, 'show'])->name('pos.invoice-settings.show');
-Route::post('/invoice-settings', [InvoiceSettingsController::class, 'update'])->name('pos.invoice-settings.update');
 
 // ── X/Z Readings ──────────────────────────────────────
 Route::post('/x-reading', [ReadingController::class, 'generateXReading'])->name('pos.x-reading');

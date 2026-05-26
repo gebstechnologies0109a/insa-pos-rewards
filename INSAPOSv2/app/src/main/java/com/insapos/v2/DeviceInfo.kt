@@ -12,7 +12,6 @@ object DeviceInfo {
             context.contentResolver,
             Settings.Secure.ANDROID_ID
         )
-        val hw = try { HardwareDetector.detect(context).optJSONObject("summary") } catch (_: Exception) { null }
         return JSONObject().apply {
             put("app", "INSAPOSv2")
             put("version", BuildConfig.VERSION_NAME)
@@ -27,10 +26,6 @@ object DeviceInfo {
             put("hardware", Build.HARDWARE)
             put("display", Build.DISPLAY)
             put("isDebug", BuildConfig.DEBUG)
-            put("hasPhysicalKeyboard", hw?.optBoolean("hasPhysicalKeyboard", false) ?: false)
-            put("hasMouse", hw?.optBoolean("hasMouse", false) ?: false)
-            put("hasBarcodeScanner", hw?.optBoolean("hasBarcodeScanner", false) ?: false)
-            put("hasUsbPrinter", hw?.optBoolean("hasUsbPrinter", false) ?: false)
         }
     }
 

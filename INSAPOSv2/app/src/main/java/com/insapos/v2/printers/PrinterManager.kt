@@ -148,14 +148,6 @@ class PrinterManager(private val context: Context) {
                         }
                     }
                 }
-                "usb" -> {
-                    scanUsbPrinters().find { it.name == savedAddress }?.let {
-                        if (it.connect()) {
-                            currentPrinter = it
-                            notifyChange(it.getStatus())
-                        }
-                    }
-                }
                 "network" -> {
                     val parts = savedAddress.split(":")
                     if (parts.size == 2) {

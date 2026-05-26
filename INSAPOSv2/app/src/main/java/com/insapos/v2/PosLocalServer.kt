@@ -43,13 +43,11 @@ class PosLocalServer(
             val resp = when {
                 uri == "/ping" -> handlePing()
                 uri == "/device/info" -> handleDeviceInfo()
-                uri == "/device/hardware" -> handleHardwareDetect()
                 uri == "/print" && method == Method.POST -> handlePrint(session)
                 uri == "/drawer/open" && method == Method.POST -> handleDrawerOpen()
                 uri == "/printer/status" -> handlePrinterStatus()
                 uri == "/printer/list" -> handlePrinterList()
                 uri == "/printer/select" && method == Method.POST -> handlePrinterSelect(session)
-                uri == "/printer/test" && method == Method.POST -> handlePrinterTest()
                 uri == "/scan" -> handleCameraScan()
                 uri == "/scan/hid" -> handleHidScan()
                 // Offline data endpoints
@@ -76,12 +74,6 @@ class PosLocalServer(
 
     private fun handleDeviceInfo(): Response {
         return jsonOk(DeviceInfo.toJson(context).put("ok", true))
-    }
-
-    private fun handleHardwareDetect(): Response {
-        val hw = HardwareDetector.detect(context)
-        hw.put("ok", true)
-        return jsonOk(hw)
     }
 
     private fun handlePrint(session: IHTTPSession): Response {
@@ -155,29 +147,6 @@ class PosLocalServer(
         val pm = getPrinterManager() ?: return jsonError("Service not ready")
         val ok = pm.selectByName(name)
         return jsonOk(JSONObject().put("ok", ok).put("selected", name))
-    }
-
-    private fun handlePrinterTest(): Response {
-        val pm = getPrinterManager() ?: return jsonError("Printer service not ready")
-        val printer = pm.getActivePrinter() ?: return jsonError("No printer selected")
-        val testPage = buildString {
-            append("\u001B@")
-            append("\u001Ba\u0001")
-            append("================================\n")
-            append("    INSA POS - TEST PRINT\n")
-            append("================================\n\n")
-            append("\u001Ba\u0000")
-            append("Printer: ${printer.name}\n")
-            append("Type:    ${printer.type}\n")
-            append("Date:    ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\n\n")
-            append("If you can read this, your\n")
-            append("printer is working correctly!\n\n")
-            append("\u001Ba\u0001")
-            append("================================\n\n\n")
-            append("\u001DVA")
-        }
-        val ok = printer.printText(testPage)
-        return jsonOk(JSONObject().put("ok", ok).put("printer", printer.name))
     }
 
     private fun handleCameraScan(): Response {

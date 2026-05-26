@@ -14,6 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware(['web', 'auth'])
                 ->prefix('api/pos')
                 ->group(base_path('routes/pos/api.php'));
+
+            Route::prefix('api')
+                ->group(base_path('routes/epayplus-api.php'));
+
+            Route::middleware(['web'])
+                ->group(base_path('routes/epayplus-web.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -28,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/pos/device-log/*',
             'api/pos/ping',
             'api/pos/sync/*',
+            'api/v2/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
