@@ -17,13 +17,15 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
-    public const ROLE_OWNER    = 'owner';
-    public const ROLE_ADMIN    = 'admin';
-    public const ROLE_MANAGER  = 'manager';
-    public const ROLE_CASHIER  = 'cashier';
-    public const ROLE_STOCKMAN = 'stockman';
+    public const ROLE_SUPER_ADMIN = 'super_admin';
+    public const ROLE_OWNER       = 'owner';
+    public const ROLE_ADMIN       = 'admin';
+    public const ROLE_MANAGER     = 'manager';
+    public const ROLE_CASHIER     = 'cashier';
+    public const ROLE_STOCKMAN    = 'stockman';
 
     public const ROLES = [
+        self::ROLE_SUPER_ADMIN,
         self::ROLE_OWNER,
         self::ROLE_ADMIN,
         self::ROLE_MANAGER,
@@ -59,6 +61,11 @@ class User extends Authenticatable
         return in_array($this->role, $roles);
     }
 
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
     public function isOwner(): bool
     {
         return $this->role === self::ROLE_OWNER;
@@ -66,7 +73,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_OWNER]);
+        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_OWNER, self::ROLE_SUPER_ADMIN]);
     }
 
     public function isManager(): bool
@@ -86,17 +93,17 @@ class User extends Authenticatable
 
     public function canAccessBackoffice(): bool
     {
-        return $this->hasRole(self::ROLE_OWNER, self::ROLE_ADMIN, self::ROLE_MANAGER);
+        return $this->hasRole(self::ROLE_SUPER_ADMIN, self::ROLE_OWNER, self::ROLE_ADMIN, self::ROLE_MANAGER);
     }
 
     public function canManageUsers(): bool
     {
-        return $this->hasRole(self::ROLE_OWNER, self::ROLE_ADMIN);
+        return $this->hasRole(self::ROLE_SUPER_ADMIN, self::ROLE_OWNER, self::ROLE_ADMIN);
     }
 
     public function canManageSettings(): bool
     {
-        return $this->hasRole(self::ROLE_OWNER, self::ROLE_ADMIN);
+        return $this->hasRole(self::ROLE_SUPER_ADMIN, self::ROLE_OWNER, self::ROLE_ADMIN);
     }
 
     /**

@@ -17,6 +17,9 @@ use App\Http\Controllers\Backoffice\ShiftVarianceController;
 use App\Http\Controllers\POS\PosSettingsController;
 use App\Http\Controllers\POS\ReadingController;
 use App\Http\Controllers\Stockman\StockmanController;
+use App\Http\Controllers\SuperAdmin\BranchOverviewController;
+use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
+use App\Http\Controllers\SuperAdmin\LicenseController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -138,4 +141,22 @@ Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
 Route::middleware(['auth', 'role:owner,admin'])->group(function () {
     Route::post('/pos/settings', [PosSettingsController::class, 'update'])
         ->name('pos.settings.update');
+});
+
+// ── Super Admin ──────────────────────────────────
+Route::middleware(['auth', 'role:super_admin'])->prefix('super-admin')->group(function () {
+    Route::get('/', [SuperAdminDashboardController::class, 'index'])
+        ->name('super-admin.dashboard');
+
+    Route::get('/licenses', [LicenseController::class, 'index'])
+        ->name('super-admin.licenses.index');
+    Route::post('/licenses', [LicenseController::class, 'store'])
+        ->name('super-admin.licenses.store');
+    Route::put('/licenses/{branch}', [LicenseController::class, 'update'])
+        ->name('super-admin.licenses.update');
+
+    Route::get('/branches', [BranchOverviewController::class, 'index'])
+        ->name('super-admin.branches.index');
+    Route::get('/branches/{branch}', [BranchOverviewController::class, 'show'])
+        ->name('super-admin.branches.show');
 });
