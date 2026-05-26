@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">INSAPOS v2</string>
-    <string name="channel_name">INSAPOS v2 Service</string>
-    <string name="channel_description">Keeps hardware bridge running</string>
-</resources>

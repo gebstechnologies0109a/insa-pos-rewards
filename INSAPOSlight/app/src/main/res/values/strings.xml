@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">INSA POS Lite</string>
-    <string name="offline_title">No Connection</string>
-    <string name="offline_message">Unable to reach the POS server.\nCheck your network and try again.</string>
-    <string name="retry">Retry</string>
-</resources>
