@@ -2,6 +2,7 @@
 
 namespace App\Services\POS;
 
+use App\Models\POS\Branch;
 use App\Models\POS\PosSale;
 use App\Models\POS\PosShift;
 use App\Models\POS\PosShiftAudit;
@@ -23,6 +24,8 @@ class ShiftService
         if ($this->getActiveShift($user)) {
             throw new \Exception('You already have an active shift.');
         }
+
+        $this->enforceLicenseSlots($user);
 
         $shift = PosShift::create([
             'branch_id'    => $user->branch_id,
@@ -48,6 +51,30 @@ class ShiftService
         ]);
 
         return $shift;
+    }
+
+    protected function enforceLicenseSlots(User $user): void
+    {
+        if ($user->isSuperAdmin()) {
+            return;
+        }
+
+        $branch = Branch::find($user->branch_id);
+
+        if (! $branch) {
+            return;
+        }
+
+        $maxSlots = $branch->getPosSlots();
+        $openShifts = PosShift::where('branch_id', $branch->id)
+            ->where('status', 'open')
+            ->count();
+
+        if ($openShifts >= $maxSlots) {
+            throw new \Exception(
+                'Maximum number of active POS registers reached for this store. Please upgrade your subscription to add another POS.'
+            );
+        }
     }
 
     public function closeShift(PosShift $shift, float $closingCash, ?Request $request = null): PosShift

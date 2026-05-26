@@ -264,6 +264,10 @@ class MainActivity : AppCompatActivity() {
             userAgentString = "$userAgentString $appUa"
         }
 
+        webView.isFocusable = true
+        webView.isFocusableInTouchMode = true
+        webView.requestFocus()
+
         webView.addJavascriptInterface(AndroidBridge(this), AndroidBridge.BRIDGE_NAME)
 
         webView.webViewClient = object : WebViewClient() {
@@ -279,6 +283,7 @@ class MainActivity : AppCompatActivity() {
 
                 url?.let { session.lastUrl = it }
 
+                view?.requestFocus()
                 injectBridgeReady()
             }
 

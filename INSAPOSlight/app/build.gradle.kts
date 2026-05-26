@@ -4,19 +4,15 @@ plugins {
 }
 
 android {
-    namespace = "com.insapos.v2"
+    namespace = "com.insapos.light"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.insapos.v2"
+        applicationId = "com.insapos.light"
         minSdk = 23
         targetSdk = 35
-        versionCode = 17
-        versionName = "2.2q"
-
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
-        }
+        versionCode = 1
+        versionName = "1.0a"
     }
 
     buildTypes {
@@ -44,7 +40,6 @@ android {
     }
 
     buildFeatures {
-        viewBinding = true
         buildConfig = true
     }
 }
@@ -52,21 +47,5 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("com.google.android.material:material:1.12.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.webkit:webkit:1.12.1")
-
-    // NanoHTTPD — embedded HTTP server for local hardware bridge
-    implementation("org.nanohttpd:nanohttpd:2.3.1")
-    implementation("org.nanohttpd:nanohttpd-websocket:2.3.1")
-
-    // ZXing barcode/QR scanning
-    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
-    implementation("com.google.zxing:core:3.5.3")
-
-    // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-
-    // JSON
-    implementation("org.json:json:20231013")
 }

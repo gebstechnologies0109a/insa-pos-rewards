@@ -1159,7 +1159,7 @@ function posApp() {
             const exact = this.products.find(p => (p.barcode && p.barcode === q) || (p.sku && p.sku === q));
             if (exact) {
                 if (this.retailPreviewMode) { this.retailScanResult = exact; this.filteredProducts = []; }
-                else { this.retailAddToCart(exact); this.showToast(exact.name + ' added', 'success', 1500); }
+                else { this.retailAddToCart(exact); }
                 return;
             }
             const ql = q.toLowerCase();
@@ -1170,14 +1170,14 @@ function posApp() {
             );
             if (fuzzy.length === 1) {
                 if (this.retailPreviewMode) { this.retailScanResult = fuzzy[0]; this.filteredProducts = []; }
-                else { this.retailAddToCart(fuzzy[0]); this.showToast(fuzzy[0].name + ' added', 'success', 1500); }
+                else { this.retailAddToCart(fuzzy[0]); }
             }
             else if (fuzzy.length > 1) { this.retailScanResult = null; this.filteredProducts = fuzzy; }
             else { this.retailScanResult = null; this.filteredProducts = []; this.showToast('Product not found: ' + q, 'warning'); }
         },
 
         retailAddToCart(product) {
-            this.addToCart(product);
+            if (this.addToCart(product, true)) this.showToast(product.name + ' added', 'success', 1500);
             this.retailScanResult = null;
             this.retailScanQuery = '';
             this.filteredProducts = [];
@@ -1199,7 +1199,7 @@ function posApp() {
             await this.initOffline();
             this.loadShift();
             this.initBuddy();
-            window.onINSAPOSBarcode = (barcode) => { this.handleBarcodeScan(barcode); };
+            window.onINSAPOSBarcode = (barcode) => { this._lastNativeScanTime = Date.now(); this._lastNativeScan = barcode; this.handleBarcodeScan(barcode); };
         },
 
         async initOffline() {
@@ -1223,7 +1223,10 @@ function posApp() {
             const tag = event.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
             if (event.key === 'Enter') {
-                if (this._barcodeBuffer.length >= 3) { event.preventDefault(); this.handleBarcodeScan(this._barcodeBuffer); }
+                if (this._barcodeBuffer.length >= 3) {
+                    if (this._lastNativeScan === this._barcodeBuffer && Date.now() - (this._lastNativeScanTime || 0) < 500) { this._barcodeBuffer = ''; clearTimeout(this._barcodeTimer); return; }
+                    event.preventDefault(); this.handleBarcodeScan(this._barcodeBuffer);
+                }
                 this._barcodeBuffer = ''; clearTimeout(this._barcodeTimer); return;
             }
             if (event.key.length === 1) {
@@ -1239,11 +1242,11 @@ function posApp() {
             if (this.posMode === 'retail') {
                 if (product) {
                     if (this.retailPreviewMode) { this.retailScanResult = product; this.retailScanQuery = barcode; }
-                    else { this.addToCart(product); this.showToast(product.name + ' added', 'success', 1500); }
+                    else { if (this.addToCart(product, true)) this.showToast(product.name + ' added', 'success', 1500); }
                 } else { this.retailScanQuery = barcode; this.showToast('Product not found: ' + barcode, 'warning'); }
                 return;
             }
-            if (product) { this.addToCart(product); this.showToast(product.name + ' added', 'success', 1500); }
+            if (product) { if (this.addToCart(product, true)) this.showToast(product.name + ' added', 'success', 1500); }
             else { this.searchQuery = barcode; this.filterProducts(); this.showToast('Product not found: ' + barcode, 'warning'); }
         },
 
@@ -1545,17 +1548,23 @@ function posApp() {
             } catch {}
         },
 
-        addToCart(product) {
-            if (product.stock <= 0) return;
+        addToCart(product, force = false) {
+            if (!force && product.stock <= 0) { this.showToast('Out of stock: ' + product.name, 'warning'); return false; }
             const existing = this.cart.find(i => i.product_id === product.id);
-            if (existing) { if (existing.qty >= product.stock) { this.showToast('Not enough stock. Available: ' + product.stock, 'warning'); return; } existing.qty++; }
-            else { this.cart.push({ product_id: product.id, product_name: product.name, sku: product.sku, barcode: product.barcode, price: parseFloat(product.price), qty: 1, discount: 0 }); }
+            if (existing) {
+                if (!force && product.stock > 0 && existing.qty >= product.stock) { this.showToast('Not enough stock. Available: ' + product.stock, 'warning'); return false; }
+                existing.qty++;
+            } else {
+                this.cart.push({ product_id: product.id, product_name: product.name, sku: product.sku, barcode: product.barcode, price: parseFloat(product.price), qty: 1, discount: 0 });
+            }
+            if (force && product.stock <= 0) this.showToast('Warning: ' + product.name + ' shows 0 stock in system', 'warning', 2500);
+            return true;
         },
 
         changeQty(idx, delta) {
             const item = this.cart[idx]; const newQty = item.qty + delta;
             if (newQty <= 0) { this.cart.splice(idx, 1); }
-            else { const product = this.products.find(p => p.id === item.product_id); if (product && newQty > product.stock) { this.showToast('Not enough stock. Available: ' + product.stock, 'warning'); return; } item.qty = newQty; }
+            else { const product = this.products.find(p => p.id === item.product_id); if (product && product.stock > 0 && newQty > product.stock) { this.showToast('Not enough stock. Available: ' + product.stock, 'warning'); return; } item.qty = newQty; }
         },
 
         removeItem(idx) { this.cart.splice(idx, 1); },

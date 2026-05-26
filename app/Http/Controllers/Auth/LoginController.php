@@ -27,6 +27,10 @@ class LoginController extends Controller
 
             $user = Auth::user();
 
+            if ($user->isSuperAdmin()) {
+                return redirect()->intended(route('super-admin.dashboard'));
+            }
+
             if ($user->canAccessBackoffice()) {
                 return redirect()->intended(route('backoffice.dashboard'));
             }

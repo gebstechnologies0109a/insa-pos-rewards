@@ -7,6 +7,7 @@ on:
       - 'INSABuddy/**'
       - 'INSAPOS/**'
       - 'INSAPOSv2/**'
+      - 'INSAPOSlight/**'
       - '.github/workflows/build-android.yml'
   workflow_dispatch:
 
@@ -94,7 +95,7 @@ jobs:
           retention-days: 90
 
   build-insaposv2:
-    name: Build INSAPOS v2.2o APK
+    name: Build INSAPOS v2.2q APK
     runs-on: ubuntu-latest
 
     steps:
@@ -131,16 +132,57 @@ jobs:
         working-directory: INSAPOSv2
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Upload INSAPOS v2.2o Debug APK
+      - name: Upload INSAPOS v2.2q Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: INSAPOS-v2.2o-debug
+          name: INSAPOS-v2.2q-debug
           path: INSAPOSv2/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 90
 
-      - name: Upload INSAPOS v2.2o Release APK
+      - name: Upload INSAPOS v2.2q Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: INSAPOS-v2.2o-release
+          name: INSAPOS-v2.2q-release
           path: INSAPOSv2/app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 90
+
+  build-insaposlight:
+    name: Build INSA POS Lite APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Install required SDK platforms
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Create Gradle Wrapper
+        working-directory: INSAPOSlight
+        run: gradle wrapper --gradle-version 8.11.1
+
+      - name: Build Debug APK
+        working-directory: INSAPOSlight
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload INSA POS Lite Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: INSAPOSlight-debug
+          path: INSAPOSlight/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 90
