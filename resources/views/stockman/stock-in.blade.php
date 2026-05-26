@@ -7,6 +7,18 @@
     <form method="POST" action="{{ route('stockman.stock-in.store') }}" @submit="validateForm($event)">
         @csrf
 
+        @if($branches->isNotEmpty())
+        <div class="mb-6">
+            <label for="branch_id" class="block font-medium text-gray-800 mb-1">Branch</label>
+            <select id="branch_id" name="branch_id" required
+                    class="w-full max-w-md p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                @foreach($branches as $branch)
+                <option value="{{ $branch->id }}" {{ (int) old('branch_id', $defaultBranchId) === $branch->id ? 'selected' : '' }}>{{ $branch->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        @endif
+
         <div class="mb-6">
             <label for="supplier_name" class="block font-medium text-gray-800 mb-1">Supplier Name (optional)</label>
             <input type="text" id="supplier_name" name="supplier_name" value="{{ old('supplier_name') }}"

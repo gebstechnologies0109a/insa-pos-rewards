@@ -42,25 +42,38 @@ class StockmanController extends Controller
 
     public function stockInForm()
     {
+        $user = auth()->user();
         $products = Product::where('active', true)->orderBy('name')->get();
+        $branches = $user->isBranchScoped() ? collect() : Branch::orderBy('name')->get();
+        $defaultBranchId = $user->branch_id ?? ($branches->first()?->id ?? 1);
 
-        return view('stockman.stock-in', compact('products'));
+        return view('stockman.stock-in', compact('products', 'branches', 'defaultBranchId'));
     }
 
     public function stockInStore(Request $request)
     {
-        $data = $request->validate([
+        $user = auth()->user();
+
+        $rules = [
             'supplier_name'        => 'nullable|string|max:255',
             'items'                => 'required|array|min:1',
             'items.*.product_id'   => 'required|exists:products,id',
             'items.*.qty'          => 'required|integer|min:1',
             'items.*.cost'         => 'required|numeric|min:0',
-        ]);
+        ];
 
-        $user = auth()->user();
+        if (! $user->isBranchScoped()) {
+            $rules['branch_id'] = 'required|exists:branches,id';
+        }
+
+        $data = $request->validate($rules);
+
+        $branchId = $user->isBranchScoped()
+            ? $user->branch_id
+            : $data['branch_id'];
 
         $result = app(\App\Services\POS\StockInService::class)->create([
-            'branch_id'     => $user->branch_id,
+            'branch_id'     => $branchId,
             'user_id'       => $user->id,
             'supplier_name' => $data['supplier_name'] ?? null,
             'items'         => collect($data['items'])->map(function ($item) {
