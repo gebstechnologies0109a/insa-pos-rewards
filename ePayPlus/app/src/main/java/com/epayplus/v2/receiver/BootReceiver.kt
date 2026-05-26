@@ -1,0 +1,18 @@
+package com.epayplus.v2.receiver
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import com.epayplus.v2.service.EPayService
+
+class BootReceiver : BroadcastReceiver() {
+
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
+            intent.action == "android.intent.action.QUICKBOOT_POWERON") {
+
+            val serviceIntent = Intent(context, EPayService::class.java)
+            context.startForegroundService(serviceIntent)
+        }
+    }
+}

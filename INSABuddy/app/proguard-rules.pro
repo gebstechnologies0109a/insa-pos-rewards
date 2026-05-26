@@ -1,0 +1,4 @@
+-keep class fi.iki.elonen.** { *; }
+-keep class org.nanohttpd.** { *; }
+-keep class com.insapos.insabuddy.** { *; }
+-dontwarn org.nanohttpd.**
