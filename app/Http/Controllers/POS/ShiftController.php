@@ -16,7 +16,13 @@ class ShiftController extends Controller
 
     public function current(): JsonResponse
     {
-        $shift = $this->service->getActiveShift(auth()->user());
+        $user = auth()->user();
+
+        if (! $user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
+        $shift = $this->service->getActiveShift($user);
 
         return response()->json([
             'success' => true,
@@ -26,13 +32,19 @@ class ShiftController extends Controller
 
     public function open(Request $request): JsonResponse
     {
+        $user = auth()->user();
+
+        if (! $user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
         $request->validate([
             'opening_cash' => 'required|numeric|min:0',
         ]);
 
         try {
             $shift = $this->service->openShift(
-                auth()->user(),
+                $user,
                 (float) $request->opening_cash,
                 $request,
             );

@@ -34,8 +34,13 @@ class PosSaleController extends Controller
 
     public function recent(Request $request): JsonResponse
     {
-        $limit = min((int) $request->get('limit', 20), 50);
         $user = auth()->user();
+
+        if (! $user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
+        $limit = min((int) $request->get('limit', 20), 50);
 
         $sales = PosSale::where('branch_id', $user->branch_id)
             ->where('cashier_id', $user->id)

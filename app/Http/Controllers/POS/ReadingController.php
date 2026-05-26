@@ -22,6 +22,10 @@ class ReadingController extends Controller
     {
         $user = $request->user();
 
+        if (! $user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
         $reading = $this->readingService->generateXReading($user);
 
         return response()->json([
@@ -41,6 +45,10 @@ class ReadingController extends Controller
     public function generateZReading(Request $request): JsonResponse
     {
         $user = $request->user();
+
+        if (! $user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
 
         $reading = $this->readingService->generateZReading($user);
 
