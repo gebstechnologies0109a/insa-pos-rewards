@@ -9,13 +9,16 @@ class HidScannerDriver(private val onBarcode: (String) -> Unit) {
     private val buffer = StringBuilder()
     private val handler = Handler(Looper.getMainLooper())
     private var lastBarcode: String = ""
+    private var lastKeyTime: Long = 0
     private val flushDelay = 80L
+    private val scannerSpeedThreshold = 60L
 
     private val flushRunnable = Runnable {
-        if (buffer.isNotEmpty()) {
-            lastBarcode = buffer.toString()
+        val code = buffer.toString()
+        buffer.clear()
+        if (code.length >= 3) {
+            lastBarcode = code
             onBarcode(lastBarcode)
-            buffer.clear()
         }
     }
 
@@ -27,19 +30,32 @@ class HidScannerDriver(private val onBarcode: (String) -> Unit) {
             event.keyCode == KeyEvent.KEYCODE_TAB
         ) {
             handler.removeCallbacks(flushRunnable)
-            if (buffer.isNotEmpty()) {
+            if (buffer.length >= 3) {
                 lastBarcode = buffer.toString()
-                onBarcode(lastBarcode)
                 buffer.clear()
+                onBarcode(lastBarcode)
+                return true
             }
-            return true
+            buffer.clear()
+            return false
         }
 
         if (ch.isLetterOrDigit() || ch == '-' || ch == '_' || ch == '.' || ch == '/') {
-            handler.removeCallbacks(flushRunnable)
-            buffer.append(ch)
-            handler.postDelayed(flushRunnable, flushDelay)
-            return true
+            val now = System.currentTimeMillis()
+            if (buffer.isEmpty() || (now - lastKeyTime) < scannerSpeedThreshold) {
+                handler.removeCallbacks(flushRunnable)
+                buffer.append(ch)
+                lastKeyTime = now
+                handler.postDelayed(flushRunnable, flushDelay)
+                return true
+            } else {
+                handler.removeCallbacks(flushRunnable)
+                buffer.clear()
+                buffer.append(ch)
+                lastKeyTime = now
+                handler.postDelayed(flushRunnable, flushDelay)
+                return false
+            }
         }
 
         return false
