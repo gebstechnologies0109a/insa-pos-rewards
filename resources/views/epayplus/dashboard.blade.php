@@ -1,6 +1,6 @@
-@extends('layouts.admin')
+@extends('layouts.epayplus')
 
-@section('title', 'ePayPlus Dashboard')
+@section('title', 'Dashboard')
 
 @section('content')
 <div class="container-fluid py-4">
