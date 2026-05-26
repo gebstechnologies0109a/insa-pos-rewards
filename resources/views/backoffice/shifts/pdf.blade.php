@@ -23,7 +23,8 @@
     </style>
 </head>
 <body>
-    <h1>INSA POS — Shift Report</h1>
+    @php $brandName = str_contains(request()->getHost(), 'epayplus') ? 'ePay Plus' : 'INSA POS'; @endphp
+    <h1>{{ $brandName }} — Shift Report</h1>
     <div class="subtitle">Generated {{ now()->format('M d, Y h:i A') }}</div>
 
     <div class="section-title">Shift Details</div>
@@ -89,7 +90,7 @@
     @endif
 
     <div class="footer">
-        INSA POS System &mdash; Shift Report #{{ $shift->id }} &mdash; Printed {{ now()->format('M d, Y h:i A') }}
+        {{ $brandName }} System &mdash; Shift Report #{{ $shift->id }} &mdash; Printed {{ now()->format('M d, Y h:i A') }}
     </div>
 </body>
 </html>

@@ -1,7 +1,8 @@
+@php $isEpayPlus = str_contains(request()->getHost(), 'epayplus'); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
 <!DOCTYPE html>
 <html>
 <head>
-    <title>INSA POS — Stockman</title>
+    <title>{{ $brandName }} — Stockman</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -10,7 +11,7 @@
     <nav class="bg-gray-800 text-white">
         <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
             <div class="flex items-center gap-6">
-                <span class="font-bold text-lg">INSA POS — Stockman</span>
+                <span class="font-bold text-lg">{{ $brandName }} — Stockman</span>
                 <div class="flex gap-4 text-sm">
                     <a href="{{ route('stockman.inventory') }}" class="hover:text-blue-300 {{ request()->routeIs('stockman.inventory') ? 'text-blue-400' : '' }}">Inventory</a>
                     <a href="{{ route('stockman.stock-in') }}" class="hover:text-blue-300 {{ request()->routeIs('stockman.stock-in*') ? 'text-blue-400' : '' }}">Stock In</a>

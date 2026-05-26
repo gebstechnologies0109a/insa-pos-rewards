@@ -1,7 +1,8 @@
+@php $isEpayPlus = str_contains(request()->getHost(), 'epayplus'); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
 <!DOCTYPE html>
 <html>
 <head>
-    <title>INSA POS — Back Office</title>
+    <title>{{ $brandName }} — Back Office</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -12,7 +13,7 @@
         <!-- SIDEBAR -->
         <aside class="w-56 bg-gray-900 text-gray-300 flex flex-col flex-shrink-0">
             <div class="p-4 border-b border-gray-800">
-                <a href="{{ route('backoffice.dashboard') }}" class="text-white font-bold text-lg">INSA POS</a>
+                <a href="{{ route('backoffice.dashboard') }}" class="text-white font-bold text-lg">{{ $brandName }}</a>
                 <div class="text-xs text-gray-500 mt-1">Back Office</div>
             </div>
 

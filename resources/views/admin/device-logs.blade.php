@@ -1,10 +1,11 @@
+@php $isEpayPlus = str_contains(request()->getHost(), 'epayplus'); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>INSA POS — Device Logs</title>
+    <title>{{ $brandName }} — Device Logs</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .log-row:hover { background: #f9fafb; }
@@ -14,7 +15,7 @@
 <body class="bg-gray-100 min-h-screen">
     <header class="bg-white shadow px-6 py-4 flex items-center justify-between">
         <div class="flex items-center gap-4">
-            <h1 class="text-xl font-bold text-gray-800">INSAPOS Device Logs</h1>
+            <h1 class="text-xl font-bold text-gray-800">{{ $brandName }} Device Logs</h1>
             <span class="text-sm text-gray-500">{{ $logs->total() }} entries</span>
         </div>
         <div class="flex items-center gap-3">
@@ -92,7 +93,7 @@
                     @empty
                     <tr>
                         <td colspan="6" class="p-12 text-center text-gray-400">
-                            No device logs yet. Logs will appear here when the INSAPOS app sends them.
+                            No device logs yet. Logs will appear here when the {{ $brandName }} app sends them.
                         </td>
                     </tr>
                     @endforelse

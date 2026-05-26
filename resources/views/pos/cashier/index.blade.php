@@ -1,10 +1,11 @@
+@php $isEpayPlus = str_contains(request()->getHost(), 'epayplus'); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.8, user-scalable=no">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>INSA POS — Cashier</title>
+    <title>{{ $brandName }} — Cashier</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -71,7 +72,7 @@
 <div x-show="showModeSelect" class="fixed inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 z-[200] flex items-center justify-center" x-cloak>
     <div class="text-center max-w-2xl mx-auto px-6">
         <div class="mb-2">
-            <span class="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">INSA POS</span>
+            <span class="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">{{ $brandName }}</span>
         </div>
         <p class="text-blue-200 text-sm lg:text-lg mb-10">Select your register mode to get started</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 lg:gap-8">
@@ -141,7 +142,7 @@
 
 <!-- HEADER -->
 <header class="bg-white shadow px-2 py-1 lg:px-4 lg:py-2 flex items-center justify-between flex-shrink-0">
-    <h1 class="text-sm lg:text-lg font-bold text-gray-800 whitespace-nowrap">INSA POS</h1>
+    <h1 class="text-sm lg:text-lg font-bold text-gray-800 whitespace-nowrap">{{ $brandName }}</h1>
     <div class="flex items-center gap-1.5 lg:gap-3 text-[11px] lg:text-sm text-gray-600 flex-wrap justify-end">
         <!-- Sync Status -->
         <div class="flex items-center gap-1 lg:gap-1.5 px-1.5 py-0.5 lg:px-2 lg:py-1 rounded-full border cursor-pointer"
@@ -1409,7 +1410,7 @@ function posApp() {
         async buddyPrintReceipt() {
             if (!this.buddyConnected || !this.lastSale) return;
             await INSABuddy.printReceipt({
-                storeName: 'INSA POS', branchName: '{{ auth()->user()->branch?->name ?? "" }}',
+                storeName: '{{ $brandName }}', branchName: '{{ auth()->user()->branch?->name ?? "" }}',
                 saleNumber: this.lastSale.sale_number || this.lastSale.local_id?.substring(0, 8),
                 date: new Date().toLocaleString(), cashier: '{{ auth()->user()->name }}',
                 items: (this.lastSale._cart || this.cart).map(i => ({ name: i.product_name, qty: i.qty, price: i.price, discount: i.discount || 0 })),
@@ -1578,7 +1579,7 @@ function posApp() {
             };
             if (db) { await db.transactions.add(txData); await db.syncQueue.add({ type: 'transaction_push', ref: localId }); this.pendingSyncCount++; }
             const receiptData = {
-                local_tx_id: localId, sale_number: null, store_name: 'INSA POS', branch_name: '{{ auth()->user()->branch?->name ?? "" }}',
+                local_tx_id: localId, sale_number: null, store_name: '{{ $brandName }}', branch_name: '{{ auth()->user()->branch?->name ?? "" }}',
                 cashier: '{{ auth()->user()->name }}', items: txData.items, subtotal: txData.subtotal, discount: txData.discount_total,
                 total: txData.total, payment_method: txData.payment_method, amount_tendered: txData.amount_tendered,
                 change_due: txData.change_due, customer: this.selectedCustomer?.name || null,
