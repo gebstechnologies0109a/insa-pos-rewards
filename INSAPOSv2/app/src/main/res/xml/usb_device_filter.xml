@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ESC/POS thermal receipt printers (USB class 7 = Printer) -->
+    <usb-device class="7" />
+    <!-- HID barcode scanners -->
+    <usb-device class="3" />
+    <!-- CDC serial devices (some printers / cash drawers) -->
+    <usb-device class="2" />
+</resources>

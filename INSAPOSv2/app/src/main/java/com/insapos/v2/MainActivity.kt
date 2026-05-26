@@ -2,12 +2,17 @@ package com.insapos.v2
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
@@ -16,6 +21,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -45,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "INSAPOSv2"
         private const val PERMISSION_REQUEST = 1001
+        private const val ACTION_USB_PERMISSION = "com.insapos.v2.USB_PERMISSION"
     }
 
     private lateinit var webView: WebView
@@ -66,6 +73,34 @@ class MainActivity : AppCompatActivity() {
     private var usingHttp = false
 
     private var hidScanner: HidScannerDriver? = null
+
+    private val usbReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                ACTION_USB_PERMISSION -> {
+                    val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    }
+                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    Log.i(TAG, "USB permission ${if (granted) "granted" else "denied"} for ${device?.productName}")
+                    if (granted) {
+                        posService?.printerManager?.reconnect()
+                    }
+                }
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                    Log.i(TAG, "USB device attached")
+                    handler.postDelayed({ requestUsbPermissions(); injectHardwareInfo() }, 500)
+                }
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    Log.i(TAG, "USB device detached")
+                    handler.postDelayed({ injectHardwareInfo() }, 500)
+                }
+            }
+        }
+    }
 
     private val barcodeLauncher: ActivityResultLauncher<ScanOptions> =
         registerForActivityResult(ScanContract()) { result ->
@@ -138,12 +173,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         requestPermissions()
+        registerUsbReceiver()
         setupCookies()
         setupConnectivity()
         setupWebView()
         startPosService()
 
         probeAndLoad()
+
+        handler.postDelayed({ requestUsbPermissions() }, 2000)
     }
 
     override fun onResume() {
@@ -152,6 +190,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        try { unregisterReceiver(usbReceiver) } catch (_: Exception) {}
         if (serviceBound) {
             unbindService(serviceConnection)
             serviceBound = false
@@ -163,6 +202,13 @@ class MainActivity : AppCompatActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (hidScanner?.handleKeyEvent(event) == true) return true
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (event.source and android.view.InputDevice.SOURCE_MOUSE != 0) {
+            webView.requestFocus()
+        }
+        return super.dispatchGenericMotionEvent(event)
     }
 
     // --- Fullscreen ---
@@ -262,6 +308,19 @@ class MainActivity : AppCompatActivity() {
 
             val appUa = "INSAPOSv2/${BuildConfig.VERSION_NAME} Android/${Build.VERSION.RELEASE}"
             userAgentString = "$userAgentString $appUa"
+        }
+
+        webView.isFocusable = true
+        webView.isFocusableInTouchMode = true
+        webView.requestFocus()
+
+        webView.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP -> {
+                    if (!v.hasFocus()) v.requestFocus()
+                }
+            }
+            false
         }
 
         webView.addJavascriptInterface(AndroidBridge(this), AndroidBridge.BRIDGE_NAME)
@@ -519,6 +578,58 @@ class MainActivity : AppCompatActivity() {
 
         webView.evaluateJavascript(js, null)
         handler.postDelayed({ updateSyncBadge() }, 2000)
+        handler.postDelayed({ injectHardwareInfo() }, 1500)
+    }
+
+    // --- USB permission handling ---
+
+    private fun registerUsbReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(ACTION_USB_PERMISSION)
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(usbReceiver, filter)
+        }
+    }
+
+    private fun requestUsbPermissions() {
+        try {
+            val usbManager = getSystemService(Context.USB_SERVICE) as? UsbManager ?: return
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                PendingIntent.FLAG_MUTABLE else 0
+            val pi = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION), flags)
+
+            for ((_, device) in usbManager.deviceList) {
+                if (!usbManager.hasPermission(device)) {
+                    Log.i(TAG, "Requesting USB permission for ${device.productName} (${device.vendorId}:${device.productId})")
+                    usbManager.requestPermission(device, pi)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "USB permission request failed: ${e.message}")
+        }
+    }
+
+    // --- Hardware detection ---
+
+    private fun injectHardwareInfo() {
+        try {
+            val hw = HardwareDetector.detect(this)
+            val escaped = hw.toString().replace("'", "\\'").replace("\n", "")
+            val js = """
+                (function() {
+                    window.INSAPOS_HARDWARE = JSON.parse('$escaped');
+                    if(window.onINSAPOSHardware) window.onINSAPOSHardware(window.INSAPOS_HARDWARE);
+                })();
+            """.trimIndent()
+            runOnUiThread { webView.evaluateJavascript(js, null) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Hardware info injection failed: ${e.message}")
+        }
     }
 
     // --- Camera barcode scanner ---

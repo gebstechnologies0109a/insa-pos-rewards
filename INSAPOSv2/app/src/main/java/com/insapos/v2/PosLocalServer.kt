@@ -43,6 +43,7 @@ class PosLocalServer(
             val resp = when {
                 uri == "/ping" -> handlePing()
                 uri == "/device/info" -> handleDeviceInfo()
+                uri == "/device/hardware" -> handleHardwareDetect()
                 uri == "/print" && method == Method.POST -> handlePrint(session)
                 uri == "/drawer/open" && method == Method.POST -> handleDrawerOpen()
                 uri == "/printer/status" -> handlePrinterStatus()
@@ -75,6 +76,12 @@ class PosLocalServer(
 
     private fun handleDeviceInfo(): Response {
         return jsonOk(DeviceInfo.toJson(context).put("ok", true))
+    }
+
+    private fun handleHardwareDetect(): Response {
+        val hw = HardwareDetector.detect(context)
+        hw.put("ok", true)
+        return jsonOk(hw)
     }
 
     private fun handlePrint(session: IHTTPSession): Response {
