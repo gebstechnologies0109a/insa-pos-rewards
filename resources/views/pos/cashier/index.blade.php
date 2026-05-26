@@ -1232,22 +1232,30 @@ function posApp() {
         },
 
         retailScan() {
-            const q = this.retailScanQuery.trim();
+            let q = this.retailScanQuery.trim();
+            if (!q && this._barcodeBuffer.length >= 3) {
+                q = this._barcodeBuffer;
+                this._barcodeBuffer = '';
+            }
             if (!q) { this.retailScanResult = null; return; }
-            const exact = this.products.find(p => (p.barcode && p.barcode === q) || (p.sku && p.sku === q));
+
+            const exact = this.products.find(p =>
+                (p.barcode && p.barcode === q) || (p.sku && p.sku === q) ||
+                (p.barcode && p.barcode === String(q)) || (p.sku && p.sku === String(q))
+            );
             if (exact) {
-                if (this.retailPreviewMode) { this.retailScanResult = exact; this.filteredProducts = []; }
+                if (this.retailPreviewMode) { this.retailScanResult = exact; this.retailScanQuery = q; this.filteredProducts = []; }
                 else { this.retailAddToCart(exact); this.showToast(exact.name + ' added', 'success', 1500); }
                 return;
             }
             const ql = q.toLowerCase();
             const fuzzy = this.products.filter(p =>
-                p.name.toLowerCase().includes(ql) ||
+                (p.name && p.name.toLowerCase().includes(ql)) ||
                 (p.sku && p.sku.toLowerCase().includes(ql)) ||
                 (p.barcode && p.barcode.includes(q))
             );
             if (fuzzy.length === 1) {
-                if (this.retailPreviewMode) { this.retailScanResult = fuzzy[0]; this.filteredProducts = []; }
+                if (this.retailPreviewMode) { this.retailScanResult = fuzzy[0]; this.retailScanQuery = q; this.filteredProducts = []; }
                 else { this.retailAddToCart(fuzzy[0]); this.showToast(fuzzy[0].name + ' added', 'success', 1500); }
             }
             else if (fuzzy.length > 1) { this.retailScanResult = null; this.filteredProducts = fuzzy; }
@@ -1277,7 +1285,11 @@ function posApp() {
             await this.initOffline();
             this.loadShift();
             this.initBuddy();
-            window.onINSAPOSBarcode = (barcode) => { this.handleBarcodeScan(barcode); };
+            window.onINSAPOSBarcode = (barcode) => {
+                this._barcodeBuffer = '';
+                clearTimeout(this._barcodeTimer);
+                this.handleBarcodeScan(barcode);
+            };
         },
 
         async initOffline() {
@@ -1299,7 +1311,20 @@ function posApp() {
 
         handleBarcodeKey(event) {
             const tag = event.target.tagName;
+            const isRetailInput = event.target.id === 'retailScanInput';
+
+            if (isRetailInput) {
+                if (event.key === 'Enter') return;
+                if (event.key.length === 1) {
+                    this._barcodeBuffer += event.key;
+                    clearTimeout(this._barcodeTimer);
+                    this._barcodeTimer = setTimeout(() => { this._barcodeBuffer = ''; }, 100);
+                }
+                return;
+            }
+
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
             if (event.key === 'Enter') {
                 if (this._barcodeBuffer.length >= 3) { event.preventDefault(); this.handleBarcodeScan(this._barcodeBuffer); }
                 this._barcodeBuffer = ''; clearTimeout(this._barcodeTimer); return;
@@ -1313,12 +1338,47 @@ function posApp() {
 
         handleBarcodeScan(barcode) {
             if (!barcode || barcode.length < 2) return;
-            const product = this.products.find(p => (p.barcode && p.barcode === barcode) || (p.sku && p.sku === barcode));
+            const bc = barcode.trim();
+            const product = this.products.find(p =>
+                (p.barcode && p.barcode === bc) || (p.sku && p.sku === bc) ||
+                (p.barcode && p.barcode === String(bc)) || (p.sku && p.sku === String(bc))
+            );
             if (this.posMode === 'retail') {
                 if (product) {
-                    if (this.retailPreviewMode) { this.retailScanResult = product; this.retailScanQuery = barcode; }
-                    else { this.addToCart(product); this.showToast(product.name + ' added', 'success', 1500); }
-                } else { this.retailScanQuery = barcode; this.showToast('Product not found: ' + barcode, 'warning'); }
+                    if (this.retailPreviewMode) {
+                        this.retailScanResult = product;
+                        this.retailScanQuery = bc;
+                        this.filteredProducts = [];
+                    } else {
+                        this.retailAddToCart(product);
+                        this.showToast(product.name + ' added', 'success', 1500);
+                    }
+                } else {
+                    const ql = bc.toLowerCase();
+                    const fuzzy = this.products.filter(p =>
+                        (p.name && p.name.toLowerCase().includes(ql)) ||
+                        (p.sku && p.sku.toLowerCase().includes(ql)) ||
+                        (p.barcode && p.barcode.includes(bc))
+                    );
+                    if (fuzzy.length === 1) {
+                        if (this.retailPreviewMode) {
+                            this.retailScanResult = fuzzy[0];
+                            this.retailScanQuery = bc;
+                            this.filteredProducts = [];
+                        } else {
+                            this.retailAddToCart(fuzzy[0]);
+                            this.showToast(fuzzy[0].name + ' added', 'success', 1500);
+                        }
+                    } else if (fuzzy.length > 1) {
+                        this.retailScanQuery = bc;
+                        this.retailScanResult = null;
+                        this.filteredProducts = fuzzy;
+                    } else {
+                        this.retailScanQuery = bc;
+                        this.showToast('Product not found: ' + bc, 'warning');
+                    }
+                }
+                this.$nextTick(() => { const el = document.getElementById('retailScanInput'); if (el) el.focus(); });
                 return;
             }
             if (product) { this.addToCart(product); this.showToast(product.name + ' added', 'success', 1500); }
