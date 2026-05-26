@@ -161,6 +161,76 @@
     </div>
 </div>
 
+<!-- ORDER INVOICE SETTINGS MODAL -->
+<div x-show="showInvoiceSettingsModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-cloak x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-4 lg:p-6" @click.away="showInvoiceSettingsModal = false">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-base lg:text-xl font-bold text-gray-800 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Order Invoice Settings
+            </h2>
+            <button @click="showInvoiceSettingsModal = false" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <div class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Store Name</label>
+                <input type="text" x-model="invoiceSettings.store_name" placeholder="e.g. My Store"
+                       class="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                       :disabled="!canEditInvoiceSettings">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Contact Number</label>
+                <input type="text" x-model="invoiceSettings.contact_number" placeholder="e.g. 0917-123-4567"
+                       class="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                       :disabled="!canEditInvoiceSettings">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Store Address</label>
+                <textarea x-model="invoiceSettings.store_address" placeholder="Full store address..."
+                          rows="2" class="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
+                          :disabled="!canEditInvoiceSettings"></textarea>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Invoice Header <span class="text-gray-400 font-normal">(top of receipt)</span></label>
+                <textarea x-model="invoiceSettings.invoice_header" placeholder="Custom header text for receipts..."
+                          rows="2" class="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
+                          :disabled="!canEditInvoiceSettings"></textarea>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Invoice Footer <span class="text-gray-400 font-normal">(bottom of receipt)</span></label>
+                <textarea x-model="invoiceSettings.invoice_footer" placeholder="e.g. Thank you for your purchase!"
+                          rows="2" class="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
+                          :disabled="!canEditInvoiceSettings"></textarea>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Tax ID / TIN <span class="text-gray-400 font-normal">(BIR compliance)</span></label>
+                <input type="text" x-model="invoiceSettings.tax_id" placeholder="e.g. 000-123-456-789"
+                       class="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                       :disabled="!canEditInvoiceSettings">
+            </div>
+        </div>
+
+        <div class="flex gap-2 mt-4">
+            <template x-if="canEditInvoiceSettings">
+                <button @click="saveInvoiceSettings()" :disabled="invoiceSettingsSaving"
+                        class="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:bg-blue-300 flex items-center justify-center gap-2">
+                    <svg x-show="invoiceSettingsSaving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    <span x-text="invoiceSettingsSaving ? 'Saving...' : 'Save Settings'"></span>
+                </button>
+            </template>
+            <template x-if="!canEditInvoiceSettings">
+                <div class="flex-1 py-2.5 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg text-xs text-center font-medium">
+                    View only — contact your manager to edit
+                </div>
+            </template>
+            <button @click="showInvoiceSettingsModal = false" class="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300">Close</button>
+        </div>
+    </div>
+</div>
+
 <!-- CAMERA SCANNER MODAL -->
 <div x-show="showCameraScanner" class="fixed inset-0 bg-black/80 z-[150] flex items-center justify-center" x-cloak x-transition>
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
@@ -250,6 +320,10 @@
                 <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
             </button>
         </template>
+        <!-- Order Invoice Settings -->
+        <button @click="openInvoiceSettings()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Order Invoice Settings">
+            <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+        </button>
 
         <!-- Customer Rewards Scan -->
         <button @click="showRewardsModal = true" class="p-1 lg:p-1.5 rounded hover:bg-gray-100 relative" title="Scan Customer Card / QR for DIY Biz Rewards">
@@ -1159,6 +1233,11 @@ function posApp() {
         readingData: null,
         showZConfirm: false,
 
+        showInvoiceSettingsModal: false,
+        invoiceSettings: { store_name: '', contact_number: '', store_address: '', invoice_header: '', invoice_footer: '', tax_id: '' },
+        invoiceSettingsSaving: false,
+        canEditInvoiceSettings: @json(in_array(auth()->user()->role, ['owner', 'admin', 'manager', 'supervisor'])),
+
         _barcodeBuffer: '',
         _barcodeTimer: null,
 
@@ -1284,6 +1363,7 @@ function posApp() {
             }
             await this.initOffline();
             this.loadShift();
+            this.loadInvoiceSettings();
             this.initBuddy();
             window.onINSAPOSBarcode = (barcode) => {
                 this._barcodeBuffer = '';
@@ -1507,6 +1587,41 @@ function posApp() {
             } catch { this.printerStatus = { connected: false, name: '', type: '' }; }
         },
 
+        async openInvoiceSettings() {
+            this.showInvoiceSettingsModal = true;
+            await this.loadInvoiceSettings();
+        },
+
+        async loadInvoiceSettings() {
+            try {
+                const res = await fetch('/api/pos/invoice-settings', { headers: this.csrfHeader() });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && data.settings) {
+                        this.invoiceSettings = { ...this.invoiceSettings, ...data.settings };
+                    }
+                }
+            } catch {}
+        },
+
+        async saveInvoiceSettings() {
+            this.invoiceSettingsSaving = true;
+            try {
+                const res = await fetch('/api/pos/invoice-settings', {
+                    method: 'POST', headers: this.csrfHeader(),
+                    body: JSON.stringify(this.invoiceSettings),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.showToast('Invoice settings saved!', 'success');
+                    if (data.settings) this.invoiceSettings = { ...this.invoiceSettings, ...data.settings };
+                } else {
+                    this.showToast(data.message || 'Failed to save settings.', 'error');
+                }
+            } catch { this.showToast('Network error saving settings.', 'error'); }
+            finally { this.invoiceSettingsSaving = false; }
+        },
+
         async scanPrinters() {
             this.printerScanning = true;
             this.printerList = [];
@@ -1608,8 +1723,15 @@ function posApp() {
 
         async buddyPrintReceipt() {
             if (!this.buddyConnected || !this.lastSale) return;
+            const inv = this.invoiceSettings;
             await INSABuddy.printReceipt({
-                storeName: 'INSA POS', branchName: '{{ auth()->user()->branch?->name ?? "" }}',
+                storeName: inv.store_name || 'INSA POS',
+                branchName: '{{ auth()->user()->branch?->name ?? "" }}',
+                storeAddress: inv.store_address || '',
+                contactNumber: inv.contact_number || '',
+                taxId: inv.tax_id || '',
+                invoiceHeader: inv.invoice_header || '',
+                invoiceFooter: inv.invoice_footer || '',
                 saleNumber: this.lastSale.sale_number || this.lastSale.local_id?.substring(0, 8),
                 date: new Date().toLocaleString(), cashier: '{{ auth()->user()->name }}',
                 items: (this.lastSale._cart || this.cart).map(i => ({ name: i.product_name, qty: i.qty, price: i.price, discount: i.discount || 0 })),
@@ -1777,8 +1899,12 @@ function posApp() {
                 total: this.cartTotal, change_due: Math.max(0, tendered - this.cartTotal), status: 'pending', created_at: new Date().toISOString(),
             };
             if (db) { await db.transactions.add(txData); await db.syncQueue.add({ type: 'transaction_push', ref: localId }); this.pendingSyncCount++; }
+            const inv = this.invoiceSettings;
             const receiptData = {
-                local_tx_id: localId, sale_number: null, store_name: 'INSA POS', branch_name: '{{ auth()->user()->branch?->name ?? "" }}',
+                local_tx_id: localId, sale_number: null,
+                store_name: inv.store_name || 'INSA POS', branch_name: '{{ auth()->user()->branch?->name ?? "" }}',
+                store_address: inv.store_address || '', contact_number: inv.contact_number || '',
+                tax_id: inv.tax_id || '', invoice_header: inv.invoice_header || '', invoice_footer: inv.invoice_footer || '',
                 cashier: '{{ auth()->user()->name }}', items: txData.items, subtotal: txData.subtotal, discount: txData.discount_total,
                 total: txData.total, payment_method: txData.payment_method, amount_tendered: txData.amount_tendered,
                 change_due: txData.change_due, customer: this.selectedCustomer?.name || null,
