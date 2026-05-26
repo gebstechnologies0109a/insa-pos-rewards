@@ -178,6 +178,10 @@ const INSABuddy = {
         return this._post('/printer/select', { type, name });
     },
 
+    async testPrint() {
+        return this._post('/printer/test', {});
+    },
+
     /**
      * Start polling INSABuddy status at the given interval (ms).
      * Calls `onChange(connected)` whenever status changes.
