@@ -153,3 +153,25 @@ data class GenericResponse(
     val success: Boolean,
     val message: String?
 )
+
+data class DeviceConfigResponse(
+    val success: Boolean,
+    val config: Map<String, Any>? = null,
+    @SerializedName("enabled_services") val enabledServices: List<String>? = null,
+    @SerializedName("operating_hours") val operatingHours: String? = null,
+    val type: String? = null,
+    val message: String? = null
+)
+
+data class DeviceCommandsResponse(
+    val success: Boolean,
+    val commands: List<DeviceCommandInfo>? = null,
+    val message: String? = null
+)
+
+data class DeviceCommandInfo(
+    val id: Long = 0,
+    val command: String = "",
+    val params: Map<String, Any>? = null,
+    @SerializedName("created_at") val createdAt: String = ""
+)

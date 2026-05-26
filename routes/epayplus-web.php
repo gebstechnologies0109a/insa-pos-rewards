@@ -1,16 +1,20 @@
 <?php
 
 /**
- * ePayPlus Admin Web Routes
+ * ePayPlus Admin Web Routes — v3.0
  */
 
 use App\Http\Controllers\EPayAdmin\AnnouncementController;
+use App\Http\Controllers\EPayAdmin\CommissionController;
 use App\Http\Controllers\EPayAdmin\DashboardController;
+use App\Http\Controllers\EPayAdmin\DeviceController;
 use App\Http\Controllers\EPayAdmin\EPayProductController;
+use App\Http\Controllers\EPayAdmin\KioskController;
 use App\Http\Controllers\EPayAdmin\ProviderController;
 use App\Http\Controllers\EPayAdmin\ReportController;
 use App\Http\Controllers\EPayAdmin\RetailerController;
 use App\Http\Controllers\EPayAdmin\SettingController;
+use App\Http\Controllers\EPayAdmin\SmsController;
 use App\Http\Controllers\EPayAdmin\TopupController;
 use App\Http\Controllers\EPayAdmin\TransactionController;
 use Illuminate\Support\Facades\Route;
@@ -72,6 +76,36 @@ Route::middleware(['auth', 'role:owner,admin,super_admin'])->prefix('epayplus')-
     Route::get('/reports/retailer-performance', [ReportController::class, 'retailerPerformance'])->name('epayplus.reports.retailer-performance');
     Route::get('/reports/provider-performance', [ReportController::class, 'providerPerformance'])->name('epayplus.reports.provider-performance');
     Route::get('/reports/export/{type}', [ReportController::class, 'export'])->name('epayplus.reports.export');
+
+    // ── Devices ──
+    Route::get('/devices', [DeviceController::class, 'index'])->name('epayplus.devices');
+    Route::post('/devices', [DeviceController::class, 'store'])->name('epayplus.devices.store');
+    Route::get('/devices/{device}', [DeviceController::class, 'show'])->name('epayplus.devices.show');
+    Route::put('/devices/{device}', [DeviceController::class, 'update'])->name('epayplus.devices.update');
+    Route::post('/devices/{device}/command', [DeviceController::class, 'sendCommand'])->name('epayplus.devices.command');
+    Route::get('/devices/{device}/logs', [DeviceController::class, 'logs'])->name('epayplus.devices.logs');
+    Route::delete('/devices/{device}', [DeviceController::class, 'destroyDevice'])->name('epayplus.devices.destroy');
+
+    // ── Kiosks ──
+    Route::get('/kiosks', [KioskController::class, 'index'])->name('epayplus.kiosks');
+    Route::get('/kiosks/{device}', [KioskController::class, 'show'])->name('epayplus.kiosks.show');
+    Route::put('/kiosks/{device}/config', [KioskController::class, 'updateConfig'])->name('epayplus.kiosks.config');
+    Route::post('/kiosks/{device}/collection', [KioskController::class, 'recordCollection'])->name('epayplus.kiosks.collection');
+    Route::post('/kiosks/{device}/toggle-lock', [KioskController::class, 'toggleLock'])->name('epayplus.kiosks.toggle-lock');
+
+    // ── SMS Gateway ──
+    Route::get('/sms', [SmsController::class, 'index'])->name('epayplus.sms');
+    Route::get('/sms/templates', [SmsController::class, 'templates'])->name('epayplus.sms.templates');
+    Route::post('/sms/templates', [SmsController::class, 'updateTemplates'])->name('epayplus.sms.templates.update');
+    Route::post('/sms/providers', [SmsController::class, 'updateProviders'])->name('epayplus.sms.providers.update');
+    Route::post('/sms/routing', [SmsController::class, 'updateRouting'])->name('epayplus.sms.routing.update');
+
+    // ── Commissions ──
+    Route::get('/commissions', [CommissionController::class, 'index'])->name('epayplus.commissions');
+    Route::post('/commissions', [CommissionController::class, 'store'])->name('epayplus.commissions.store');
+    Route::put('/commissions/{commission}', [CommissionController::class, 'update'])->name('epayplus.commissions.update');
+    Route::delete('/commissions/{commission}', [CommissionController::class, 'destroy'])->name('epayplus.commissions.destroy');
+    Route::post('/commissions/{commission}/toggle', [CommissionController::class, 'toggleStatus'])->name('epayplus.commissions.toggle');
 
     // ── Settings ──
     Route::get('/settings', [SettingController::class, 'index'])->name('epayplus.settings');

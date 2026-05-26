@@ -22,8 +22,8 @@ android {
         applicationId = "com.epayplus.v2"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "2.2"
+        versionCode = 4
+        versionName = "3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -116,6 +116,8 @@ dependencies {
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.hilt:hilt-work:1.1.0")
+    ksp("androidx.hilt:hilt-compiler:1.1.0")
 
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.34.0")

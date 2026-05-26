@@ -50,6 +50,9 @@
     <!-- USB -->
     <uses-permission android:name="android.permission.USB_PERMISSION" />
 
+    <!-- Overlay (for blocking status bar) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
@@ -104,6 +107,13 @@
             android:name=".service.TransactionService"
             android:enabled="true"
             android:exported="false" />
+
+        <!-- Kiosk Lock-Down Service -->
+        <service
+            android:name=".service.KioskService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
 
         <!-- SMS Receiver -->
         <receiver

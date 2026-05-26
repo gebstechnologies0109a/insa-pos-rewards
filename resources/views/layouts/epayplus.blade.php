@@ -58,6 +58,28 @@
                         </a>
                     </li>
 
+                    <li><div class="nav-section">Device Fleet</div></li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.devices*') ? 'active' : '' }}" href="{{ route('epayplus.devices') }}">
+                            <i class="bi bi-phone"></i> Devices
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.kiosks*') ? 'active' : '' }}" href="{{ route('epayplus.kiosks') }}">
+                            <i class="bi bi-display"></i> Kiosks
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.sms*') ? 'active' : '' }}" href="{{ route('epayplus.sms') }}">
+                            <i class="bi bi-chat-dots"></i> SMS Gateway
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.commissions*') ? 'active' : '' }}" href="{{ route('epayplus.commissions') }}">
+                            <i class="bi bi-percent"></i> Commissions
+                        </a>
+                    </li>
+
                     <li><div class="nav-section">Operations</div></li>
                     <li class="nav-item">
                         <a class="nav-link {{ request()->routeIs('epayplus.transactions*') ? 'active' : '' }}" href="{{ route('epayplus.transactions') }}">

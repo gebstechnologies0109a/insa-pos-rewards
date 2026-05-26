@@ -56,8 +56,14 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE syncedToServer = 0")
     suspend fun getUnsyncedTransactions(): List<TransactionEntity>
 
+    @Query("SELECT * FROM transactions WHERE syncedToServer = 0")
+    suspend fun getPendingSync(): List<TransactionEntity>
+
     @Query("UPDATE transactions SET syncedToServer = 1 WHERE id IN (:ids)")
     suspend fun markAsSynced(ids: List<Long>)
+
+    @Query("UPDATE transactions SET syncedToServer = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSalesSummary(summary: SalesSummaryEntity)

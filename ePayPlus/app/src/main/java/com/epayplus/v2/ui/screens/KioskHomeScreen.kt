@@ -23,14 +23,16 @@ import androidx.compose.ui.unit.sp
 import com.epayplus.v2.ui.theme.*
 
 @Composable
-fun KioskHomeScreen() {
+fun KioskHomeScreen(
+    onServiceSelected: (String) -> Unit = {}
+) {
     val services = listOf(
-        KioskService("Buy Load", Icons.Filled.PhoneAndroid, CategoryEload),
-        KioskService("Bills Payment", Icons.Filled.Receipt, CategoryBills),
-        KioskService("Cash-In", Icons.Filled.AccountBalanceWallet, CategoryEcash),
-        KioskService("WiFi", Icons.Filled.Wifi, CategoryWifi),
-        KioskService("Balance Inquiry", Icons.Filled.AccountBalance, EPayBlue),
-        KioskService("More", Icons.Filled.MoreHoriz, EPayOrange),
+        KioskServiceItem("Buy Load", Icons.Filled.PhoneAndroid, CategoryEload, "eload"),
+        KioskServiceItem("Bills Payment", Icons.Filled.Receipt, CategoryBills, "bills"),
+        KioskServiceItem("Cash-In", Icons.Filled.AccountBalanceWallet, CategoryEcash, "ecash"),
+        KioskServiceItem("WiFi", Icons.Filled.Wifi, CategoryWifi, "wifi"),
+        KioskServiceItem("Balance Inquiry", Icons.Filled.AccountBalance, EPayBlue, "balance"),
+        KioskServiceItem("More", Icons.Filled.MoreHoriz, EPayOrange, "more"),
     )
 
     Column(
@@ -77,7 +79,7 @@ fun KioskHomeScreen() {
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(services) { service ->
-                    KioskServiceCard(service)
+                    KioskServiceCard(service) { onServiceSelected(service.route) }
                 }
             }
         }
@@ -85,12 +87,12 @@ fun KioskHomeScreen() {
 }
 
 @Composable
-private fun KioskServiceCard(service: KioskService) {
+private fun KioskServiceCard(service: KioskServiceItem, onClick: () -> Unit = {}) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clickable { },
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
@@ -127,8 +129,9 @@ private fun KioskServiceCard(service: KioskService) {
     }
 }
 
-private data class KioskService(
+private data class KioskServiceItem(
     val label: String,
     val icon: ImageVector,
-    val color: Color
+    val color: Color,
+    val route: String = ""
 )
