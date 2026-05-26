@@ -41,6 +41,15 @@
                     </span>
                 </a>
 
+                <div class="px-5 pt-4 pb-1 text-xs uppercase text-indigo-500 tracking-wider font-semibold">ePayPlus</div>
+
+                <a href="{{ route('epayplus.dashboard') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition {{ request()->routeIs('epayplus.*') ? 'bg-indigo-900 text-white' : '' }}">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        ePayPlus Admin
+                    </span>
+                </a>
+
                 <div class="px-5 pt-4 pb-1 text-xs uppercase text-indigo-500 tracking-wider font-semibold">Quick Links</div>
 
                 <a href="{{ route('backoffice.dashboard') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition">
