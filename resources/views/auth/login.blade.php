@@ -1,7 +1,11 @@
+@php
+    $isEpayPlus = str_contains(request()->getHost(), 'epayplus');
+    $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS';
+@endphp
 <!DOCTYPE html>
 <html>
 <head>
-    <title>INSA POS — Login</title>
+    <title>{{ $brandName }} — Login</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -9,7 +13,7 @@
     <div class="w-full max-w-md">
         <div class="bg-white rounded-lg shadow-lg p-8">
             <div class="text-center mb-8">
-                <h1 class="text-2xl font-bold text-gray-900">INSA POS</h1>
+                <h1 class="text-2xl font-bold text-gray-900">{{ $brandName }}</h1>
                 <p class="text-gray-500 text-sm mt-1">Sign in to your account</p>
             </div>
 
