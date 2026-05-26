@@ -6,56 +6,58 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
     primary = EPayGreen,
-    onPrimary = EPayWhite,
-    primaryContainer = EPayGreenLight,
+    onPrimary = Color.White,
+    primaryContainer = EPayGreenSurface,
     onPrimaryContainer = EPayGreenDark,
-    secondary = EPayBlue,
-    onSecondary = EPayWhite,
-    secondaryContainer = EPayBlueLight,
-    onSecondaryContainer = EPayBlueDark,
-    tertiary = EPayOrange,
-    onTertiary = EPayWhite,
-    background = EPayWhite,
+    secondary = EPayGold,
+    onSecondary = Color.White,
+    secondaryContainer = EPayGoldSurface,
+    onSecondaryContainer = EPayGoldDark,
+    tertiary = EPayBlue,
+    onTertiary = Color.White,
+    background = EPayLightGray,
     onBackground = EPayDarkGray,
-    surface = EPayWhite,
+    surface = Color.White,
     onSurface = EPayDarkGray,
-    surfaceVariant = EPayLightGray,
+    surfaceVariant = EPaySurfaceGray,
     onSurfaceVariant = EPayMediumGray,
     error = StatusError,
-    onError = EPayWhite
+    onError = Color.White,
+    outline = Color(0xFFCAC4D0)
 )
 
 private val DarkColorScheme = darkColorScheme(
     primary = EPayGreenLight,
     onPrimary = EPayGreenDark,
     primaryContainer = EPayGreen,
-    onPrimaryContainer = EPayWhite,
-    secondary = EPayBlueLight,
-    onSecondary = EPayBlueDark,
-    secondaryContainer = EPayBlue,
-    onSecondaryContainer = EPayWhite,
-    tertiary = EPayOrange,
-    onTertiary = EPayDarkGray,
+    onPrimaryContainer = Color.White,
+    secondary = EPayGoldLight,
+    onSecondary = EPayGoldDark,
+    secondaryContainer = EPayGold,
+    onSecondaryContainer = Color.White,
+    tertiary = EPayBlueLight,
+    onTertiary = EPayBlueDark,
     background = DarkBackground,
-    onBackground = EPayWhite,
+    onBackground = Color.White,
     surface = DarkSurface,
-    onSurface = EPayWhite,
+    onSurface = Color.White,
     surfaceVariant = DarkCard,
-    onSurfaceVariant = EPayLightGray,
-    error = StatusError,
-    onError = EPayWhite
+    onSurfaceVariant = Color(0xFFCAC4D0),
+    error = Color(0xFFEF5350),
+    onError = Color.White
 )
 
 @Composable
 fun EPayPlusTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -71,8 +73,8 @@ fun EPayPlusTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            window.statusBarColor = EPayGreenDark.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
         }
     }
 

@@ -4,7 +4,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.telephony.SmsManager
-import com.epayplus.v2.data.repository.AccountRepository
+import com.epayplus.v2.data.local.dao.TransactionDao
 import com.epayplus.v2.data.repository.TransactionRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
@@ -14,7 +14,7 @@ import javax.inject.Inject
 class TransactionService : Service() {
 
     @Inject lateinit var transactionRepository: TransactionRepository
-    @Inject lateinit var accountRepository: AccountRepository
+    @Inject lateinit var transactionDao: TransactionDao
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -40,17 +40,18 @@ class TransactionService : Service() {
                 @Suppress("DEPRECATION")
                 val smsManager = SmsManager.getDefault()
                 smsManager.sendTextMessage(number, null, message, null, null)
-                transactionRepository.updateTransactionStatus(transactionId, "SUCCESS", "SMS sent")
+                transactionDao.updateStatus(transactionId, "SUCCESS")
+                transactionDao.updateRemarks(transactionId, "SMS sent")
             } catch (e: Exception) {
-                transactionRepository.updateTransactionStatus(transactionId, "FAILED", e.message ?: "SMS failed")
+                transactionDao.updateStatus(transactionId, "FAILED")
+                transactionDao.updateRemarks(transactionId, e.message ?: "SMS failed")
             }
         }
     }
 
     private fun syncTransactions() {
         serviceScope.launch {
-            val account = accountRepository.getAccountSync() ?: return@launch
-            transactionRepository.syncPendingTransactions(account.apiKey)
+            transactionRepository.syncPendingTransactions()
         }
     }
 

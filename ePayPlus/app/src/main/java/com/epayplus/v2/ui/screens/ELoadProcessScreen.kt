@@ -1,6 +1,9 @@
 package com.epayplus.v2.ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -18,119 +21,178 @@ import androidx.navigation.NavController
 import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.ELoadViewModel
+import com.epayplus.v2.ui.viewmodel.ProcessState
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ELoadProcessScreen(
     navController: NavController,
+    providerCode: String,
     productId: Long,
     phoneNumber: String,
     viewModel: ELoadViewModel = hiltViewModel()
 ) {
     val processState by viewModel.processState.collectAsState()
 
-    LaunchedEffect(productId, phoneNumber) {
-        viewModel.processEload(productId, phoneNumber)
+    LaunchedEffect(Unit) {
+        if (processState is ProcessState.Idle) {
+            viewModel.processEload(providerCode, productId, phoneNumber)
+        }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Processing", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = EPayGreen,
-                    titleContentColor = Color.White
-                )
-            )
-        }
-    ) { paddingValues ->
-        Column(
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+                .fillMaxWidth()
                 .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            when (processState) {
-                is ProcessState.Processing -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(64.dp),
-                        color = EPayGreen,
-                        strokeWidth = 4.dp
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        "Processing Transaction...",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        "Please wait while we process your e-load request.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center
-                    )
-                }
-                is ProcessState.Success -> {
-                    val state = processState as ProcessState.Success
-                    Icon(
-                        Icons.Filled.CheckCircle,
-                        "Success",
-                        tint = StatusSuccess,
-                        modifier = Modifier.size(72.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Transaction Successful!", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Ref: ${state.referenceNumber}", color = Color.Gray)
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    Button(
-                        onClick = {
-                            navController.navigate(NavRoutes.Home.route) {
-                                popUpTo(NavRoutes.Home.route) { inclusive = true }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                when (val state = processState) {
+                    is ProcessState.Processing -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(64.dp),
+                            color = EPayGreen,
+                            strokeWidth = 5.dp
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            "Processing E-Load",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Loading $phoneNumber...\nPlease wait.",
+                            textAlign = TextAlign.Center,
+                            color = EPayMediumGray,
+                            fontSize = 14.sp
+                        )
+                    }
+                    is ProcessState.Success -> {
+                        Surface(
+                            modifier = Modifier.size(72.dp),
+                            shape = CircleShape,
+                            color = StatusSuccess.copy(alpha = 0.12f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Filled.CheckCircle,
+                                    "Success",
+                                    tint = StatusSuccess,
+                                    modifier = Modifier.size(48.dp)
+                                )
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = EPayGreen),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Done", modifier = Modifier.padding(vertical = 4.dp))
-                    }
-                }
-                is ProcessState.Failed -> {
-                    val state = processState as ProcessState.Failed
-                    Icon(
-                        Icons.Filled.Error,
-                        "Failed",
-                        tint = StatusError,
-                        modifier = Modifier.size(72.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Transaction Failed", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(state.message, color = Color.Gray, textAlign = TextAlign.Center)
-                    Spacer(modifier = Modifier.height(32.dp))
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Text(
+                            "Load Successful!",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = StatusSuccess
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Ref: ${state.referenceNumber}",
+                            color = EPayMediumGray,
+                            fontSize = 13.sp
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
 
-                    Button(
-                        onClick = { navController.popBackStack() },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = EPayGreen),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Try Again", modifier = Modifier.padding(vertical = 4.dp))
+                        Button(
+                            onClick = {
+                                navController.navigate(
+                                    NavRoutes.TransactionResult.createRoute(state.transactionId, "ELOAD")
+                                ) {
+                                    popUpTo(NavRoutes.ELoadProviders.route) { inclusive = false }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = EPayGreen),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text("View Receipt", modifier = Modifier.padding(vertical = 4.dp), fontWeight = FontWeight.SemiBold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                navController.navigate(NavRoutes.Home.route) {
+                                    popUpTo(NavRoutes.Home.route) { inclusive = true }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text("Back to Home", modifier = Modifier.padding(vertical = 4.dp))
+                        }
                     }
+                    is ProcessState.Failed -> {
+                        Surface(
+                            modifier = Modifier.size(72.dp),
+                            shape = CircleShape,
+                            color = StatusError.copy(alpha = 0.12f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Filled.Cancel,
+                                    "Failed",
+                                    tint = StatusError,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Text(
+                            "Transaction Failed",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = StatusError
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            state.message,
+                            textAlign = TextAlign.Center,
+                            color = EPayMediumGray,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Button(
+                            onClick = { navController.popBackStack() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = EPayGreen),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Filled.Refresh, "Retry", modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Try Again", modifier = Modifier.padding(vertical = 4.dp), fontWeight = FontWeight.SemiBold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                navController.navigate(NavRoutes.Home.route) {
+                                    popUpTo(NavRoutes.Home.route) { inclusive = true }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text("Back to Home")
+                        }
+                    }
+                    else -> {}
                 }
-                else -> {}
             }
         }
     }
-}
-
-sealed class ProcessState {
-    object Idle : ProcessState()
-    object Processing : ProcessState()
-    data class Success(val referenceNumber: String, val transactionId: Long) : ProcessState()
-    data class Failed(val message: String) : ProcessState()
 }

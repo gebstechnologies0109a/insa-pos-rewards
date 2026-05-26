@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,85 +29,76 @@ fun SalesScreen(
     viewModel: SalesViewModel = hiltViewModel()
 ) {
     val salesSummaries by viewModel.salesSummaries.collectAsState()
-    val todaySummary by viewModel.todaySummary.collectAsState()
+    val todaySales by viewModel.todaySales.collectAsState()
+    val todayCount by viewModel.todayCount.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Sales Report", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = EPayBlue,
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
-                )
-            )
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Box(
+            modifier = Modifier.fillMaxWidth()
+                .background(brush = Brush.verticalGradient(listOf(EPayBlue, EPayBlue.copy(alpha = 0.85f))))
+                .padding(16.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sales Report", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
         }
-    ) { paddingValues ->
+
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Today's summary card
             item {
-                TodaySummaryCard(todaySummary)
-            }
-
-            // Breakdown cards
-            item {
-                Row(
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = EPayBlue)
                 ) {
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        label = "E-Load",
-                        value = todaySummary.eloadCount,
-                        amount = todaySummary.eloadSales,
-                        color = CategoryEload
-                    )
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        label = "Bills",
-                        value = todaySummary.billsCount,
-                        amount = todaySummary.billsSales,
-                        color = CategoryBills
-                    )
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        label = "E-Cash",
-                        value = todaySummary.ecashCount,
-                        amount = todaySummary.ecashSales,
-                        color = CategoryEcash
-                    )
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        label = "WiFi",
-                        value = todaySummary.wifiCount,
-                        amount = todaySummary.wifiSales,
-                        color = CategoryWifi
-                    )
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text("Today's Summary", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "₱ ${String.format("%,.2f", todaySales)}",
+                            color = Color.White,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text("Total Sales", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                            Column {
+                                Text("Transactions", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
+                                Text("$todayCount", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            }
+                        }
+                    }
                 }
             }
 
-            // History
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Recent Days", fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Recent Days", fontWeight = FontWeight.SemiBold, color = EPayMediumGray)
+            }
+
+            if (salesSummaries.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(Icons.Filled.BarChart, "No data", modifier = Modifier.size(48.dp), tint = EPayMediumGray.copy(alpha = 0.4f))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("No sales data yet", color = EPayMediumGray)
+                        }
+                    }
+                }
             }
 
             items(salesSummaries) { summary ->
@@ -117,72 +109,26 @@ fun SalesScreen(
 }
 
 @Composable
-private fun TodaySummaryCard(summary: SalesSummaryEntity) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = EPayBlue)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text("Today's Sales", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                "₱ ${String.format("%,.2f", summary.totalSales)}",
-                color = Color.White,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column {
-                    Text("Transactions", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
-                    Text("${summary.totalTransactions}", color = Color.White, fontWeight = FontWeight.SemiBold)
-                }
-                Column {
-                    Text("Profit", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
-                    Text("₱${String.format("%,.2f", summary.totalProfit)}", color = Color.White, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatCard(modifier: Modifier, label: String, value: Int, amount: Double, color: Color) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(label, fontSize = 12.sp, color = Color.Gray)
-            Text("$value txns", fontWeight = FontWeight.SemiBold)
-            Text("₱${String.format("%,.0f", amount)}", color = color, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
 private fun SalesDayCard(summary: SalesSummaryEntity) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                Text(summary.date, fontWeight = FontWeight.Medium)
-                Text("${summary.totalTransactions} transactions", fontSize = 12.sp, color = Color.Gray)
+                Text(summary.date, fontWeight = FontWeight.SemiBold)
+                Text("${summary.totalTransactions} transactions", fontSize = 12.sp, color = EPayMediumGray)
             }
-            Text(
-                "₱${String.format("%,.2f", summary.totalSales)}",
-                fontWeight = FontWeight.Bold,
-                color = EPayGreen
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text("₱${String.format("%,.2f", summary.totalSales)}", fontWeight = FontWeight.Bold, color = EPayGreen)
+                Text("Profit: ₱${String.format("%,.2f", summary.totalProfit)}", fontSize = 11.sp, color = EPayMediumGray)
+            }
         }
     }
 }

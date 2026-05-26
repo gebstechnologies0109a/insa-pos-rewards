@@ -17,11 +17,11 @@ class SalesViewModel @Inject constructor(
         transactionRepository.getRecentSalesSummaries()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val todaySummary: StateFlow<SalesSummaryEntity> = flow {
-        emit(SalesSummaryEntity(date = java.text.SimpleDateFormat("yyyy-MM-dd").format(java.util.Date())))
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5000),
-        SalesSummaryEntity(date = "")
-    )
+    val todaySales: StateFlow<Double> =
+        transactionRepository.getTodaySales()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    val todayCount: StateFlow<Int> =
+        transactionRepository.getTodayTransactionCount()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 }

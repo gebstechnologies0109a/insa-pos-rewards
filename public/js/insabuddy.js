@@ -78,7 +78,7 @@ const INSABuddy = {
         const divider = '================================';
 
         lines.push('\x1B\x61\x01'); // center align
-        lines.push(receipt.storeName || 'INSA POS');
+        lines.push(receipt.storeName || (window.location.hostname.includes('epayplus') ? 'ePay Plus' : 'INSA POS'));
         lines.push(receipt.branchName || '');
         lines.push(divider);
         lines.push('\x1B\x61\x00'); // left align

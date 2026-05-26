@@ -15,10 +15,15 @@ class TransactionViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _filterType = MutableStateFlow("ALL")
+    private val _searchQuery = MutableStateFlow("")
 
-    val transactions: StateFlow<List<TransactionEntity>> = _filterType
-        .flatMapLatest { type ->
-            if (type == "ALL") {
+    val transactions: StateFlow<List<TransactionEntity>> = combine(
+        _filterType, _searchQuery
+    ) { type, query -> Pair(type, query) }
+        .flatMapLatest { (type, query) ->
+            if (query.isNotEmpty()) {
+                transactionRepository.searchTransactions(query)
+            } else if (type == "ALL") {
                 transactionRepository.getAllTransactions()
             } else {
                 transactionRepository.getTransactionsByType(type)
@@ -29,4 +34,11 @@ class TransactionViewModel @Inject constructor(
     fun filterByType(type: String) {
         _filterType.value = type
     }
+
+    fun search(query: String) {
+        _searchQuery.value = query
+    }
+
+    suspend fun getTransactionById(id: Long): TransactionEntity? =
+        transactionRepository.getTransactionById(id)
 }

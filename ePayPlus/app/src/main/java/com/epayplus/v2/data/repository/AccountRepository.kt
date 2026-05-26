@@ -1,15 +1,19 @@
 package com.epayplus.v2.data.repository
 
+import android.provider.Settings
+import com.epayplus.v2.data.local.TokenManager
 import com.epayplus.v2.data.local.dao.AccountDao
 import com.epayplus.v2.data.local.entity.AccountEntity
 import com.epayplus.v2.data.remote.EPayApiService
+import com.epayplus.v2.domain.model.ChangePinRequest
 import com.epayplus.v2.domain.model.LoginRequest
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 class AccountRepository @Inject constructor(
     private val accountDao: AccountDao,
-    private val apiService: EPayApiService
+    private val apiService: EPayApiService,
+    private val tokenManager: TokenManager
 ) {
     fun getAccount(): Flow<AccountEntity?> = accountDao.getAccount()
 
@@ -19,8 +23,17 @@ class AccountRepository @Inject constructor(
         return try {
             val response = apiService.login(LoginRequest(accountId, pin, deviceId))
             if (response.isSuccessful && response.body()?.success == true) {
-                val accountInfo = response.body()!!.account!!
-                val token = response.body()!!.token!!
+                val body = response.body()!!
+                val accountInfo = body.account!!
+                val token = body.token!!
+
+                tokenManager.saveSession(
+                    token = token,
+                    accountId = accountInfo.id,
+                    businessName = accountInfo.businessName,
+                    ownerName = accountInfo.ownerName
+                )
+
                 val entity = AccountEntity(
                     accountId = accountInfo.id,
                     businessName = accountInfo.businessName,
@@ -34,45 +47,52 @@ class AccountRepository @Inject constructor(
                 accountDao.insert(entity)
                 Result.success(entity)
             } else {
-                Result.failure(Exception(response.body()?.message ?: "Login failed"))
+                val errorMsg = response.body()?.message
+                    ?: response.errorBody()?.string()
+                    ?: "Login failed. Please check your credentials."
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception("Connection error: ${e.localizedMessage ?: "Unable to reach server"}"))
         }
     }
 
     suspend fun refreshBalance(): Result<Double> {
         return try {
-            val account = accountDao.getAccountSync() ?: return Result.failure(Exception("No account"))
-            val response = apiService.getBalance("Bearer ${account.apiKey}")
+            val response = apiService.getBalance()
             if (response.isSuccessful && response.body()?.success == true) {
                 val balance = response.body()!!.balance
-                accountDao.updateBalance(account.id, balance)
+                val account = accountDao.getAccountSync()
+                account?.let { accountDao.updateBalance(it.id, balance) }
                 Result.success(balance)
             } else {
                 Result.failure(Exception(response.body()?.message ?: "Failed to get balance"))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            val account = accountDao.getAccountSync()
+            if (account != null) {
+                Result.success(account.balance)
+            } else {
+                Result.failure(e)
+            }
         }
     }
 
-    suspend fun updateKioskMode(enabled: Boolean, pin: String) {
-        val account = accountDao.getAccountSync() ?: return
-        accountDao.updateKioskMode(account.id, enabled, pin)
-    }
-
-    suspend fun updatePrinterConfig(address: String, type: String) {
-        val account = accountDao.getAccountSync() ?: return
-        accountDao.updatePrinterConfig(account.id, address, type)
+    suspend fun logout() {
+        tokenManager.clearSession()
+        accountDao.getAccountSync()?.let { accountDao.delete(it) }
     }
 
     suspend fun changePin(currentPin: String, newPin: String): Result<Unit> {
         return try {
-            val account = accountDao.getAccountSync() ?: return Result.failure(Exception("No account"))
-            if (account.pin != currentPin) return Result.failure(Exception("Incorrect current PIN"))
-            accountDao.updatePin(account.id, newPin)
-            Result.success(Unit)
+            val response = apiService.changePin(ChangePinRequest(currentPin, newPin))
+            if (response.isSuccessful && response.body()?.success == true) {
+                val account = accountDao.getAccountSync()
+                account?.let { accountDao.updatePin(it.id, newPin) }
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.body()?.message ?: "Failed to change PIN"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -81,4 +101,6 @@ class AccountRepository @Inject constructor(
     suspend fun saveAccount(account: AccountEntity) {
         accountDao.insert(account)
     }
+
+    fun isLoggedIn(): Flow<Boolean> = tokenManager.isLoggedIn
 }

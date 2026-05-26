@@ -20,7 +20,7 @@ sealed class BottomNavItem(
 
     object ELoad : BottomNavItem(
         route = NavRoutes.ELoadProviders.route,
-        title = "E-Load",
+        title = "Load",
         icon = Icons.Outlined.PhoneAndroid,
         selectedIcon = Icons.Filled.PhoneAndroid
     )
@@ -32,17 +32,17 @@ sealed class BottomNavItem(
         selectedIcon = Icons.Filled.Receipt
     )
 
-    object Sales : BottomNavItem(
-        route = NavRoutes.Sales.route,
-        title = "Sales",
-        icon = Icons.Outlined.BarChart,
-        selectedIcon = Icons.Filled.BarChart
+    object ECash : BottomNavItem(
+        route = NavRoutes.ECashProviders.route,
+        title = "Cash-In",
+        icon = Icons.Outlined.AccountBalanceWallet,
+        selectedIcon = Icons.Filled.AccountBalanceWallet
     )
 
-    object Settings : BottomNavItem(
+    object More : BottomNavItem(
         route = NavRoutes.Settings.route,
         title = "More",
-        icon = Icons.Outlined.MoreHoriz,
-        selectedIcon = Icons.Filled.MoreHoriz
+        icon = Icons.Outlined.Menu,
+        selectedIcon = Icons.Filled.Menu
     )
 }

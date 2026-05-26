@@ -41,7 +41,9 @@ interface ProductDao {
     @Query("DELETE FROM products WHERE type = :type")
     suspend fun deleteByType(type: String)
 
-    // SMS Templates
+    @Query("SELECT * FROM products WHERE id = :id")
+    suspend fun getProductById(id: Long): ProductEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTemplate(template: SmsTemplateEntity): Long
 

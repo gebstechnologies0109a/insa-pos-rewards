@@ -13,6 +13,9 @@ interface AccountDao {
     @Update
     suspend fun update(account: AccountEntity)
 
+    @Delete
+    suspend fun delete(account: AccountEntity)
+
     @Query("SELECT * FROM accounts LIMIT 1")
     fun getAccount(): Flow<AccountEntity?>
 

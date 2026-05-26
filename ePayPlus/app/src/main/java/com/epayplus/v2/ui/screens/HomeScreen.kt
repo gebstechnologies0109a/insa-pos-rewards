@@ -3,9 +3,8 @@ package com.epayplus.v2.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,13 +22,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.epayplus.v2.data.local.entity.TransactionEntity
 import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.HomeViewModel
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,69 +42,280 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        "ePayPlus",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 22.sp
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(EPayGreenDark, EPayGreen)
                     )
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = EPayGreen,
-                    titleContentColor = Color.White
-                ),
-                actions = {
-                    IconButton(onClick = { navController.navigate(NavRoutes.Settings.route) }) {
-                        Icon(Icons.Filled.Settings, "Settings", tint = Color.White)
+                )
+                .padding(top = 16.dp, bottom = 20.dp)
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "ePayPlus",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            uiState.businessName.ifEmpty { "Welcome" },
+                            fontSize = 13.sp,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        IconButton(onClick = { navController.navigate(NavRoutes.TransactionHistory.route) }) {
+                            Icon(Icons.Outlined.Notifications, "Notifications", tint = Color.White)
+                        }
                     }
                 }
-            )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Available Balance",
+                                fontSize = 13.sp,
+                                color = EPayMediumGray
+                            )
+                            if (uiState.isRefreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = EPayGreen,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                IconButton(
+                                    onClick = { viewModel.refreshBalance() },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Refresh,
+                                        "Refresh",
+                                        tint = EPayGreen,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            "₱ ${String.format("%,.2f", uiState.balance)}",
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = EPayGreenDark
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Divider(color = EPayLightGray)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("Today's Sales", fontSize = 11.sp, color = EPayMediumGray)
+                                Text(
+                                    "₱ ${String.format("%,.2f", uiState.todaySales)}",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 16.sp,
+                                    color = EPayGreen
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Transactions", fontSize = 11.sp, color = EPayMediumGray)
+                                Text(
+                                    "${uiState.todayTransactions}",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 16.sp,
+                                    color = EPayDarkGray
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
-    ) { paddingValues ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
+                .padding(top = 16.dp)
         ) {
-            // Balance Card
-            BalanceCard(
-                balance = uiState.balance,
-                businessName = uiState.businessName,
-                todaySales = uiState.todaySales,
-                todayTransactions = uiState.todayTransactions
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Service Grid
             Text(
-                "Services",
+                "Quick Services",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(horizontal = 20.dp)
             )
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ServiceButton(Icons.Filled.PhoneAndroid, "Load", CategoryEload) {
+                    navController.navigate(NavRoutes.ELoadProviders.route)
+                }
+                ServiceButton(Icons.Filled.Receipt, "Bills", CategoryBills) {
+                    navController.navigate(NavRoutes.BillsCategories.route)
+                }
+                ServiceButton(Icons.Filled.AccountBalanceWallet, "Cash-In", CategoryEcash) {
+                    navController.navigate(NavRoutes.ECashProviders.route)
+                }
+                ServiceButton(Icons.Filled.BarChart, "Sales", EPayBlue) {
+                    navController.navigate(NavRoutes.Sales.route)
+                }
+            }
 
-            ServiceGrid(navController)
+            Spacer(modifier = Modifier.height(20.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (uiState.announcements.isNotEmpty()) {
+                Text(
+                    "Announcements",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(uiState.announcements) { announcement ->
+                        Card(
+                            modifier = Modifier.width(280.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = EPayGoldSurface)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Filled.Campaign,
+                                        "Announcement",
+                                        tint = EPayGold,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        announcement.title,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    announcement.content,
+                                    fontSize = 12.sp,
+                                    color = EPayMediumGray,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+            }
 
-            // Quick Actions
-            Text(
-                "Quick Actions",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Recent Transactions",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                TextButton(onClick = { navController.navigate(NavRoutes.TransactionHistory.route) }) {
+                    Text("See All", color = EPayGreen, fontSize = 13.sp)
+                }
+            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            QuickActionsRow(navController)
+            if (uiState.recentTransactions.isEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Outlined.Inbox,
+                            "Empty",
+                            modifier = Modifier.size(40.dp),
+                            tint = EPayMediumGray.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "No transactions yet",
+                            color = EPayMediumGray,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "Start by loading, paying bills, or cashing in",
+                            color = EPayMediumGray.copy(alpha = 0.7f),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            } else {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column {
+                        uiState.recentTransactions.forEachIndexed { index, transaction ->
+                            RecentTransactionRow(transaction)
+                            if (index < uiState.recentTransactions.lastIndex) {
+                                Divider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = EPayLightGray
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -109,206 +323,107 @@ fun HomeScreen(
 }
 
 @Composable
-private fun BalanceCard(
-    balance: Double,
-    businessName: String,
-    todaySales: Double,
-    todayTransactions: Int
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(EPayGreen, EPayGreenDark)
-                    )
-                )
-                .padding(20.dp)
-        ) {
-            Column {
-                Text(
-                    businessName.ifEmpty { "ePayPlus V2.0" },
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 14.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "₱ ${String.format("%,.2f", balance)}",
-                    color = Color.White,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    "Available Balance",
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 12.sp
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Divider(color = Color.White.copy(alpha = 0.3f))
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text("Today's Sales", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
-                        Text(
-                            "₱ ${String.format("%,.2f", todaySales)}",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("Transactions", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
-                        Text(
-                            "$todayTransactions",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ServiceGrid(navController: NavController) {
-    val services = listOf(
-        ServiceItem("E-Load", Icons.Filled.PhoneAndroid, CategoryEload, NavRoutes.ELoadProviders.route),
-        ServiceItem("Bills Pay", Icons.Filled.Receipt, CategoryBills, NavRoutes.BillsCategories.route),
-        ServiceItem("E-Cash", Icons.Filled.AccountBalanceWallet, CategoryEcash, NavRoutes.ECashProviders.route),
-        ServiceItem("WiFi", Icons.Filled.Wifi, CategoryWifi, NavRoutes.Settings.route),
-        ServiceItem("Sales", Icons.Filled.BarChart, EPayBlue, NavRoutes.Sales.route),
-        ServiceItem("History", Icons.Filled.History, EPayOrange, NavRoutes.TransactionHistory.route),
-    )
-
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        modifier = Modifier.height(220.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(services) { service ->
-            ServiceCard(service) {
-                navController.navigate(service.route)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ServiceCard(service: ServiceItem, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(service.color.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    service.icon,
-                    contentDescription = service.label,
-                    tint = service.color,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                service.label,
-                style = MaterialTheme.typography.labelMedium,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuickActionsRow(navController: NavController) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        QuickActionCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Filled.QrCodeScanner,
-            label = "Scan QR",
-            color = EPayBlue
-        ) { }
-
-        QuickActionCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Filled.Print,
-            label = "Print Last",
-            color = EPayOrange
-        ) { }
-
-        QuickActionCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Filled.Refresh,
-            label = "Refresh",
-            color = EPayGreen
-        ) { }
-    }
-}
-
-@Composable
-private fun QuickActionCard(
-    modifier: Modifier = Modifier,
+private fun ServiceButton(
     icon: ImageVector,
     label: String,
     color: Color,
     onClick: () -> Unit
 ) {
-    OutlinedCard(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(8.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Surface(
+            modifier = Modifier.size(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = color.copy(alpha = 0.12f)
         ) {
-            Icon(icon, label, tint = color, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, label, tint = color, modifier = Modifier.size(28.dp))
+            }
         }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = EPayDarkGray
+        )
     }
 }
 
-private data class ServiceItem(
-    val label: String,
-    val icon: ImageVector,
-    val color: Color,
-    val route: String
-)
+@Composable
+private fun RecentTransactionRow(transaction: TransactionEntity) {
+    val typeColor = when (transaction.type) {
+        "ELOAD" -> CategoryEload
+        "BILLS" -> CategoryBills
+        "ECASH" -> CategoryEcash
+        else -> EPayMediumGray
+    }
+    val typeIcon = when (transaction.type) {
+        "ELOAD" -> Icons.Filled.PhoneAndroid
+        "BILLS" -> Icons.Filled.Receipt
+        "ECASH" -> Icons.Filled.AccountBalanceWallet
+        else -> Icons.Filled.SwapHoriz
+    }
+    val statusColor = when (transaction.status) {
+        "SUCCESS" -> StatusSuccess
+        "FAILED" -> StatusError
+        else -> StatusPending
+    }
+    val dateFormat = SimpleDateFormat("MMM dd, hh:mm a", Locale.getDefault())
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = CircleShape,
+            color = typeColor.copy(alpha = 0.12f)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(typeIcon, transaction.type, tint = typeColor, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                transaction.provider,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                "${transaction.targetNumber} • ${dateFormat.format(Date(transaction.createdAt))}",
+                fontSize = 11.sp,
+                color = EPayMediumGray
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                "₱${String.format("%,.2f", transaction.amount)}",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp
+            )
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = statusColor.copy(alpha = 0.12f)
+            ) {
+                Text(
+                    transaction.status,
+                    color = statusColor,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+        }
+    }
+}

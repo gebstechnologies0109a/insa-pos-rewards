@@ -1,108 +1,182 @@
 package com.epayplus.v2.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
+import com.epayplus.v2.ui.viewmodel.SettingsViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(navController: NavController) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Settings", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, "Back")
+fun SettingsScreen(
+    navController: NavController,
+    viewModel: SettingsViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Box(
+            modifier = Modifier.fillMaxWidth()
+                .background(brush = Brush.verticalGradient(listOf(EPayGreenDark, EPayGreen)))
+                .padding(20.dp)
+        ) {
+            Column {
+                Text("More", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f))
+                ) {
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(modifier = Modifier.size(48.dp), shape = CircleShape, color = Color.White.copy(alpha = 0.2f)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.Person, "Profile", tint = Color.White, modifier = Modifier.size(28.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                uiState.businessName.ifEmpty { "ePayPlus User" },
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                uiState.ownerName.ifEmpty { "Account" },
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 13.sp
+                            )
+                        }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = EPayGreen,
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
-                )
-            )
+                }
+            }
         }
-    ) { paddingValues ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text("Account", fontWeight = FontWeight.SemiBold, color = Color.Gray)
-            SettingsItem(Icons.Filled.Person, "Account Info", "Manage your account details") {}
-            SettingsItem(Icons.Filled.Lock, "Change PIN", "Update your security PIN") {}
-            SettingsItem(Icons.Filled.Key, "API Settings", "Configure server connection") {}
+            SectionLabel("Account")
+            SettingsItem(Icons.Outlined.BarChart, "Sales Report", "View daily sales summary") {
+                navController.navigate(NavRoutes.Sales.route)
+            }
+            SettingsItem(Icons.Outlined.History, "Transaction History", "View all transactions") {
+                navController.navigate(NavRoutes.TransactionHistory.route)
+            }
+            SettingsItem(Icons.Outlined.Lock, "Change PIN", "Update your security PIN") {
+                navController.navigate(NavRoutes.ChangePin.route)
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Device", fontWeight = FontWeight.SemiBold, color = Color.Gray)
-            SettingsItem(Icons.Filled.Print, "Printer Setup", "Configure thermal printer") {}
-            SettingsItem(Icons.Filled.Bluetooth, "Bluetooth", "Manage Bluetooth devices") {}
-            SettingsItem(Icons.Filled.Wifi, "WiFi Vendo", "Piso WiFi settings") {}
-            SettingsItem(Icons.Filled.ScreenLockPortrait, "Kiosk Mode", "Enable kiosk lock mode") {}
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Products", fontWeight = FontWeight.SemiBold, color = Color.Gray)
-            SettingsItem(Icons.Filled.PhoneAndroid, "E-Load Settings", "Manage load products") {}
-            SettingsItem(Icons.Filled.Receipt, "Bills Settings", "Configure bills payment") {}
-            SettingsItem(Icons.Filled.Sms, "SMS Templates", "Configure SMS-based loading") {}
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("App", fontWeight = FontWeight.SemiBold, color = Color.Gray)
-            SettingsItem(Icons.Filled.Notifications, "Notifications", "Manage push notifications") {}
-            SettingsItem(Icons.Filled.DarkMode, "Appearance", "Theme and display settings") {}
-            SettingsItem(Icons.Filled.Info, "About", "App version and info") {
+            SectionLabel("App")
+            SettingsItem(Icons.Outlined.Info, "About", "App version and information") {
                 navController.navigate(NavRoutes.About.route)
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showLogoutDialog = true },
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = StatusError.copy(alpha = 0.08f))
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(Icons.Filled.Logout, "Logout", tint = StatusError, modifier = Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Logout", color = StatusError, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                }
+            }
         }
+    }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            icon = { Icon(Icons.Filled.Logout, "Logout", tint = StatusError) },
+            title = { Text("Logout", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to logout?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showLogoutDialog = false
+                        viewModel.logout {
+                            navController.navigate(NavRoutes.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusError),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Logout") }
+            },
+            dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Cancel") } },
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 }
 
 @Composable
-private fun SettingsItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 13.sp,
+        color = EPayMediumGray,
+        modifier = Modifier.padding(vertical = 4.dp)
+    )
+}
+
+@Composable
+private fun SettingsItem(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(icon, title, tint = EPayGreen, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Medium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(title, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+                Text(subtitle, fontSize = 12.sp, color = EPayMediumGray)
             }
-            Icon(Icons.Filled.ChevronRight, "Go", tint = Color.Gray)
+            Icon(Icons.Filled.ChevronRight, "Go", tint = EPayMediumGray.copy(alpha = 0.5f))
         }
     }
 }

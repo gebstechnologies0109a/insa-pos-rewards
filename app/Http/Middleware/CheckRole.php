@@ -14,6 +14,10 @@ class CheckRole
             return redirect()->route('login');
         }
 
+        if ($request->user()->role === 'super_admin') {
+            return $next($request);
+        }
+
         if (! empty($roles) && ! in_array($request->user()->role, $roles)) {
             abort(403, 'Unauthorized.');
         }

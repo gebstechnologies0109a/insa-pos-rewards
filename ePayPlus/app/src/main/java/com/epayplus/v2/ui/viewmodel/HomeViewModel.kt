@@ -2,9 +2,12 @@ package com.epayplus.v2.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.epayplus.v2.data.local.entity.TransactionEntity
 import com.epayplus.v2.data.repository.AccountRepository
 import com.epayplus.v2.data.repository.ProductRepository
 import com.epayplus.v2.data.repository.TransactionRepository
+import com.epayplus.v2.domain.model.Announcement
+import com.epayplus.v2.data.remote.EPayApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -16,7 +19,10 @@ data class HomeUiState(
     val ownerName: String = "",
     val todaySales: Double = 0.0,
     val todayTransactions: Int = 0,
+    val recentTransactions: List<TransactionEntity> = emptyList(),
+    val announcements: List<Announcement> = emptyList(),
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val error: String? = null
 )
 
@@ -24,7 +30,8 @@ data class HomeUiState(
 class HomeViewModel @Inject constructor(
     private val accountRepository: AccountRepository,
     private val transactionRepository: TransactionRepository,
-    private val productRepository: ProductRepository
+    private val productRepository: ProductRepository,
+    private val apiService: EPayApiService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -33,20 +40,8 @@ class HomeViewModel @Inject constructor(
     init {
         loadAccountInfo()
         observeTodaySales()
-        syncProducts()
-    }
-
-    private fun syncProducts() {
-        viewModelScope.launch {
-            val account = accountRepository.getAccountSync()
-            val token = account?.apiKey
-            if (!token.isNullOrEmpty()) {
-                listOf("ELOAD", "BILLS", "ECASH").forEach { type ->
-                    productRepository.refreshProducts(token, type)
-                }
-            }
-            productRepository.ensureProductsExist()
-        }
+        observeRecentTransactions()
+        refreshAll()
     }
 
     private fun loadAccountInfo() {
@@ -78,15 +73,48 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun refreshBalance() {
+    private fun observeRecentTransactions() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            transactionRepository.getAllTransactions().collect { transactions ->
+                _uiState.update { it.copy(recentTransactions = transactions.take(5)) }
+            }
+        }
+    }
+
+    fun refreshAll() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+
             accountRepository.refreshBalance()
                 .onSuccess { balance ->
-                    _uiState.update { it.copy(balance = balance, isLoading = false, error = null) }
+                    _uiState.update { it.copy(balance = balance) }
+                }
+
+            listOf("ELOAD", "BILLS", "ECASH").forEach { type ->
+                try { productRepository.refreshProducts(type) } catch (_: Exception) {}
+            }
+            productRepository.ensureProductsExist()
+
+            try {
+                val response = apiService.getAnnouncements()
+                if (response.isSuccessful && response.body()?.success == true) {
+                    _uiState.update { it.copy(announcements = response.body()!!.announcements) }
+                }
+            } catch (_: Exception) {}
+
+            _uiState.update { it.copy(isRefreshing = false, error = null) }
+        }
+    }
+
+    fun refreshBalance() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            accountRepository.refreshBalance()
+                .onSuccess { balance ->
+                    _uiState.update { it.copy(balance = balance, isRefreshing = false, error = null) }
                 }
                 .onFailure { error ->
-                    _uiState.update { it.copy(isLoading = false, error = error.message) }
+                    _uiState.update { it.copy(isRefreshing = false, error = error.message) }
                 }
         }
     }

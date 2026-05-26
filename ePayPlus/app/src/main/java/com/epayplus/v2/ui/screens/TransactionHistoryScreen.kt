@@ -1,5 +1,6 @@
 package com.epayplus.v2.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -7,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,36 +33,52 @@ fun TransactionHistoryScreen(
 ) {
     val transactions by viewModel.transactions.collectAsState()
     var selectedFilter by remember { mutableStateOf("ALL") }
+    var searchQuery by remember { mutableStateOf("") }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Transaction History", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, "Back")
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        CenterAlignedTopAppBar(
+            title = { Text("Transaction History", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(Icons.Filled.ArrowBack, "Back")
+                }
+            },
+            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                containerColor = EPayGreen,
+                titleContentColor = Color.White,
+                navigationIconContentColor = Color.White
+            )
+        )
+
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = {
+                    searchQuery = it
+                    viewModel.search(it)
+                },
+                placeholder = { Text("Search transactions...") },
+                leadingIcon = { Icon(Icons.Outlined.Search, "Search", tint = EPayMediumGray) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = ""; viewModel.search("") }) {
+                            Icon(Icons.Filled.Clear, "Clear", modifier = Modifier.size(18.dp))
+                        }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = EPayOrange,
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = EPayGreen,
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White
                 )
             )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            // Filter chips
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("ALL", "ELOAD", "BILLS", "ECASH").forEach { filter ->
                     FilterChip(
                         selected = selectedFilter == filter,
@@ -68,37 +86,46 @@ fun TransactionHistoryScreen(
                             selectedFilter = filter
                             viewModel.filterByType(filter)
                         },
-                        label = { Text(filter, fontSize = 12.sp) }
+                        label = {
+                            Text(
+                                when (filter) {
+                                    "ALL" -> "All"
+                                    "ELOAD" -> "Load"
+                                    "BILLS" -> "Bills"
+                                    "ECASH" -> "Cash-In"
+                                    else -> filter
+                                },
+                                fontSize = 12.sp
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = EPayGreen.copy(alpha = 0.12f),
+                            selectedLabelColor = EPayGreen
+                        )
                     )
                 }
             }
+        }
 
-            LazyColumn(
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(transactions) { transaction ->
-                    TransactionCard(transaction)
-                }
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(transactions) { transaction ->
+                TransactionCard(transaction)
+            }
 
-                if (transactions.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    Icons.Filled.Inbox,
-                                    "Empty",
-                                    modifier = Modifier.size(48.dp),
-                                    tint = Color.Gray
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("No transactions yet", color = Color.Gray)
-                            }
+            if (transactions.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Outlined.Inbox, "Empty", modifier = Modifier.size(56.dp), tint = EPayMediumGray.copy(alpha = 0.4f))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("No transactions found", fontWeight = FontWeight.Medium, color = EPayMediumGray)
+                            Text("Your transactions will appear here", fontSize = 13.sp, color = EPayMediumGray.copy(alpha = 0.7f))
                         }
                     }
                 }
@@ -113,80 +140,52 @@ private fun TransactionCard(transaction: TransactionEntity) {
         "ELOAD" -> CategoryEload
         "BILLS" -> CategoryBills
         "ECASH" -> CategoryEcash
-        "WIFI" -> CategoryWifi
-        else -> Color.Gray
+        else -> EPayMediumGray
     }
-
+    val typeIcon = when (transaction.type) {
+        "ELOAD" -> Icons.Filled.PhoneAndroid
+        "BILLS" -> Icons.Filled.Receipt
+        "ECASH" -> Icons.Filled.AccountBalanceWallet
+        else -> Icons.Filled.SwapHoriz
+    }
     val statusColor = when (transaction.status) {
         "SUCCESS" -> StatusSuccess
         "FAILED" -> StatusError
         "PENDING" -> StatusPending
-        else -> Color.Gray
+        else -> EPayMediumGray
     }
-
-    val dateFormat = SimpleDateFormat("MMM dd, hh:mm a", Locale.getDefault())
+    val dateFormat = SimpleDateFormat("MMM dd, yyyy hh:mm a", Locale.getDefault())
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(14.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = typeColor.copy(alpha = 0.15f)
-            ) {
+            Surface(modifier = Modifier.size(44.dp), shape = CircleShape, color = typeColor.copy(alpha = 0.12f)) {
                 Box(contentAlignment = Alignment.Center) {
-                    val icon = when (transaction.type) {
-                        "ELOAD" -> Icons.Filled.PhoneAndroid
-                        "BILLS" -> Icons.Filled.Receipt
-                        "ECASH" -> Icons.Filled.AccountBalanceWallet
-                        else -> Icons.Filled.Wifi
-                    }
-                    Icon(icon, transaction.type, tint = typeColor, modifier = Modifier.size(20.dp))
+                    Icon(typeIcon, transaction.type, tint = typeColor, modifier = Modifier.size(22.dp))
                 }
             }
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "${transaction.provider} - ${transaction.product}",
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 14.sp,
-                    maxLines = 1
-                )
-                Text(
-                    transaction.targetNumber,
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
-                Text(
-                    dateFormat.format(Date(transaction.createdAt)),
-                    fontSize = 11.sp,
-                    color = Color.Gray
-                )
+                Text("${transaction.provider} - ${transaction.product}", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1)
+                Text(transaction.targetNumber, fontSize = 12.sp, color = EPayMediumGray)
+                Text(dateFormat.format(Date(transaction.createdAt)), fontSize = 11.sp, color = EPayMediumGray.copy(alpha = 0.7f))
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    "₱${String.format("%,.2f", transaction.amount)}",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = statusColor.copy(alpha = 0.15f)
-                ) {
+                Text("₱${String.format("%,.2f", transaction.amount)}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Surface(shape = RoundedCornerShape(6.dp), color = statusColor.copy(alpha = 0.12f)) {
                     Text(
                         transaction.status,
                         color = statusColor,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
             }

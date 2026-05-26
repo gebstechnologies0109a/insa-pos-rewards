@@ -29,6 +29,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE createdAt BETWEEN :startTime AND :endTime ORDER BY createdAt DESC")
     fun getTransactionsByDateRange(startTime: Long, endTime: Long): Flow<List<TransactionEntity>>
 
+    @Query("SELECT * FROM transactions WHERE provider LIKE :query OR product LIKE :query OR targetNumber LIKE :query OR referenceNumber LIKE :query ORDER BY createdAt DESC")
+    fun searchTransactions(query: String): Flow<List<TransactionEntity>>
+
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun getTransactionById(id: Long): TransactionEntity?
 
@@ -41,13 +44,21 @@ interface TransactionDao {
     @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE status = 'SUCCESS' AND createdAt >= :todayStart")
     fun getTodaySales(todayStart: Long): Flow<Double>
 
+    @Query("UPDATE transactions SET status = :status, completedAt = CASE WHEN :status != 'PENDING' THEN :now ELSE completedAt END WHERE id = :id")
+    suspend fun updateStatus(id: Long, status: String, now: Long = System.currentTimeMillis())
+
+    @Query("UPDATE transactions SET referenceNumber = :refNumber WHERE id = :id")
+    suspend fun updateReferenceNumber(id: Long, refNumber: String)
+
+    @Query("UPDATE transactions SET remarks = :remarks WHERE id = :id")
+    suspend fun updateRemarks(id: Long, remarks: String)
+
     @Query("SELECT * FROM transactions WHERE syncedToServer = 0")
     suspend fun getUnsyncedTransactions(): List<TransactionEntity>
 
     @Query("UPDATE transactions SET syncedToServer = 1 WHERE id IN (:ids)")
     suspend fun markAsSynced(ids: List<Long>)
 
-    // Sales Summary
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSalesSummary(summary: SalesSummaryEntity)
 
@@ -56,4 +67,7 @@ interface TransactionDao {
 
     @Query("SELECT * FROM sales_summary WHERE date = :date")
     suspend fun getSalesSummaryByDate(date: String): SalesSummaryEntity?
+
+    @Query("SELECT * FROM transactions ORDER BY createdAt DESC LIMIT :limit")
+    fun getRecentTransactions(limit: Int = 5): Flow<List<TransactionEntity>>
 }

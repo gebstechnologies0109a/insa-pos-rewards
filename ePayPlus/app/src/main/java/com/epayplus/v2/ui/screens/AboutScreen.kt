@@ -1,5 +1,6 @@
 package com.epayplus.v2.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,93 +21,90 @@ import com.epayplus.v2.ui.theme.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(navController: NavController) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("About", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = EPayGreen,
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
-                )
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        TopAppBar(
+            title = { Text("About", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(Icons.Filled.ArrowBack, "Back")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = EPayGreen,
+                titleContentColor = Color.White,
+                navigationIconContentColor = Color.White
             )
-        }
-    ) { paddingValues ->
+        )
+
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(32.dp),
+            modifier = Modifier.fillMaxSize().padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Surface(
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier.size(90.dp),
                 shape = CircleShape,
-                color = EPayGreen
+                color = EPayGreen,
+                shadowElevation = 8.dp
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Filled.Payments,
-                        "Logo",
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp)
-                    )
+                    Icon(Icons.Filled.Payments, "Logo", tint = Color.White, modifier = Modifier.size(48.dp))
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            Text(
-                "ePayPlus",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = EPayGreen
-            )
-            Text(
-                "Version 2.0.0",
-                fontSize = 14.sp,
-                color = Color.Gray
-            )
+            Text("ePayPlus", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = EPayGreen)
+            Text("Version 2.2", fontSize = 14.sp, color = EPayMediumGray)
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = EPayGreenSurface)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         "All-in-One Loading & Payment Platform",
                         fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "E-Load • Bills Payment • E-Cash\nWiFi Vendo • Kiosk Mode",
                         textAlign = TextAlign.Center,
-                        color = Color.Gray,
-                        fontSize = 13.sp
+                        fontSize = 16.sp
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        FeatureChip("E-Load")
+                        FeatureChip("Bills Pay")
+                        FeatureChip("Cash-In")
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            Text("Built with Kotlin & Jetpack Compose", fontSize = 12.sp, color = Color.Gray)
-            Text("Material Design 3", fontSize = 12.sp, color = Color.Gray)
+            Text("Built with Kotlin & Jetpack Compose", fontSize = 12.sp, color = EPayMediumGray)
+            Text("Material Design 3", fontSize = 12.sp, color = EPayMediumGray)
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Text("© 2026 ePayPlus Technologies", fontSize = 12.sp, color = Color.Gray)
+            Text("© 2026 ePayPlus Technologies", fontSize = 12.sp, color = EPayMediumGray.copy(alpha = 0.7f))
         }
+    }
+}
+
+@Composable
+private fun FeatureChip(label: String) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = EPayGreen.copy(alpha = 0.12f)
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = EPayGreen
+        )
     }
 }

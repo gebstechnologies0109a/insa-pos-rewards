@@ -3,9 +3,11 @@ package com.epayplus.v2.di
 import android.content.Context
 import androidx.room.Room
 import com.epayplus.v2.data.local.EPayDatabase
+import com.epayplus.v2.data.local.TokenManager
 import com.epayplus.v2.data.local.dao.TransactionDao
 import com.epayplus.v2.data.local.dao.ProductDao
 import com.epayplus.v2.data.local.dao.AccountDao
+import com.epayplus.v2.data.remote.AuthInterceptor
 import com.epayplus.v2.data.remote.EPayApiService
 import com.epayplus.v2.data.repository.TransactionRepository
 import com.epayplus.v2.data.repository.ProductRepository
@@ -25,6 +27,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+
+    @Provides
+    @Singleton
+    fun provideTokenManager(@ApplicationContext context: Context): TokenManager {
+        return TokenManager(context)
+    }
 
     @Provides
     @Singleton
@@ -50,11 +58,18 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
+    fun provideAuthInterceptor(tokenManager: TokenManager): AuthInterceptor {
+        return AuthInterceptor(tokenManager)
+    }
+
+    @Provides
+    @Singleton
+    fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
         return OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
             .addInterceptor(logging)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -96,6 +111,7 @@ object AppModule {
     @Singleton
     fun provideAccountRepository(
         accountDao: AccountDao,
-        apiService: EPayApiService
-    ): AccountRepository = AccountRepository(accountDao, apiService)
+        apiService: EPayApiService,
+        tokenManager: TokenManager
+    ): AccountRepository = AccountRepository(accountDao, apiService, tokenManager)
 }

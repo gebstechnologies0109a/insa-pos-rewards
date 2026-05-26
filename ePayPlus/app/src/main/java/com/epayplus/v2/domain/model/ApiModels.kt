@@ -49,27 +49,42 @@ data class ProductInfo(
     val category: String = ""
 )
 
+data class ProvidersResponse(
+    val success: Boolean,
+    val providers: List<ProviderDetail>,
+    val message: String?
+)
+
+data class ProviderDetail(
+    val code: String = "",
+    val name: String = "",
+    val type: String = "",
+    val logo: String = "",
+    val category: String = ""
+)
+
 data class EloadRequest(
     @SerializedName("provider_code") val providerCode: String,
     @SerializedName("product_code") val productCode: String,
     @SerializedName("mobile_number") val mobileNumber: String,
     val amount: Double,
-    @SerializedName("reference_id") val referenceId: String
+    @SerializedName("reference_id") val referenceId: String = ""
 )
 
 data class BillPaymentRequest(
-    @SerializedName("biller_code") val billerCode: String,
+    @SerializedName("provider_code") val providerCode: String,
     @SerializedName("product_code") val productCode: String,
     @SerializedName("account_number") val accountNumber: String,
     val amount: Double,
-    @SerializedName("reference_id") val referenceId: String
+    @SerializedName("reference_id") val referenceId: String = ""
 )
 
 data class EcashRequest(
     @SerializedName("provider_code") val providerCode: String,
-    @SerializedName("mobile_number") val mobileNumber: String,
+    @SerializedName("product_code") val productCode: String = "",
+    @SerializedName("account_number") val accountNumber: String,
     val amount: Double,
-    @SerializedName("reference_id") val referenceId: String
+    @SerializedName("reference_id") val referenceId: String = ""
 )
 
 data class TransactionResponse(
@@ -83,7 +98,7 @@ data class TransactionResponse(
 data class TransactionHistoryResponse(
     val success: Boolean,
     val transactions: List<TransactionInfo>,
-    val totalPages: Int,
+    val totalPages: Int = 1,
     val message: String?
 )
 
@@ -122,11 +137,11 @@ data class AnnouncementsResponse(
 )
 
 data class Announcement(
-    val id: String,
-    val title: String,
-    val content: String,
-    val type: String,
-    val createdAt: String
+    val id: String = "",
+    val title: String = "",
+    val content: String = "",
+    val type: String = "",
+    val createdAt: String = ""
 )
 
 data class ChangePinRequest(

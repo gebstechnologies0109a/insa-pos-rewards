@@ -17,54 +17,170 @@ class TransactionRepository @Inject constructor(
     fun getTransactionsByType(type: String): Flow<List<TransactionEntity>> =
         transactionDao.getTransactionsByType(type)
 
+    fun searchTransactions(query: String): Flow<List<TransactionEntity>> =
+        transactionDao.searchTransactions("%$query%")
+
     fun getTodaySales(): Flow<Double> {
-        val todayStart = getTodayStartMillis()
-        return transactionDao.getTodaySales(todayStart)
+        return transactionDao.getTodaySales(getTodayStartMillis())
     }
 
     fun getTodayTransactionCount(): Flow<Int> {
-        val todayStart = getTodayStartMillis()
-        return transactionDao.getTodayTransactionCount(todayStart)
+        return transactionDao.getTodayTransactionCount(getTodayStartMillis())
     }
 
     fun getRecentSalesSummaries() = transactionDao.getRecentSalesSummaries()
 
-    suspend fun createTransaction(
-        type: String,
-        provider: String,
-        product: String,
+    suspend fun getTransactionById(id: Long): TransactionEntity? =
+        transactionDao.getTransactionById(id)
+
+    suspend fun processEload(
+        providerCode: String,
+        productCode: String,
+        mobileNumber: String,
         amount: Double,
-        fee: Double,
-        targetNumber: String,
-        paymentMethod: String = "WALLET"
-    ): TransactionEntity {
+        providerName: String,
+        productName: String
+    ): Result<TransactionEntity> {
+        val refNumber = generateReferenceNumber()
         val transaction = TransactionEntity(
-            type = type,
-            provider = provider,
-            product = product,
+            type = "ELOAD",
+            provider = providerName,
+            product = productName,
             amount = amount,
-            fee = fee,
-            targetNumber = targetNumber,
-            referenceNumber = generateReferenceNumber(),
+            fee = 0.0,
+            targetNumber = mobileNumber,
+            referenceNumber = refNumber,
             status = "PENDING",
-            paymentMethod = paymentMethod
+            paymentMethod = "WALLET"
         )
-        val id = transactionDao.insert(transaction)
-        return transaction.copy(id = id)
-    }
+        val localId = transactionDao.insert(transaction)
 
-    suspend fun updateTransactionStatus(id: Long, status: String, remarks: String = "") {
-        val transaction = transactionDao.getTransactionById(id) ?: return
-        transactionDao.update(
-            transaction.copy(
-                status = status,
-                remarks = remarks,
-                completedAt = if (status != "PENDING") System.currentTimeMillis() else null
+        return try {
+            val response = apiService.processEload(
+                EloadRequest(
+                    providerCode = providerCode,
+                    productCode = productCode,
+                    mobileNumber = mobileNumber,
+                    amount = amount,
+                    referenceId = refNumber
+                )
             )
-        )
+            if (response.isSuccessful && response.body()?.success == true) {
+                val serverRef = response.body()?.referenceNumber ?: refNumber
+                transactionDao.updateStatus(localId, "SUCCESS")
+                transactionDao.updateReferenceNumber(localId, serverRef)
+                val updated = transactionDao.getTransactionById(localId)!!
+                Result.success(updated)
+            } else {
+                val msg = response.body()?.message ?: "Transaction failed"
+                transactionDao.updateStatus(localId, "FAILED")
+                transactionDao.updateRemarks(localId, msg)
+                Result.failure(Exception(msg))
+            }
+        } catch (e: Exception) {
+            transactionDao.updateStatus(localId, "FAILED")
+            transactionDao.updateRemarks(localId, e.localizedMessage ?: "Network error")
+            Result.failure(e)
+        }
     }
 
-    suspend fun syncPendingTransactions(token: String): Result<Int> {
+    suspend fun processBillPayment(
+        providerCode: String,
+        productCode: String,
+        accountNumber: String,
+        amount: Double,
+        providerName: String
+    ): Result<TransactionEntity> {
+        val refNumber = generateReferenceNumber()
+        val transaction = TransactionEntity(
+            type = "BILLS",
+            provider = providerName,
+            product = "Bill Payment",
+            amount = amount,
+            fee = 0.0,
+            targetNumber = accountNumber,
+            referenceNumber = refNumber,
+            status = "PENDING",
+            paymentMethod = "WALLET"
+        )
+        val localId = transactionDao.insert(transaction)
+
+        return try {
+            val response = apiService.processBillPayment(
+                BillPaymentRequest(
+                    providerCode = providerCode,
+                    productCode = productCode,
+                    accountNumber = accountNumber,
+                    amount = amount,
+                    referenceId = refNumber
+                )
+            )
+            if (response.isSuccessful && response.body()?.success == true) {
+                val serverRef = response.body()?.referenceNumber ?: refNumber
+                transactionDao.updateStatus(localId, "SUCCESS")
+                transactionDao.updateReferenceNumber(localId, serverRef)
+                Result.success(transactionDao.getTransactionById(localId)!!)
+            } else {
+                val msg = response.body()?.message ?: "Transaction failed"
+                transactionDao.updateStatus(localId, "FAILED")
+                transactionDao.updateRemarks(localId, msg)
+                Result.failure(Exception(msg))
+            }
+        } catch (e: Exception) {
+            transactionDao.updateStatus(localId, "FAILED")
+            transactionDao.updateRemarks(localId, e.localizedMessage ?: "Network error")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun processEcash(
+        providerCode: String,
+        accountNumber: String,
+        amount: Double,
+        providerName: String
+    ): Result<TransactionEntity> {
+        val refNumber = generateReferenceNumber()
+        val transaction = TransactionEntity(
+            type = "ECASH",
+            provider = providerName,
+            product = "Cash-In",
+            amount = amount,
+            fee = 0.0,
+            targetNumber = accountNumber,
+            referenceNumber = refNumber,
+            status = "PENDING",
+            paymentMethod = "WALLET"
+        )
+        val localId = transactionDao.insert(transaction)
+
+        return try {
+            val response = apiService.processEcash(
+                EcashRequest(
+                    providerCode = providerCode,
+                    accountNumber = accountNumber,
+                    amount = amount,
+                    referenceId = refNumber
+                )
+            )
+            if (response.isSuccessful && response.body()?.success == true) {
+                val serverRef = response.body()?.referenceNumber ?: refNumber
+                transactionDao.updateStatus(localId, "SUCCESS")
+                transactionDao.updateReferenceNumber(localId, serverRef)
+                Result.success(transactionDao.getTransactionById(localId)!!)
+            } else {
+                val msg = response.body()?.message ?: "Transaction failed"
+                transactionDao.updateStatus(localId, "FAILED")
+                transactionDao.updateRemarks(localId, msg)
+                Result.failure(Exception(msg))
+            }
+        } catch (e: Exception) {
+            transactionDao.updateStatus(localId, "FAILED")
+            transactionDao.updateRemarks(localId, e.localizedMessage ?: "Network error")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun syncPendingTransactions(): Result<Int> {
         return try {
             val unsynced = transactionDao.getUnsyncedTransactions()
             if (unsynced.isEmpty()) return Result.success(0)
@@ -79,7 +195,7 @@ class TransactionRepository @Inject constructor(
                     createdAt = it.createdAt
                 )
             }
-            val response = apiService.syncTransactions("Bearer $token", syncRequests)
+            val response = apiService.syncTransactions(syncRequests)
             if (response.isSuccessful && response.body()?.success == true) {
                 transactionDao.markAsSynced(unsynced.map { it.id })
                 Result.success(response.body()?.syncedCount ?: 0)
