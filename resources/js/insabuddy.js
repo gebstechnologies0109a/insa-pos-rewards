@@ -186,6 +186,87 @@ const INSABuddy = {
     },
 
     /**
+     * Whether the connected bridge exposes full I/O device APIs (INSAPOSv2).
+     */
+    hasIoApi() {
+        return this._isV2;
+    },
+
+    /**
+     * Scan for keyboards, mice, and barcode scanners.
+     */
+    async scanIoDevices() {
+        return this._get('/device/io/scan');
+    },
+
+    /**
+     * Get saved I/O preferences.
+     */
+    async getIoStatus() {
+        return this._get('/device/io/status');
+    },
+
+    /**
+     * Save I/O preferences (keyboard, mouse, scanner, camera toggle).
+     */
+    async saveIoPreferences(prefs) {
+        return this._post('/device/io/save', prefs);
+    },
+
+    /**
+     * Test an I/O device (keyboard, mouse, scanner).
+     */
+    async testIoDevice(type, deviceId = null) {
+        const body = { type };
+        if (deviceId) body.device_id = deviceId;
+        return this._post('/device/io/test', body);
+    },
+
+    parseIoScan(data) {
+        if (!data) {
+            return {
+                keyboards: [],
+                mice: [],
+                scanners: [],
+                preferences: {},
+                ioApi: false,
+            };
+        }
+        const mapList = (arr) => {
+            if (!Array.isArray(arr)) return [];
+            return arr.map(d => ({
+                id: String(d.id ?? ''),
+                name: d.name || '',
+                type: d.type || '',
+                connected: d.connected !== false,
+            })).filter(d => d.id && d.name);
+        };
+        const prefs = data.preferences || {};
+        return {
+            keyboards: mapList(data.keyboards),
+            mice: mapList(data.mice),
+            scanners: mapList(data.scanners),
+            preferences: {
+                default_keyboard_id: prefs.default_keyboard_id || null,
+                default_mouse_id: prefs.default_mouse_id || null,
+                default_scanner_id: prefs.default_scanner_id || null,
+                use_camera_for_scan: prefs.use_camera_for_scan !== false,
+            },
+            ioApi: data.io_api === true || this._isV2,
+        };
+    },
+
+    parseIoPreferences(data) {
+        const prefs = data?.preferences || data || {};
+        return {
+            default_keyboard_id: prefs.default_keyboard_id || null,
+            default_mouse_id: prefs.default_mouse_id || null,
+            default_scanner_id: prefs.default_scanner_id || null,
+            use_camera_for_scan: prefs.use_camera_for_scan !== false,
+        };
+    },
+
+    /**
      * Normalize printer list response from INSABuddy or INSAPOSv2.
      */
     parsePrinterList(data) {

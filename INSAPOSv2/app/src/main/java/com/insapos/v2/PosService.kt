@@ -39,6 +39,7 @@ class PosService : Service() {
         private set
     var hidScannerDriver: HidScannerDriver? = null
     var onCameraScanRequested: (() -> Unit)? = null
+    val ioPreferences: IoPreferencesStore by lazy { IoPreferencesStore(this) }
 
     inner class LocalBinder : Binder() {
         fun getService(): PosService = this@PosService
@@ -81,6 +82,7 @@ class PosService : Service() {
                         getHidScanner = { hidScannerDriver },
                         getDatabase = { offlineDb },
                         getSyncEngine = { syncEngine },
+                        ioPreferences = ioPreferences,
                         launchCameraScan = { onCameraScanRequested?.invoke() }
                     )
                     localServer?.start()

@@ -223,6 +223,13 @@
             </button>
         </template>
 
+        <!-- I/O Settings — keyboard, scanner, camera -->
+        <template x-if="buddyConnected || hasNativeBridge">
+            <button @click="openIoSettings()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="I/O Settings">
+                <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            </button>
+        </template>
+
         <button @click="showHistoryModal = true; loadRecentSales()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Recent Transactions">
             <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         </button>
@@ -1102,6 +1109,173 @@
     </div>
 </div>
 
+<!-- I/O SETTINGS MODAL -->
+<div x-show="showIoModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[360px] lg:max-w-md p-4 lg:p-6 max-h-[90vh] overflow-y-auto" @click.away="showIoModal = false">
+        <div class="flex items-center justify-between mb-3 lg:mb-4">
+            <h2 class="text-base lg:text-xl font-bold text-gray-800 flex items-center gap-2">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                I/O Settings
+            </h2>
+            <button @click="showIoModal = false" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Option picker -->
+        <div x-show="ioMenuView" class="space-y-2">
+            <p class="text-[11px] lg:text-sm text-gray-600 mb-2">Configure input devices for this terminal.</p>
+            <div x-show="!ioApiAvailable && (buddyConnected || hasNativeBridge)" class="text-[10px] lg:text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2">
+                Full device setup requires INSAPOSv2. INSABuddy supports HID scanner test only.
+            </div>
+            <button @click="startIoWizard('keyboard')" class="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div class="font-semibold text-sm text-gray-800">Keyboard / Mouse</div>
+                <div class="text-[10px] lg:text-xs text-gray-500">Scan, test, and set default keyboard or mouse</div>
+            </button>
+            <button @click="startIoWizard('scanner')" class="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div class="font-semibold text-sm text-gray-800">QR / Barcode Scanner</div>
+                <div class="text-[10px] lg:text-xs text-gray-500">USB or Bluetooth HID barcode scanner</div>
+            </button>
+            <button @click="startIoWizard('camera')" class="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div class="font-semibold text-sm text-gray-800">Camera On or Off</div>
+                <div class="text-[10px] lg:text-xs text-gray-500">Allow camera fallback when scanning products</div>
+            </button>
+        </div>
+
+        <!-- Wizard -->
+        <div x-show="!ioMenuView">
+            <div class="flex items-center gap-1 mb-3">
+                <button @click="ioBackToMenu()" class="text-[10px] lg:text-xs text-blue-600 hover:underline">← All options</button>
+                <span class="text-[10px] lg:text-xs text-gray-400 ml-auto" x-text="ioWizardTitle"></span>
+            </div>
+
+            <div class="flex items-center gap-1 mb-4 lg:mb-5" x-show="ioOption !== 'camera'">
+                <template x-for="(label, idx) in ['Scan', 'Test', 'Save']" :key="idx">
+                    <div class="flex items-center flex-1">
+                        <div class="flex items-center gap-1.5 flex-1">
+                            <span class="w-6 h-6 lg:w-7 lg:h-7 rounded-full flex items-center justify-center text-[10px] lg:text-xs font-bold shrink-0"
+                                  :class="ioStep > idx + 1 ? 'bg-green-500 text-white' : (ioStep === idx + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500')"
+                                  x-text="idx + 1"></span>
+                            <span class="text-[10px] lg:text-xs font-medium truncate"
+                                  :class="ioStep === idx + 1 ? 'text-blue-700' : 'text-gray-400'"
+                                  x-text="label"></span>
+                        </div>
+                        <div x-show="idx < 2" class="w-3 lg:w-4 h-0.5 mx-0.5 shrink-0"
+                             :class="ioStep > idx + 1 ? 'bg-green-400' : 'bg-gray-200'"></div>
+                    </div>
+                </template>
+            </div>
+
+            <p class="text-[10px] lg:text-xs text-gray-500 mb-3 lg:mb-4" x-text="ioStatusMessage"></p>
+
+            <!-- Keyboard / Mouse wizard -->
+            <div x-show="ioOption === 'keyboard'">
+                    <div x-show="ioStep === 1" class="space-y-3">
+                        <p class="text-[11px] lg:text-sm text-gray-600">Search for USB or Bluetooth keyboards and mice.</p>
+                        <button @click="scanIoDevices()" :disabled="ioScanning"
+                                class="w-full py-2.5 lg:py-3 bg-blue-600 text-white rounded-lg text-xs lg:text-base font-medium hover:bg-blue-700 disabled:bg-blue-400 flex items-center justify-center gap-2">
+                            <svg x-show="ioScanning" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span x-text="ioScanning ? 'Scanning...' : 'Scan Devices'"></span>
+                        </button>
+                        <div x-show="ioKeyboards.length > 0 || ioMice.length > 0" class="space-y-2">
+                            <div x-show="ioKeyboards.length > 0">
+                                <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-1">Keyboard</label>
+                                <select x-model="ioSelectedKeyboardIndex" class="w-full p-2 lg:p-3 border rounded-lg text-xs lg:text-sm">
+                                    <option value="-1">None</option>
+                                    <template x-for="(d, i) in ioKeyboards" :key="'kb-'+d.id">
+                                        <option :value="i" x-text="d.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div x-show="ioMice.length > 0">
+                                <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-1">Mouse</label>
+                                <select x-model="ioSelectedMouseIndex" class="w-full p-2 lg:p-3 border rounded-lg text-xs lg:text-sm">
+                                    <option value="-1">None</option>
+                                    <template x-for="(d, i) in ioMice" :key="'ms-'+d.id">
+                                        <option :value="i" x-text="d.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <button @click="ioStep = 2" :disabled="ioSelectedKeyboardIndex < 0 && ioSelectedMouseIndex < 0"
+                                    class="w-full py-2 lg:py-2.5 bg-gray-800 text-white rounded-lg text-xs lg:text-sm font-medium disabled:bg-gray-300">Continue to Test</button>
+                        </div>
+                    </div>
+                    <div x-show="ioStep === 2" class="space-y-3">
+                        <p class="text-[11px] lg:text-sm text-gray-600">Type on the keyboard or move the mouse, then run test.</p>
+                        <button @click="testIo()" :disabled="ioTesting"
+                                class="w-full py-2.5 lg:py-3 bg-green-600 text-white rounded-lg text-xs lg:text-base font-medium disabled:bg-gray-300 flex items-center justify-center gap-2">
+                            <span x-text="ioTesting ? 'Testing...' : 'Test Input'"></span>
+                        </button>
+                        <button @click="ioStep = 3" class="w-full py-2 lg:py-2.5 bg-gray-800 text-white rounded-lg text-xs lg:text-sm font-medium">Continue to Save</button>
+                        <button @click="ioStep = 1" class="w-full py-2 text-[11px] lg:text-sm text-gray-500">← Back to Scan</button>
+                    </div>
+                    <div x-show="ioStep === 3" class="space-y-3">
+                        <button @click="saveIoDefault()" :disabled="ioSaving"
+                                class="w-full py-2.5 lg:py-3 bg-blue-600 text-white rounded-lg text-xs lg:text-base font-medium disabled:bg-gray-300 flex items-center justify-center gap-2">
+                            <span x-text="ioSaving ? 'Saving...' : 'Set as Default & Save'"></span>
+                        </button>
+                        <button @click="ioStep = 2" class="w-full py-2 text-[11px] lg:text-sm text-gray-500">← Back to Test</button>
+                    </div>
+            </div>
+
+            <!-- Barcode scanner wizard -->
+            <div x-show="ioOption === 'scanner'">
+                    <div x-show="ioStep === 1" class="space-y-3">
+                        <p class="text-[11px] lg:text-sm text-gray-600">Search for HID barcode scanners connected to this device.</p>
+                        <button @click="scanIoDevices()" :disabled="ioScanning"
+                                class="w-full py-2.5 lg:py-3 bg-blue-600 text-white rounded-lg text-xs lg:text-base font-medium hover:bg-blue-700 disabled:bg-blue-400 flex items-center justify-center gap-2">
+                            <span x-text="ioScanning ? 'Scanning...' : 'Scan for Scanners'"></span>
+                        </button>
+                        <div x-show="ioScanners.length > 0">
+                            <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-1">Found scanners</label>
+                            <select x-model="ioSelectedScannerIndex" class="w-full p-2 lg:p-3 border rounded-lg text-xs lg:text-sm">
+                                <option value="-1" disabled>Select a scanner...</option>
+                                <template x-for="(d, i) in ioScanners" :key="'sc-'+d.id">
+                                    <option :value="i" x-text="d.name"></option>
+                                </template>
+                            </select>
+                            <button @click="ioStep = 2" :disabled="ioSelectedScannerIndex < 0"
+                                    class="w-full mt-2 py-2 lg:py-2.5 bg-gray-800 text-white rounded-lg text-xs lg:text-sm font-medium disabled:bg-gray-300">Continue to Test</button>
+                        </div>
+                    </div>
+                    <div x-show="ioStep === 2" class="space-y-3">
+                        <p class="text-[11px] lg:text-sm text-gray-600">Scan a barcode with your device, then tap test.</p>
+                        <button @click="testIo()" :disabled="ioTesting"
+                                class="w-full py-2.5 lg:py-3 bg-green-600 text-white rounded-lg text-xs lg:text-base font-medium disabled:bg-gray-300">
+                            <span x-text="ioTesting ? 'Checking...' : 'Test Scanner'"></span>
+                        </button>
+                        <button @click="ioStep = 3" class="w-full py-2 lg:py-2.5 bg-gray-800 text-white rounded-lg text-xs lg:text-sm font-medium">Continue to Save</button>
+                        <button @click="ioStep = 1" class="w-full py-2 text-[11px] lg:text-sm text-gray-500">← Back to Scan</button>
+                    </div>
+                    <div x-show="ioStep === 3" class="space-y-3">
+                        <button @click="saveIoDefault()" :disabled="ioSaving || ioSelectedScannerIndex < 0"
+                                class="w-full py-2.5 lg:py-3 bg-blue-600 text-white rounded-lg text-xs lg:text-base font-medium disabled:bg-gray-300">
+                            <span x-text="ioSaving ? 'Saving...' : 'Set as Default & Save'"></span>
+                        </button>
+                        <button @click="ioStep = 2" class="w-full py-2 text-[11px] lg:text-sm text-gray-500">← Back to Test</button>
+                    </div>
+            </div>
+
+            <!-- Camera toggle -->
+            <div x-show="ioOption === 'camera'" class="space-y-4">
+                    <p class="text-[11px] lg:text-sm text-gray-600">When off, product scan uses the physical HID scanner only. When on, the app can fall back to the device camera (ZXing).</p>
+                    <label class="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                        <span class="text-sm font-medium text-gray-800">Use camera for scans</span>
+                        <input type="checkbox" x-model="useCameraForScan" class="w-5 h-5 rounded text-blue-600">
+                    </label>
+                    <button @click="saveIoDefault()" :disabled="ioSaving"
+                            class="w-full py-2.5 lg:py-3 bg-blue-600 text-white rounded-lg text-xs lg:text-base font-medium disabled:bg-gray-300">
+                        <span x-text="ioSaving ? 'Saving...' : 'Save Preference'"></span>
+                    </button>
+            </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t">
+            <button @click="showIoModal = false" class="w-full py-2 lg:py-2.5 bg-gray-200 text-gray-700 rounded-lg text-xs lg:text-base font-medium hover:bg-gray-300">Close</button>
+        </div>
+    </div>
+</div>
+
 <!-- CUSTOMER REWARDS / DIY BIZ REWARDS SCAN MODAL -->
 <div x-show="showRewardsModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[340px] lg:max-w-sm p-4 lg:p-6" @click.away="showRewardsModal = false">
@@ -1224,6 +1398,25 @@ function posApp() {
         printerDefault: { connected: false, name: null, type: null },
         printerTestPassed: false,
 
+        showIoModal: false,
+        ioMenuView: true,
+        ioOption: null,
+        ioStep: 1,
+        ioScanning: false,
+        ioTesting: false,
+        ioSaving: false,
+        ioStatusMessage: '',
+        ioKeyboards: [],
+        ioMice: [],
+        ioScanners: [],
+        ioSelectedKeyboardIndex: -1,
+        ioSelectedMouseIndex: -1,
+        ioSelectedScannerIndex: -1,
+        ioApiAvailable: false,
+        useCameraForScan: localStorage.getItem('insapos_use_camera_for_scan') !== '0',
+        _lastNativeScan: null,
+        _lastNativeScanTime: 0,
+
         showRewardsModal: false,
         rewardsCardInput: '',
         rewardsResults: [],
@@ -1290,6 +1483,12 @@ function posApp() {
             if (this.syncStatus === 'offline') return 'No server connection. Sales are saved locally.';
             if (this.pendingSyncCount > 0) return this.pendingSyncCount + ' transactions waiting to sync.';
             return 'Click to sync now.';
+        },
+        get ioWizardTitle() {
+            if (this.ioOption === 'keyboard') return 'Keyboard / Mouse';
+            if (this.ioOption === 'scanner') return 'Barcode Scanner';
+            if (this.ioOption === 'camera') return 'Camera';
+            return '';
         },
 
         selectMode(mode) {
@@ -1371,6 +1570,7 @@ function posApp() {
             this.loadShift();
             this.initBuddy();
             window.onINSAPOSBarcode = (barcode) => { this._lastNativeScanTime = Date.now(); this._lastNativeScan = barcode; this.handleBarcodeScan(barcode); };
+            await this.loadIoPreferences();
         },
 
         async registerTerminalSession() {
@@ -1593,6 +1793,220 @@ function posApp() {
             }
         },
 
+        async openIoSettings() {
+            if (!this.buddyConnected && !this.hasNativeBridge) {
+                this.showToast('I/O settings require INSABuddy or the Android app', 'warning');
+                return;
+            }
+            if (typeof INSABuddy !== 'undefined') INSABuddy.detectV2();
+            this.ioMenuView = true;
+            this.ioOption = null;
+            this.ioStep = 1;
+            this.ioApiAvailable = typeof INSABuddy !== 'undefined' && (INSABuddy.hasIoApi() || INSABuddy.isV2());
+            this.ioStatusMessage = '';
+            this.showIoModal = true;
+            await this.loadIoPreferences();
+        },
+
+        ioBackToMenu() {
+            this.ioMenuView = true;
+            this.ioOption = null;
+            this.ioStep = 1;
+            this.ioStatusMessage = '';
+        },
+
+        startIoWizard(option) {
+            this.ioMenuView = false;
+            this.ioOption = option;
+            this.ioStep = option === 'camera' ? 1 : 1;
+            this.ioSelectedKeyboardIndex = -1;
+            this.ioSelectedMouseIndex = -1;
+            this.ioSelectedScannerIndex = -1;
+            if (option === 'keyboard') {
+                this.ioStatusMessage = 'Scan for keyboards and mice on this device.';
+            } else if (option === 'scanner') {
+                this.ioStatusMessage = 'Scan for barcode scanners (HID).';
+            } else {
+                this.ioStatusMessage = 'Toggle camera fallback for product scans.';
+            }
+            if (option === 'camera') this.applyIoPrefsToSelection();
+        },
+
+        applyIoPrefsToSelection(prefs) {
+            const p = prefs || {};
+            const kbId = p.default_keyboard_id;
+            const msId = p.default_mouse_id;
+            const scId = p.default_scanner_id;
+            if (kbId && this.ioKeyboards.length) {
+                const i = this.ioKeyboards.findIndex(d => d.id === String(kbId));
+                if (i >= 0) this.ioSelectedKeyboardIndex = i;
+            }
+            if (msId && this.ioMice.length) {
+                const i = this.ioMice.findIndex(d => d.id === String(msId));
+                if (i >= 0) this.ioSelectedMouseIndex = i;
+            }
+            if (scId && this.ioScanners.length) {
+                const i = this.ioScanners.findIndex(d => d.id === String(scId));
+                if (i >= 0) this.ioSelectedScannerIndex = i;
+            }
+            if (typeof p.use_camera_for_scan === 'boolean') {
+                this.useCameraForScan = p.use_camera_for_scan;
+            }
+        },
+
+        async loadIoPreferences() {
+            if (typeof INSABuddy === 'undefined') return;
+            INSABuddy.detectV2();
+            try {
+                const data = await INSABuddy.getIoStatus();
+                if (data?.preferences) {
+                    const prefs = INSABuddy.parseIoPreferences(data);
+                    this.useCameraForScan = prefs.use_camera_for_scan;
+                    localStorage.setItem('insapos_use_camera_for_scan', prefs.use_camera_for_scan ? '1' : '0');
+                    this.applyIoPrefsToSelection(prefs);
+                }
+                this.ioApiAvailable = INSABuddy.hasIoApi() || data?.io_api === true;
+            } catch {}
+        },
+
+        async scanIoDevices() {
+            if (typeof INSABuddy === 'undefined') return;
+            this.ioScanning = true;
+            this.ioStatusMessage = 'Scanning for devices...';
+            try {
+                const data = await INSABuddy.scanIoDevices();
+                const parsed = INSABuddy.parseIoScan(data);
+                this.ioApiAvailable = parsed.ioApi;
+                if (this.ioOption === 'keyboard') {
+                    this.ioKeyboards = parsed.keyboards;
+                    this.ioMice = parsed.mice;
+                    const total = parsed.keyboards.length + parsed.mice.length;
+                    if (total === 0) {
+                        this.ioStatusMessage = data?.message || 'No keyboards or mice found.';
+                        this.showToast('No devices found', 'warning');
+                    } else {
+                        this.ioStatusMessage = `Found ${total} device(s).`;
+                        this.applyIoPrefsToSelection(parsed.preferences);
+                    }
+                } else if (this.ioOption === 'scanner') {
+                    this.ioScanners = parsed.scanners;
+                    if (parsed.scanners.length === 0) {
+                        this.ioStatusMessage = data?.message || 'No scanners found. Pair USB/Bluetooth HID scanner.';
+                        this.showToast('No scanners found', 'warning');
+                    } else {
+                        this.ioStatusMessage = `Found ${parsed.scanners.length} scanner(s).`;
+                        this.applyIoPrefsToSelection(parsed.preferences);
+                    }
+                }
+            } catch {
+                this.ioStatusMessage = 'Scan failed — check local service.';
+                this.showToast('Device scan failed', 'error');
+            } finally {
+                this.ioScanning = false;
+            }
+        },
+
+        async testIo() {
+            if (typeof INSABuddy === 'undefined') return;
+            this.ioTesting = true;
+            const type = this.ioOption === 'scanner' ? 'scanner' : (this.ioSelectedMouseIndex >= 0 ? 'mouse' : 'keyboard');
+            try {
+                const result = await INSABuddy.testIoDevice(type);
+                const msg = result?.message || (result?.success ? 'Test OK' : 'Test failed');
+                this.ioStatusMessage = msg;
+                if (result?.success || result?.ok) {
+                    this.showToast(msg, result?.code ? 'success' : 'info', 4000);
+                    if (this.ioOption === 'scanner' && result?.code) this.ioStep = 3;
+                } else {
+                    this.showToast(msg, 'warning', 4000);
+                }
+            } catch {
+                this.ioStatusMessage = 'Test failed.';
+                this.showToast('Test failed', 'error');
+            } finally {
+                this.ioTesting = false;
+            }
+        },
+
+        async saveIoDefault() {
+            if (typeof INSABuddy === 'undefined') return;
+            this.ioSaving = true;
+            const payload = {};
+            if (this.ioOption === 'camera') {
+                payload.use_camera_for_scan = !!this.useCameraForScan;
+            } else if (this.ioOption === 'keyboard') {
+                const kb = this.ioSelectedKeyboardIndex >= 0 ? this.ioKeyboards[this.ioSelectedKeyboardIndex] : null;
+                const ms = this.ioSelectedMouseIndex >= 0 ? this.ioMice[this.ioSelectedMouseIndex] : null;
+                if (kb) payload.default_keyboard_id = kb.id;
+                if (ms) payload.default_mouse_id = ms.id;
+            } else if (this.ioOption === 'scanner') {
+                const sc = this.ioSelectedScannerIndex >= 0 ? this.ioScanners[this.ioSelectedScannerIndex] : null;
+                if (!sc) {
+                    this.showToast('Select a scanner first', 'warning');
+                    this.ioSaving = false;
+                    return;
+                }
+                payload.default_scanner_id = sc.id;
+            }
+            try {
+                const result = await INSABuddy.saveIoPreferences(payload);
+                if (payload.use_camera_for_scan !== undefined) {
+                    localStorage.setItem('insapos_use_camera_for_scan', payload.use_camera_for_scan ? '1' : '0');
+                }
+                if (INSABuddy.isSuccessResponse(result) || result?.saved) {
+                    this.ioStatusMessage = 'Preferences saved.';
+                    this.showToast('I/O settings saved', 'success');
+                    if (this.ioOption === 'camera') this.ioBackToMenu();
+                } else {
+                    const msg = result?.message || 'Could not save on this device.';
+                    this.ioStatusMessage = msg;
+                    if (this.ioOption === 'camera' && payload.use_camera_for_scan !== undefined) {
+                        localStorage.setItem('insapos_use_camera_for_scan', payload.use_camera_for_scan ? '1' : '0');
+                        this.showToast('Saved locally (device prefs need INSAPOSv2)', 'info');
+                    } else {
+                        this.showToast(msg, 'warning');
+                    }
+                }
+            } catch {
+                this.showToast('Save error', 'error');
+            } finally {
+                this.ioSaving = false;
+            }
+        },
+
+        async _fetchHidBarcode() {
+            try {
+                if (typeof INSABuddy !== 'undefined' && (this.buddyConnected || this.hasNativeBridge)) {
+                    const data = await INSABuddy.getHidScan();
+                    return data?.code || data?.value || null;
+                }
+                if (this.hasNativeBridge) {
+                    const res = await fetch(`http://127.0.0.1:${this._nativeScanPort}/scan/hid`, { signal: AbortSignal.timeout(3000) });
+                    const data = await res.json();
+                    return data?.code || data?.value || null;
+                }
+            } catch {}
+            return null;
+        },
+
+        _waitForHidScan(timeoutMs = 15000) {
+            return new Promise((resolve) => {
+                const start = Date.now();
+                const startScan = this._lastNativeScan;
+                const poll = async () => {
+                    if (this._lastNativeScan && this._lastNativeScan !== startScan) {
+                        resolve(this._lastNativeScan);
+                        return;
+                    }
+                    const code = await this._fetchHidBarcode();
+                    if (code) { resolve(code); return; }
+                    if (Date.now() - start > timeoutMs) { resolve(null); return; }
+                    setTimeout(poll, 400);
+                };
+                poll();
+            });
+        },
+
         async buddyOpenDrawer() { if (!this.buddyConnected) return; await INSABuddy.openDrawer(); },
 
         async openCashDrawer() {
@@ -1614,23 +2028,32 @@ function posApp() {
 
         async scanProduct() {
             if (this._scanning) return;
+            const useCamera = this.useCameraForScan !== false;
             if (this.buddyConnected || this.hasNativeBridge) {
                 this._scanning = true;
-                this.showToast('Scanning product...', 'info', 2000);
                 try {
-                    let value = null;
-                    if (this.buddyConnected) {
-                        const r = await INSABuddy.scan();
-                        if (r && r.success && r.value) value = r.value;
-                    } else if (this.hasNativeBridge) {
-                        value = await this._nativeScanAsync();
+                    let value = await this._fetchHidBarcode();
+                    if (!value) value = await this._waitForHidScan(800);
+                    if (!value && useCamera) {
+                        this.showToast('Scanning with camera...', 'info', 2000);
+                        if (this.buddyConnected) {
+                            const r = await INSABuddy.scan();
+                            if (r && (r.success || r.ok) && (r.value || r.code)) value = r.value || r.code;
+                        } else if (this.hasNativeBridge) {
+                            value = await this._nativeScanAsync();
+                        }
+                    } else if (!value && !useCamera) {
+                        this.showToast('Use your barcode scanner (camera is off)', 'info', 3000);
+                        value = await this._waitForHidScan(20000);
                     }
                     if (value) { this.handleBarcodeScan(value); }
-                    else { this.showToast('No barcode detected. Try again.', 'warning'); }
+                    else { this.showToast(useCamera ? 'No barcode detected. Try again.' : 'No scan received from scanner.', 'warning'); }
                 } catch { this.showToast('Scan failed.', 'error'); }
                 finally { this._scanning = false; }
-            } else {
+            } else if (useCamera) {
                 this.openCameraScanner('product');
+            } else {
+                this.showToast('Enable camera in I/O Settings or use the Android app', 'warning');
             }
         },
 

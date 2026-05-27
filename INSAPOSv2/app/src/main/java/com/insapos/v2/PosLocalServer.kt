@@ -15,6 +15,7 @@ class PosLocalServer(
     private val getHidScanner: () -> HidScannerDriver?,
     private val getDatabase: () -> OfflineDatabase?,
     private val getSyncEngine: () -> SyncEngine?,
+    private val ioPreferences: IoPreferencesStore,
     private val launchCameraScan: (() -> Unit)? = null
 ) : NanoHTTPD("127.0.0.1", PORT) {
 
@@ -51,6 +52,10 @@ class PosLocalServer(
                 uri == "/printer/test" && method == Method.POST -> handlePrinterTest()
                 uri == "/scan" -> handleCameraScan()
                 uri == "/scan/hid" -> handleHidScan()
+                uri == "/device/io/scan" -> handleIoScan()
+                uri == "/device/io/status" -> handleIoStatus()
+                uri == "/device/io/save" && method == Method.POST -> handleIoSave(session)
+                uri == "/device/io/test" && method == Method.POST -> handleIoTest(session)
                 // Offline data endpoints
                 uri == "/offline/products" -> handleGetProducts(session)
                 uri == "/offline/products/barcode" -> handleProductByBarcode(session)
@@ -186,7 +191,84 @@ class PosLocalServer(
         return jsonOk(JSONObject().apply {
             put("ok", barcode.isNotBlank())
             put("code", barcode)
+            put("value", barcode)
         })
+    }
+
+    private fun handleIoScan(): Response {
+        val scan = HardwareDetector.scanAll(context)
+        scan.put("preferences", ioPreferences.toJson())
+        scan.put("io_api", true)
+        return jsonOk(scan)
+    }
+
+    private fun handleIoStatus(): Response {
+        return jsonOk(JSONObject().apply {
+            put("ok", true)
+            put("io_api", true)
+            put("preferences", ioPreferences.toJson())
+        })
+    }
+
+    private fun handleIoSave(session: IHTTPSession): Response {
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        if (json.has("default_keyboard_id")) {
+            val v = json.optString("default_keyboard_id", "")
+            ioPreferences.defaultKeyboardId = v.ifBlank { null }
+        }
+        if (json.has("default_mouse_id")) {
+            val v = json.optString("default_mouse_id", "")
+            ioPreferences.defaultMouseId = v.ifBlank { null }
+        }
+        if (json.has("default_scanner_id")) {
+            val v = json.optString("default_scanner_id", "")
+            ioPreferences.defaultScannerId = v.ifBlank { null }
+        }
+        if (json.has("use_camera_for_scan")) {
+            ioPreferences.useCameraForScan = json.optBoolean("use_camera_for_scan", true)
+        }
+        return jsonOk(JSONObject().apply {
+            put("ok", true)
+            put("saved", true)
+            put("preferences", ioPreferences.toJson())
+        })
+    }
+
+    private fun handleIoTest(session: IHTTPSession): Response {
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        val type = json.optString("type", "scanner").lowercase()
+        return when (type) {
+            "scanner", "barcode" -> {
+                val hid = getHidScanner()
+                val barcode = hid?.getLastBarcode() ?: ""
+                jsonOk(JSONObject().apply {
+                    put("ok", true)
+                    put("type", "scanner")
+                    put("message", if (barcode.isNotBlank()) {
+                        "Last scan: $barcode"
+                    } else {
+                        "Scan a barcode with your scanner, then test again."
+                    })
+                    put("code", barcode)
+                    put("success", barcode.isNotBlank())
+                })
+            }
+            "keyboard" -> jsonOk(JSONObject().apply {
+                put("ok", true)
+                put("type", "keyboard")
+                put("success", true)
+                put("message", "Keyboard detected. Type in a field to verify input works.")
+            })
+            "mouse" -> jsonOk(JSONObject().apply {
+                put("ok", true)
+                put("type", "mouse")
+                put("success", true)
+                put("message", "Move the mouse pointer to verify it responds.")
+            })
+            else -> jsonError("Unknown device type: $type")
+        }
     }
 
     // --- Offline data handlers ---

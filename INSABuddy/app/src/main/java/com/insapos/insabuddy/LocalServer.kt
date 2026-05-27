@@ -46,6 +46,10 @@ class LocalServer(
             uri == "/printer/list" && method == Method.GET -> handlePrinterList()
             uri == "/printer/select" && method == Method.POST -> handlePrinterSelect(session)
             uri == "/printer/test" && method == Method.POST -> handlePrinterTest()
+            uri == "/device/io/scan" && method == Method.GET -> handleIoLimited()
+            uri == "/device/io/status" && method == Method.GET -> handleIoLimited()
+            uri == "/device/io/save" && method == Method.POST -> handleIoSaveLimited(session)
+            uri == "/device/io/test" && method == Method.POST -> handleIoTestLimited()
             uri == "/receipt/save" && method == Method.POST -> handleReceiptSave(session)
             uri == "/transaction/save" && method == Method.POST -> handleTransactionSave(session)
             uri == "/sync/push" && method == Method.POST -> handleSyncPush(session)
@@ -147,6 +151,42 @@ class LocalServer(
             put("value", barcode ?: "")
             put("source", "hid")
             put("listening", hid?.isListening ?: false)
+        }
+        return jsonResponse(json)
+    }
+
+    private fun handleIoLimited(): Response {
+        val json = JSONObject().apply {
+            put("ok", true)
+            put("io_api", false)
+            put("message", "Full I/O setup requires INSAPOSv2. HID scanner and camera scan still work.")
+            put("keyboards", JSONArray())
+            put("mice", JSONArray())
+            put("scanners", JSONArray())
+            put("preferences", JSONObject().put("use_camera_for_scan", true))
+        }
+        return jsonResponse(json)
+    }
+
+    private fun handleIoSaveLimited(session: IHTTPSession): Response {
+        val json = JSONObject().apply {
+            put("ok", true)
+            put("saved", false)
+            put("io_api", false)
+            put("message", "I/O preferences are saved on INSAPOSv2 only.")
+        }
+        return jsonResponse(json)
+    }
+
+    private fun handleIoTestLimited(): Response {
+        val hid = getHidScanner()
+        val barcode = hid?.lastBarcode ?: ""
+        val json = JSONObject().apply {
+            put("ok", true)
+            put("type", "scanner")
+            put("success", barcode.isNotBlank())
+            put("code", barcode)
+            put("message", if (barcode.isNotBlank()) "Last scan: $barcode" else "Scan with your HID scanner, then test again.")
         }
         return jsonResponse(json)
     }
