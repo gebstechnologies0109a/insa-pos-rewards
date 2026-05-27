@@ -25,11 +25,14 @@ class LicenseController extends Controller
             'active'    => 'required|boolean',
         ]);
 
+        $active = $request->boolean('active');
+
         $license = PosLicense::updateOrCreate(
             ['branch_id' => $branch->id],
             [
-                'pos_slots' => $request->pos_slots,
-                'active'    => $request->active,
+                'pos_slots' => (int) $request->pos_slots,
+                'active'    => $active,
+                'status'    => $active ? PosLicense::STATUS_ACTIVE : PosLicense::STATUS_SUSPENDED,
             ]
         );
 
@@ -47,8 +50,9 @@ class LicenseController extends Controller
         PosLicense::updateOrCreate(
             ['branch_id' => $request->branch_id],
             [
-                'pos_slots' => $request->pos_slots,
+                'pos_slots' => (int) $request->pos_slots,
                 'active'    => true,
+                'status'    => PosLicense::STATUS_ACTIVE,
             ]
         );
 

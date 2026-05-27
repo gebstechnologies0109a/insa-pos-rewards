@@ -31,6 +31,21 @@ class PosLicense extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::saving(function (PosLicense $license) {
+            if (($license->status === null || $license->status === '') && $license->pos_slots > 0) {
+                $license->status = self::STATUS_ACTIVE;
+            }
+
+            if ((bool) $license->active) {
+                $license->status = self::STATUS_ACTIVE;
+            } elseif ($license->status === null || $license->status === '') {
+                $license->status = self::STATUS_SUSPENDED;
+            }
+        });
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
@@ -58,11 +73,7 @@ class PosLicense extends Model
 
     public function isCurrentlyActive(): bool
     {
-        if ($this->status === self::STATUS_SUSPENDED || $this->status === self::STATUS_EXPIRED) {
-            return false;
-        }
-
-        if (! $this->active) {
+        if (! $this->hasActiveEntitlement()) {
             return false;
         }
 
@@ -77,5 +88,32 @@ class PosLicense extends Model
         }
 
         return true;
+    }
+
+    /**
+     * License is entitled when the active flag or status column says so (kept in sync on save).
+     */
+    public function hasActiveEntitlement(): bool
+    {
+        if ((bool) $this->active) {
+            return true;
+        }
+
+        return $this->normalizedStatus() === self::STATUS_ACTIVE;
+    }
+
+    public function normalizedStatus(): string
+    {
+        $status = $this->status;
+
+        if ($status !== null && $status !== '') {
+            return $status;
+        }
+
+        if ($this->pos_slots > 0) {
+            return self::STATUS_ACTIVE;
+        }
+
+        return (bool) $this->active ? self::STATUS_ACTIVE : self::STATUS_SUSPENDED;
     }
 }

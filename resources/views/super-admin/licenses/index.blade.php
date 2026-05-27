@@ -52,7 +52,7 @@
                 @php
                     $license = $branch->license;
                     $slots = $license?->pos_slots ?? 1;
-                    $isActive = $license?->active ?? false;
+                    $isActive = $license?->isCurrentlyActive() ?? false;
                 @endphp
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-3 font-medium text-gray-900">{{ $branch->name }}</td>
