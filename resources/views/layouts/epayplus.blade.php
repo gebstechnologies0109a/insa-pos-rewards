@@ -60,8 +60,32 @@
 
                     <li><div class="nav-section">Device Fleet</div></li>
                     <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.fleet.dashboard') ? 'active' : '' }}" href="{{ route('epayplus.fleet.dashboard') }}">
+                            <i class="bi bi-hdd-network"></i> Fleet Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.fleet.alerts') ? 'active' : '' }}" href="{{ route('epayplus.fleet.alerts') }}">
+                            <i class="bi bi-bell"></i> Alerts
+                            @php $activeAlertCount = \App\Models\EPayPlus\DeviceAlert::where('status','active')->count(); @endphp
+                            @if($activeAlertCount > 0)
+                                <span class="badge bg-danger ms-1">{{ $activeAlertCount }}</span>
+                            @endif
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.fleet.updates') ? 'active' : '' }}" href="{{ route('epayplus.fleet.updates') }}">
+                            <i class="bi bi-cloud-arrow-up"></i> OTA Updates
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.fleet.groups') ? 'active' : '' }}" href="{{ route('epayplus.fleet.groups') }}">
+                            <i class="bi bi-collection"></i> Groups
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {{ request()->routeIs('epayplus.devices*') ? 'active' : '' }}" href="{{ route('epayplus.devices') }}">
-                            <i class="bi bi-phone"></i> Devices
+                            <i class="bi bi-phone"></i> Devices (Legacy)
                         </a>
                     </li>
                     <li class="nav-item">

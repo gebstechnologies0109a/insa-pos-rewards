@@ -8,6 +8,7 @@ use App\Http\Controllers\EPayAdmin\AnnouncementController;
 use App\Http\Controllers\EPayAdmin\CommissionController;
 use App\Http\Controllers\EPayAdmin\DashboardController;
 use App\Http\Controllers\EPayAdmin\DeviceController;
+use App\Http\Controllers\EPayAdmin\DeviceFleetController;
 use App\Http\Controllers\EPayAdmin\EPayProductController;
 use App\Http\Controllers\EPayAdmin\KioskController;
 use App\Http\Controllers\EPayAdmin\ProviderController;
@@ -113,4 +114,36 @@ Route::middleware(['auth', 'role:owner,admin,super_admin'])->prefix('epayplus')-
 
     // ── Audit Log ──
     Route::get('/audit-log', [DashboardController::class, 'auditLog'])->name('epayplus.audit-log');
+
+    // ── Device Fleet Management ──
+    Route::prefix('fleet')->group(function () {
+        Route::get('/', [DeviceFleetController::class, 'dashboard'])->name('epayplus.fleet.dashboard');
+        Route::get('/live-status', [DeviceFleetController::class, 'liveStatus'])->name('epayplus.fleet.live-status');
+        Route::post('/bulk-command', [DeviceFleetController::class, 'bulkCommand'])->name('epayplus.fleet.bulk-command');
+
+        // Device detail
+        Route::get('/device/{device}', [DeviceFleetController::class, 'deviceDetail'])->name('epayplus.fleet.device');
+        Route::put('/device/{device}', [DeviceFleetController::class, 'updateDevice'])->name('epayplus.fleet.device.update');
+        Route::post('/device/{device}/command', [DeviceFleetController::class, 'sendCommand'])->name('epayplus.fleet.device.command');
+        Route::get('/device/{device}/commands', [DeviceFleetController::class, 'commandHistory'])->name('epayplus.fleet.device.commands');
+
+        // OTA Updates
+        Route::get('/updates', [DeviceFleetController::class, 'updates'])->name('epayplus.fleet.updates');
+        Route::post('/updates', [DeviceFleetController::class, 'storeUpdate'])->name('epayplus.fleet.updates.store');
+        Route::post('/updates/{update}/release', [DeviceFleetController::class, 'releaseUpdate'])->name('epayplus.fleet.updates.release');
+        Route::post('/updates/{update}/pause', [DeviceFleetController::class, 'pauseUpdate'])->name('epayplus.fleet.updates.pause');
+        Route::post('/updates/{update}/rollback', [DeviceFleetController::class, 'rollbackUpdate'])->name('epayplus.fleet.updates.rollback');
+
+        // Alerts
+        Route::get('/alerts', [DeviceFleetController::class, 'alerts'])->name('epayplus.fleet.alerts');
+        Route::post('/alerts/{alert}/acknowledge', [DeviceFleetController::class, 'acknowledgeAlert'])->name('epayplus.fleet.alert.acknowledge');
+        Route::post('/alerts/{alert}/resolve', [DeviceFleetController::class, 'resolveAlert'])->name('epayplus.fleet.alert.resolve');
+        Route::post('/alerts/bulk-resolve', [DeviceFleetController::class, 'bulkResolveAlerts'])->name('epayplus.fleet.alerts.bulk-resolve');
+
+        // Groups
+        Route::get('/groups', [DeviceFleetController::class, 'groups'])->name('epayplus.fleet.groups');
+        Route::post('/groups', [DeviceFleetController::class, 'storeGroup'])->name('epayplus.fleet.groups.store');
+        Route::put('/groups/{group}', [DeviceFleetController::class, 'updateGroup'])->name('epayplus.fleet.groups.update');
+        Route::delete('/groups/{group}', [DeviceFleetController::class, 'deleteGroup'])->name('epayplus.fleet.groups.delete');
+    });
 });
