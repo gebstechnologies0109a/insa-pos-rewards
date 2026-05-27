@@ -38,10 +38,16 @@ class TransactionController extends Controller
             });
         }
 
+        $summary = [
+            'total_amount' => (clone $query)->sum('amount'),
+            'total_earnings' => (clone $query)->where('status', 'SUCCESS')->sum('commission'),
+            'success_count' => (clone $query)->where('status', 'SUCCESS')->count(),
+        ];
+
         $transactions = $query->paginate(50)->withQueryString();
         $retailers    = Retailer::orderBy('business_name')->get(['id', 'business_name']);
 
-        return view('epayplus.transactions', compact('transactions', 'retailers'));
+        return view('epayplus.transactions', compact('transactions', 'retailers', 'summary'));
     }
 
     public function show(Transaction $transaction)

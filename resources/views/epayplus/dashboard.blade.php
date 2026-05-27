@@ -8,7 +8,47 @@
         <h4 class="fw-bold mb-0">Dashboard</h4>
         <small class="text-muted">ePayPlus Admin Overview</small>
     </div>
-    <span class="badge bg-success fs-6">v3.0</span>
+    <span class="badge bg-success fs-6">v3.1</span>
+</div>
+
+{{-- Dual Wallet + Fleet KPI Row --}}
+<div class="row g-3 mb-3">
+    <div class="col-md-3 col-6">
+        <div class="card border-0 shadow-sm h-100 border-start border-success border-3">
+            <div class="card-body">
+                <p class="text-muted mb-1 small">E-Load Wallet (Network)</p>
+                <h4 class="fw-bold text-success mb-0">₱{{ number_format($stats['totalEloadWallet'] ?? $stats['totalBalance'], 2) }}</h4>
+                <small class="text-muted">All retailer E-Load balances</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card border-0 shadow-sm h-100 border-start border-primary border-3">
+            <div class="card-body">
+                <p class="text-muted mb-1 small">Bills & Cash-In Wallet</p>
+                <h4 class="fw-bold text-primary mb-0">₱{{ number_format($stats['totalBillsWallet'] ?? 0, 2) }}</h4>
+                <small class="text-muted">Bills / GCash / Maya pool</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted mb-1 small">Machines Online</p>
+                <h4 class="fw-bold mb-0">{{ $stats['machinesOnline'] ?? 0 }}<small class="text-muted fs-6"> / {{ $stats['machinesTotal'] ?? 0 }}</small></h4>
+                <a href="{{ route('epayplus.fleet.dashboard') }}" class="small text-decoration-none">Fleet dashboard →</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted mb-1 small">Pending Alerts</p>
+                <h4 class="fw-bold text-warning mb-0">{{ $stats['pendingAlerts'] ?? 0 }}</h4>
+                <a href="{{ route('epayplus.fleet.alerts') }}" class="small text-warning text-decoration-none">View alerts →</a>
+            </div>
+        </div>
+    </div>
 </div>
 
 {{-- Stats Cards Row 1 --}}

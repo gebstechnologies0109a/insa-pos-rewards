@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\EPayAdmin;
 
 use App\Http\Controllers\Controller;
+use App\Models\EPayPlus\Device;
+use App\Models\EPayPlus\DeviceAlert;
 use App\Models\EPayPlus\Retailer;
 use App\Models\EPayPlus\Transaction;
 use App\Models\EPayPlus\Topup;
@@ -22,8 +24,14 @@ class DashboardController extends Controller
             'todayTransactions' => Transaction::today()->count(),
             'todaySales'        => Transaction::today()->successful()->sum('amount'),
             'todayCommissions'  => Transaction::today()->successful()->sum('commission'),
+            'todayEarnings'     => Transaction::today()->successful()->sum('commission'),
             'pendingTopups'     => Topup::where('status', 'PENDING')->count(),
             'totalBalance'      => Retailer::sum('balance'),
+            'totalEloadWallet'  => Retailer::sum('eload_balance'),
+            'totalBillsWallet'  => Retailer::sum('bills_balance'),
+            'machinesOnline'    => Device::where('last_seen_at', '>=', now()->subMinutes(5))->count(),
+            'machinesTotal'     => Device::count(),
+            'pendingAlerts'     => DeviceAlert::where('status', 'active')->count(),
             'monthTransactions' => Transaction::whereMonth('created_at', now()->month)->count(),
             'monthSales'        => Transaction::whereMonth('created_at', now()->month)->successful()->sum('amount'),
             'totalProviders'    => Provider::count(),

@@ -26,7 +26,8 @@ class DeviceFleetController extends Controller
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('device_id', 'like', "%{$search}%")
                   ->orWhere('location', 'like', "%{$search}%")
-                  ->orWhere('serial_number', 'like', "%{$search}%");
+                  ->orWhere('serial_number', 'like', "%{$search}%")
+                  ->orWhere('machine_uid', 'like', "%{$search}%");
             });
         }
 
@@ -166,6 +167,7 @@ class DeviceFleetController extends Controller
             'group_id' => 'nullable|integer|exists:epay_device_groups,id',
             'config_profile_id' => 'nullable|integer|exists:epay_device_configs,id',
             'location' => 'nullable|string|max:255',
+            'machine_uid' => 'nullable|string|max:100',
         ]);
 
         $device->update($validated);

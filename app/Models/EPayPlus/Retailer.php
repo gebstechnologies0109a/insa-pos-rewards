@@ -14,7 +14,7 @@ class Retailer extends Model
 
     protected $fillable = [
         'account_id', 'business_name', 'owner_name', 'mobile_number',
-        'email', 'address', 'balance', 'credit_limit', 'pin',
+        'email', 'address', 'balance', 'eload_balance', 'bills_balance', 'credit_limit', 'pin',
         'api_token', 'device_id', 'is_active', 'is_kiosk_enabled',
         'kiosk_pin', 'printer_address', 'printer_type', 'server_url',
         'sim_slot', 'settings', 'last_login_at',
@@ -26,6 +26,8 @@ class Retailer extends Model
     {
         return [
             'balance' => 'decimal:2',
+            'eload_balance' => 'decimal:2',
+            'bills_balance' => 'decimal:2',
             'credit_limit' => 'decimal:2',
             'is_active' => 'boolean',
             'is_kiosk_enabled' => 'boolean',
@@ -44,22 +46,25 @@ class Retailer extends Model
         return $this->hasMany(Topup::class, 'retailer_id');
     }
 
-    public function deductBalance(float $amount): bool
+    public function deductBalance(float $amount, string $wallet = 'eload'): bool
     {
-        if ($this->balance < $amount) {
+        $field = $wallet === 'bills' ? 'bills_balance' : 'eload_balance';
+        if (($this->{$field} ?? $this->balance) < $amount) {
             return false;
         }
-        $this->decrement('balance', $amount);
+        $this->decrement($field, $amount);
         return true;
     }
 
-    public function addBalance(float $amount): void
+    public function addBalance(float $amount, string $wallet = 'eload'): void
     {
-        $this->increment('balance', $amount);
+        $field = $wallet === 'bills' ? 'bills_balance' : 'eload_balance';
+        $this->increment($field, $amount);
     }
 
-    public function hasSufficientBalance(float $amount): bool
+    public function hasSufficientBalance(float $amount, string $wallet = 'eload'): bool
     {
-        return $this->balance >= $amount;
+        $field = $wallet === 'bills' ? 'bills_balance' : 'eload_balance';
+        return ($this->{$field} ?? $this->balance) >= $amount;
     }
 }

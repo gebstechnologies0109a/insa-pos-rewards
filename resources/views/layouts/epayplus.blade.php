@@ -58,6 +58,22 @@
                         </a>
                     </li>
 
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.licenses*') ? 'active' : '' }}" href="{{ route('epayplus.licenses') }}">
+                            <i class="bi bi-key"></i> Licenses
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.blacklists*') ? 'active' : '' }}" href="{{ route('epayplus.blacklists') }}">
+                            <i class="bi bi-shield-x"></i> Blacklist
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.pricing*') ? 'active' : '' }}" href="{{ route('epayplus.pricing') }}">
+                            <i class="bi bi-tag"></i> Pricing
+                        </a>
+                    </li>
+
                     <li><div class="nav-section">Device Fleet</div></li>
                     <li class="nav-item">
                         <a class="nav-link {{ request()->routeIs('epayplus.fleet.dashboard') ? 'active' : '' }}" href="{{ route('epayplus.fleet.dashboard') }}">
@@ -81,6 +97,11 @@
                     <li class="nav-item">
                         <a class="nav-link {{ request()->routeIs('epayplus.fleet.groups') ? 'active' : '' }}" href="{{ route('epayplus.fleet.groups') }}">
                             <i class="bi bi-collection"></i> Groups
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.fleet.configs*') ? 'active' : '' }}" href="{{ route('epayplus.fleet.configs') }}">
+                            <i class="bi bi-sliders"></i> Config Profiles
                         </a>
                     </li>
                     <li class="nav-item">

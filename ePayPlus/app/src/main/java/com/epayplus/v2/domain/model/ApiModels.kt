@@ -25,9 +25,74 @@ data class AccountInfo(
     @SerializedName("isKioskEnabled") val isKioskEnabled: Boolean = false
 )
 
+data class DeviceRegisterRequest(
+    @SerializedName("device_id") val deviceId: String,
+    @SerializedName("machine_uid") val machineUid: String,
+    @SerializedName("license_code") val licenseCode: String? = null,
+    val type: String = "retailer",
+    @SerializedName("app_version") val appVersion: String? = null,
+    @SerializedName("os_version") val osVersion: String? = null,
+    val model: String? = null
+)
+
+data class DeviceRegisterResponse(
+    val success: Boolean,
+    val device: DeviceInfo? = null,
+    val message: String? = null
+)
+
+data class DeviceInfo(
+    val id: Long = 0,
+    @SerializedName("device_id") val deviceId: String = "",
+    @SerializedName("machine_uid") val machineUid: String = "",
+    val type: String = "",
+    @SerializedName("license_code") val licenseCode: String? = null,
+    val config: Map<String, Any>? = null
+)
+
+data class WalletsResponse(
+    val success: Boolean,
+    val wallets: WalletBalances? = null,
+    val message: String? = null
+)
+
+data class WalletBalances(
+    val eload: WalletInfo? = null,
+    val bills: WalletInfo? = null,
+    val total: Double = 0.0
+)
+
+data class WalletInfo(
+    val label: String = "",
+    val balance: Double = 0.0,
+    val currency: String = "PHP"
+)
+
+data class HeartbeatResponse(
+    val success: Boolean,
+    @SerializedName("pending_commands") val pendingCommands: Int = 0,
+    @SerializedName("server_time") val serverTime: String? = null,
+    @SerializedName("config_version") val configVersion: Long = 0,
+    val config: RemoteConfig? = null,
+    @SerializedName("machine_uid") val machineUid: String? = null,
+    val message: String? = null
+)
+
+data class RemoteConfig(
+    val config: Map<String, Any>? = null,
+    @SerializedName("enabled_services") val enabledServices: List<String>? = null,
+    val services: Map<String, Boolean>? = null,
+    @SerializedName("operating_hours") val operatingHours: String? = null,
+    @SerializedName("is_locked") val isLocked: Boolean = false,
+    @SerializedName("config_version") val configVersion: Long = 0,
+    @SerializedName("machine_uid") val machineUid: String? = null
+)
+
 data class BalanceResponse(
     val success: Boolean,
     val balance: Double,
+    @SerializedName("eload_balance") val eloadBalance: Double? = null,
+    @SerializedName("bills_balance") val billsBalance: Double? = null,
     val message: String?
 )
 

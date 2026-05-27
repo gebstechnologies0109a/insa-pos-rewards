@@ -46,6 +46,9 @@
             <div class="text-muted">
                 <span class="badge bg-{{ $statusColor }} me-1">{{ $device->isOnline() ? 'Online' : 'Offline' }}</span>
                 <span class="me-2">{{ $device->device_id }}</span>
+                @if($device->machine_uid)
+                    <span class="badge bg-info me-1" title="Machine UID">{{ $device->machine_uid }}</span>
+                @endif
                 @if($device->group)
                     <span class="badge" style="background: {{ $device->group->color }}">{{ $device->group->name }}</span>
                 @endif
@@ -77,6 +80,10 @@
                     <div class="col-6">
                         <div class="info-label">Model</div>
                         <div class="info-value">{{ $device->model ?? '—' }}</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="info-label">Machine UID</div>
+                        <div class="info-value"><code>{{ $device->machine_uid ?? '—' }}</code></div>
                     </div>
                     <div class="col-6">
                         <div class="info-label">Serial</div>

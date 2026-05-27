@@ -2,10 +2,12 @@ package com.epayplus.v2.service
 
 import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.epayplus.v2.data.local.TokenManager
 import com.epayplus.v2.data.remote.EPayApiService
+import com.google.gson.Gson
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -70,12 +72,29 @@ class DeviceCommandService @AssistedInject constructor(
         }
     }
 
-    private fun executeCommand(command: String, params: Map<String, Any>?): Boolean {
+    private suspend fun executeCommand(command: String, params: Map<String, Any>?): Boolean {
         return when (command) {
-            "restart_app" -> {
-                val intent = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
-                intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-                appContext.startActivity(intent)
+            "restart_app", "reboot" -> {
+                if (command == "reboot") {
+                    try {
+                        val pm = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                        pm.reboot(null)
+                    } catch (_: Exception) {
+                        // Fallback to app restart if reboot not permitted
+                        restartApp()
+                    }
+                } else {
+                    restartApp()
+                }
+                true
+            }
+            "lock", "lock_device", "lock_task" -> {
+                val km = com.epayplus.v2.util.KioskManager(appContext)
+                km.lockDevice()
+                true
+            }
+            "unlock", "unlock_device" -> {
+                // Device unlock handled server-side via is_locked flag; no local action required
                 true
             }
             "enable_kiosk" -> {
@@ -96,19 +115,30 @@ class DeviceCommandService @AssistedInject constructor(
                     true
                 } catch (_: Exception) { false }
             }
-            "sync_products" -> {
+            "sync_products", "force_sync" -> {
                 OfflineQueueService.triggerNow(appContext)
                 true
             }
-            "lock_device" -> {
-                val km = com.epayplus.v2.util.KioskManager(appContext)
-                km.lockDevice()
-                true
-            }
-            "update_config" -> {
-                true
+            "push_config", "update_config" -> {
+                try {
+                    val deviceId = tokenManager.getDeviceId() ?: return false
+                    val machineUid = tokenManager.getMachineUid()
+                    val configResponse = apiService.getRemoteConfig(deviceId, machineUid)
+                    if (configResponse.isSuccessful) {
+                        configResponse.body()?.let { body ->
+                            tokenManager.saveRemoteConfig(Gson().toJson(body), 0)
+                        }
+                        true
+                    } else false
+                } catch (_: Exception) { false }
             }
             else -> false
         }
+    }
+
+    private fun restartApp() {
+        val intent = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
+        intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+        appContext.startActivity(intent)
     }
 }

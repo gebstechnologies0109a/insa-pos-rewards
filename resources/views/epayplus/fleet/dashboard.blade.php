@@ -273,6 +273,6 @@ function refreshStatus() {
         })
         .catch(() => {});
 }
-setInterval(refreshStatus, 30000);
+setInterval(refreshStatus, 15000);
 </script>
 @endpush

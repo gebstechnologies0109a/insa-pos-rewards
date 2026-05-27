@@ -13,6 +13,35 @@
     </a>
 </div>
 
+@if(isset($summary))
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body py-2 text-center">
+                <small class="text-muted">Filtered Volume</small>
+                <div class="fw-bold">₱{{ number_format($summary['total_amount'], 2) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body py-2 text-center">
+                <small class="text-muted">Earnings (Commission)</small>
+                <div class="fw-bold text-primary">₱{{ number_format($summary['total_earnings'], 2) }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body py-2 text-center">
+                <small class="text-muted">Successful Txns</small>
+                <div class="fw-bold text-success">{{ number_format($summary['success_count']) }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 {{-- Filters --}}
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-2">
@@ -77,6 +106,7 @@
                         <th>Target</th>
                         <th class="text-end">Amount</th>
                         <th class="text-end">Commission</th>
+                        <th class="text-end">Earnings</th>
                         <th>Status</th>
                         <th>Date</th>
                         <th></th>
@@ -95,6 +125,7 @@
                         <td><small>{{ $txn->target_number }}</small></td>
                         <td class="text-end fw-medium">₱{{ number_format($txn->amount, 2) }}</td>
                         <td class="text-end text-primary">₱{{ number_format($txn->commission, 2) }}</td>
+                        <td class="text-end fw-medium text-success">₱{{ number_format($txn->status === 'SUCCESS' ? $txn->commission : 0, 2) }}</td>
                         <td>
                             @php $sBadge = match($txn->status) { 'SUCCESS'=>'text-bg-success','FAILED'=>'text-bg-danger','PROCESSING'=>'text-bg-warning',default=>'text-bg-secondary' }; @endphp
                             <span class="badge {{ $sBadge }}">{{ $txn->status }}</span>
@@ -105,7 +136,7 @@
                         </td>
                     </tr>
                     @empty
-                    <tr><td colspan="10" class="text-center text-muted py-4">No transactions found.</td></tr>
+                    <tr><td colspan="11" class="text-center text-muted py-4">No transactions found.</td></tr>
                     @endforelse
                 </tbody>
             </table>

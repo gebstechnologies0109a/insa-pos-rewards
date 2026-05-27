@@ -15,6 +15,8 @@ import javax.inject.Inject
 
 data class HomeUiState(
     val balance: Double = 0.0,
+    val eloadBalance: Double = 0.0,
+    val billsBalance: Double = 0.0,
     val businessName: String = "",
     val ownerName: String = "",
     val todaySales: Double = 0.0,
@@ -89,6 +91,20 @@ class HomeViewModel @Inject constructor(
                 .onSuccess { balance ->
                     _uiState.update { it.copy(balance = balance) }
                 }
+
+            try {
+                val walletResponse = apiService.getWallets()
+                if (walletResponse.isSuccessful && walletResponse.body()?.success == true) {
+                    val wallets = walletResponse.body()?.wallets
+                    _uiState.update {
+                        it.copy(
+                            eloadBalance = wallets?.eload?.balance ?: it.eloadBalance,
+                            billsBalance = wallets?.bills?.balance ?: it.billsBalance,
+                            balance = wallets?.total ?: it.balance
+                        )
+                    }
+                }
+            } catch (_: Exception) {}
 
             listOf("ELOAD", "BILLS", "ECASH").forEach { type ->
                 try { productRepository.refreshProducts(type) } catch (_: Exception) {}

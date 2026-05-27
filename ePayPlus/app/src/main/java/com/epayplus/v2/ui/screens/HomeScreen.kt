@@ -98,7 +98,7 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                "Available Balance",
+                                "Dual Wallets",
                                 fontSize = 13.sp,
                                 color = EPayMediumGray
                             )
@@ -123,11 +123,40 @@ fun HomeScreen(
                             }
                         }
                         Text(
-                            "₱ ${String.format("%,.2f", uiState.balance)}",
-                            fontSize = 30.sp,
+                            "₱ ${String.format("%,.2f", uiState.eloadBalance.takeIf { it > 0 } ?: uiState.balance)}",
+                            fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                             color = EPayGreenDark
                         )
+                        Text(
+                            "E-Load Wallet",
+                            fontSize = 11.sp,
+                            color = EPayMediumGray
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("Bills / Cash-In", fontSize = 11.sp, color = EPayMediumGray)
+                                Text(
+                                    "₱ ${String.format("%,.2f", uiState.billsBalance)}",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 16.sp,
+                                    color = EPayBlue
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Combined", fontSize = 11.sp, color = EPayMediumGray)
+                                Text(
+                                    "₱ ${String.format("%,.2f", uiState.balance)}",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 16.sp,
+                                    color = EPayDarkGray
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
                         Divider(color = EPayLightGray)
                         Spacer(modifier = Modifier.height(12.dp))

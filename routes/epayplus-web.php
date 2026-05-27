@@ -5,12 +5,16 @@
  */
 
 use App\Http\Controllers\EPayAdmin\AnnouncementController;
+use App\Http\Controllers\EPayAdmin\BlacklistController;
 use App\Http\Controllers\EPayAdmin\CommissionController;
 use App\Http\Controllers\EPayAdmin\DashboardController;
+use App\Http\Controllers\EPayAdmin\DeviceConfigController;
 use App\Http\Controllers\EPayAdmin\DeviceController;
 use App\Http\Controllers\EPayAdmin\DeviceFleetController;
 use App\Http\Controllers\EPayAdmin\EPayProductController;
 use App\Http\Controllers\EPayAdmin\KioskController;
+use App\Http\Controllers\EPayAdmin\LicenseController;
+use App\Http\Controllers\EPayAdmin\PricingController;
 use App\Http\Controllers\EPayAdmin\ProviderController;
 use App\Http\Controllers\EPayAdmin\ReportController;
 use App\Http\Controllers\EPayAdmin\RetailerController;
@@ -25,6 +29,26 @@ Route::middleware(['auth', 'role:owner,admin,super_admin'])->prefix('epayplus')-
     // ── Dashboard ──
     Route::get('/', [DashboardController::class, 'index'])->name('epayplus.dashboard');
     Route::get('/dashboard/chart-data', [DashboardController::class, 'chartData'])->name('epayplus.dashboard.chart');
+
+    // ── Licenses ──
+    Route::get('/licenses', [LicenseController::class, 'index'])->name('epayplus.licenses');
+    Route::post('/licenses/generate', [LicenseController::class, 'generate'])->name('epayplus.licenses.generate');
+    Route::post('/licenses/{license}/activate', [LicenseController::class, 'activate'])->name('epayplus.licenses.activate');
+    Route::post('/licenses/{license}/transfer', [LicenseController::class, 'transfer'])->name('epayplus.licenses.transfer');
+    Route::post('/licenses/{license}/revoke', [LicenseController::class, 'revoke'])->name('epayplus.licenses.revoke');
+    Route::post('/licenses/{license}/block', [LicenseController::class, 'block'])->name('epayplus.licenses.block');
+
+    // ── Blacklists ──
+    Route::get('/blacklists', [BlacklistController::class, 'index'])->name('epayplus.blacklists');
+    Route::post('/blacklists', [BlacklistController::class, 'store'])->name('epayplus.blacklists.store');
+    Route::post('/blacklists/{blacklist}/toggle', [BlacklistController::class, 'toggle'])->name('epayplus.blacklists.toggle');
+    Route::delete('/blacklists/{blacklist}', [BlacklistController::class, 'destroy'])->name('epayplus.blacklists.destroy');
+
+    // ── Pricing ──
+    Route::get('/pricing', [PricingController::class, 'index'])->name('epayplus.pricing');
+    Route::post('/pricing', [PricingController::class, 'store'])->name('epayplus.pricing.store');
+    Route::put('/pricing/{pricing}', [PricingController::class, 'update'])->name('epayplus.pricing.update');
+    Route::delete('/pricing/{pricing}', [PricingController::class, 'destroy'])->name('epayplus.pricing.destroy');
 
     // ── Retailers ──
     Route::get('/retailers', [RetailerController::class, 'index'])->name('epayplus.retailers');
@@ -145,5 +169,11 @@ Route::middleware(['auth', 'role:owner,admin,super_admin'])->prefix('epayplus')-
         Route::post('/groups', [DeviceFleetController::class, 'storeGroup'])->name('epayplus.fleet.groups.store');
         Route::put('/groups/{group}', [DeviceFleetController::class, 'updateGroup'])->name('epayplus.fleet.groups.update');
         Route::delete('/groups/{group}', [DeviceFleetController::class, 'deleteGroup'])->name('epayplus.fleet.groups.delete');
+
+        // Remote config profiles
+        Route::get('/configs', [DeviceConfigController::class, 'index'])->name('epayplus.fleet.configs');
+        Route::post('/configs', [DeviceConfigController::class, 'store'])->name('epayplus.fleet.configs.store');
+        Route::put('/configs/{config}', [DeviceConfigController::class, 'update'])->name('epayplus.fleet.configs.update');
+        Route::delete('/configs/{config}', [DeviceConfigController::class, 'destroy'])->name('epayplus.fleet.configs.delete');
     });
 });

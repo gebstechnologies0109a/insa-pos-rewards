@@ -10,6 +10,7 @@ class Device extends Model
 
     protected $fillable = [
         'retailer_id', 'device_id', 'name', 'type', 'status', 'is_locked',
+        'machine_uid', 'license_id',
         'app_version', 'current_ota_version', 'os_version', 'model', 'serial_number',
         'location', 'latitude', 'longitude', 'group_zone',
         'group_id', 'config_profile_id',
@@ -41,6 +42,11 @@ class Device extends Model
     public function group()
     {
         return $this->belongsTo(DeviceGroup::class, 'group_id');
+    }
+
+    public function license()
+    {
+        return $this->belongsTo(License::class, 'license_id');
     }
 
     public function configProfile()

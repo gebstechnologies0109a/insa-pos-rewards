@@ -16,6 +16,8 @@ class AccountController extends Controller
         return response()->json([
             'success' => true,
             'balance' => (float) $retailer->balance,
+            'eload_balance' => (float) ($retailer->eload_balance ?? $retailer->balance),
+            'bills_balance' => (float) ($retailer->bills_balance ?? 0),
         ]);
     }
 
@@ -33,6 +35,8 @@ class AccountController extends Controller
                 'email' => $retailer->email,
                 'address' => $retailer->address,
                 'balance' => (float) $retailer->balance,
+                'eloadBalance' => (float) ($retailer->eload_balance ?? $retailer->balance),
+                'billsBalance' => (float) ($retailer->bills_balance ?? 0),
                 'isKioskEnabled' => $retailer->is_kiosk_enabled,
                 'printerAddress' => $retailer->printer_address,
                 'printerType' => $retailer->printer_type,

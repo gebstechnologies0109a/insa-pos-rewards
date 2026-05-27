@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V2\AccountController;
 use App\Http\Controllers\Api\V2\DeviceFleetApiController;
 use App\Http\Controllers\Api\V2\ProductController;
 use App\Http\Controllers\Api\V2\TransactionController;
+use App\Http\Controllers\Api\V2\WalletController;
 use App\Http\Middleware\EPayApiAuth;
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +34,7 @@ Route::prefix('v2')->group(function () {
 
         // Account
         Route::get('/account/balance', [AccountController::class, 'balance']);
+        Route::get('/wallets', [WalletController::class, 'index']);
         Route::get('/account/profile', [AccountController::class, 'profile']);
         Route::put('/account/profile', [AccountController::class, 'updateProfile']);
         Route::post('/account/topup', [AccountController::class, 'requestTopup']);
@@ -53,10 +55,11 @@ Route::prefix('v2')->group(function () {
         Route::post('/transactions/sync', [TransactionController::class, 'sync']);
     });
 
-    // Device Management (existing routes)
+    // Device Management (license activation + heartbeat polling)
     Route::post('/device/register', [DeviceApiController::class, 'register']);
     Route::post('/device/heartbeat', [DeviceApiController::class, 'heartbeat']);
     Route::get('/device/config', [DeviceApiController::class, 'getConfig']);
+    Route::get('/config', [DeviceApiController::class, 'getConfig']);
     Route::post('/device/log', [DeviceApiController::class, 'log']);
     Route::get('/device/commands', [DeviceApiController::class, 'getCommands']);
     Route::post('/device/command-ack', [DeviceApiController::class, 'acknowledgeCommand']);

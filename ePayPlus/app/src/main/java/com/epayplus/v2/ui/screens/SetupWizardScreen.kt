@@ -28,6 +28,8 @@ fun SetupWizardScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val serverUrl by viewModel.serverUrl.collectAsState()
+    val licenseCode by viewModel.licenseCode.collectAsState()
+    val machineUid by viewModel.machineUid.collectAsState()
     val accountId by viewModel.accountId.collectAsState()
     val pin by viewModel.pin.collectAsState()
     val deviceMode by viewModel.deviceMode.collectAsState()
@@ -53,12 +55,12 @@ fun SetupWizardScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Step indicator
+            // Step indicator (4 steps)
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                repeat(3) { index ->
+                repeat(4) { index ->
                     Box(
                         modifier = Modifier
                             .size(if (index == currentStep) 12.dp else 8.dp)
@@ -82,7 +84,16 @@ fun SetupWizardScreen(
                         isLoading = isLoading,
                         error = errorMessage
                     )
-                    1 -> AccountActivationStep(
+                    1 -> LicenseActivationStep(
+                        licenseCode = licenseCode,
+                        machineUid = machineUid,
+                        onLicenseChange = { viewModel.updateLicenseCode(it) },
+                        onMachineUidChange = { viewModel.updateMachineUid(it) },
+                        onNext = { viewModel.activateLicense() },
+                        isLoading = isLoading,
+                        error = errorMessage
+                    )
+                    2 -> AccountActivationStep(
                         accountId = accountId,
                         pin = pin,
                         onAccountIdChange = { viewModel.updateAccountId(it) },
@@ -91,7 +102,7 @@ fun SetupWizardScreen(
                         isLoading = isLoading,
                         error = errorMessage
                     )
-                    2 -> ModeConfigStep(
+                    3 -> ModeConfigStep(
                         selectedMode = deviceMode,
                         onModeSelect = { viewModel.updateDeviceMode(it) },
                         onComplete = {
@@ -162,6 +173,62 @@ private fun ServerSetupStep(
 }
 
 @Composable
+private fun LicenseActivationStep(
+    licenseCode: String,
+    machineUid: String,
+    onLicenseChange: (String) -> Unit,
+    onMachineUidChange: (String) -> Unit,
+    onNext: () -> Unit,
+    isLoading: Boolean,
+    error: String?
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(Icons.Default.VpnKey, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Step 2: Machine Activation", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Enter your license key and verify machine UID", textAlign = TextAlign.Center, color = Color.Gray)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = licenseCode,
+            onValueChange = onLicenseChange,
+            label = { Text("License Code") },
+            placeholder = { Text("EPAY-XXXX-XXXX") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedTextField(
+            value = machineUid,
+            onValueChange = onMachineUidChange,
+            label = { Text("Machine UID") },
+            placeholder = { Text("EPAY... or 09NET...") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        if (error != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onNext,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            enabled = licenseCode.isNotBlank() && machineUid.isNotBlank() && !isLoading
+        ) {
+            if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
+            else Text("Activate Machine")
+        }
+    }
+}
+
+@Composable
 private fun AccountActivationStep(
     accountId: String,
     pin: String,
@@ -182,7 +249,7 @@ private fun AccountActivationStep(
             tint = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Step 2: Account Activation", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text("Step 3: Account Activation", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(8.dp))
         Text("Enter your retailer account credentials", textAlign = TextAlign.Center, color = Color.Gray)
         Spacer(modifier = Modifier.height(24.dp))
@@ -240,7 +307,7 @@ private fun ModeConfigStep(
             tint = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Step 3: Device Mode", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text("Step 4: Device Mode", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(8.dp))
         Text("Choose how this device will operate", textAlign = TextAlign.Center, color = Color.Gray)
         Spacer(modifier = Modifier.height(24.dp))

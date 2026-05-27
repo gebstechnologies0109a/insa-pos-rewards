@@ -12,6 +12,9 @@ interface EPayApiService {
     @GET("account/balance")
     suspend fun getBalance(): Response<BalanceResponse>
 
+    @GET("wallets")
+    suspend fun getWallets(): Response<WalletsResponse>
+
     @GET("products/eload")
     suspend fun getEloadProducts(): Response<ProductListResponse>
 
@@ -21,7 +24,7 @@ interface EPayApiService {
     @GET("products/ecash")
     suspend fun getEcashProducts(): Response<ProductListResponse>
 
-    @GET("providers")
+    @GET("products/providers")
     suspend fun getProviders(): Response<ProvidersResponse>
 
     @POST("transactions/eload")
@@ -44,40 +47,46 @@ interface EPayApiService {
         @Body transactions: List<SyncTransactionRequest>
     ): Response<SyncResponse>
 
-    @GET("announcements")
+    @GET("products/announcements")
     suspend fun getAnnouncements(): Response<AnnouncementsResponse>
 
-    @POST("account/change-pin")
+    @POST("auth/change-pin")
     suspend fun changePin(@Body request: ChangePinRequest): Response<GenericResponse>
 
     // Device Management API v2
-    @POST("v2/device/register")
-    suspend fun registerDevice(@Body params: Map<String, String>): Response<GenericResponse>
+    @POST("device/register")
+    suspend fun registerDevice(@Body request: DeviceRegisterRequest): Response<DeviceRegisterResponse>
 
-    @POST("v2/device/heartbeat")
-    suspend fun sendHeartbeat(@Body params: Map<String, String>): Response<GenericResponse>
+    @POST("device/heartbeat")
+    suspend fun sendHeartbeat(@Body params: Map<String, String>): Response<HeartbeatResponse>
 
-    @GET("v2/device/config")
+    @GET("device/config")
     suspend fun getDeviceConfig(@Query("device_id") deviceId: String): Response<DeviceConfigResponse>
 
-    @GET("v2/device/commands")
+    @GET("config")
+    suspend fun getRemoteConfig(
+        @Query("device_id") deviceId: String,
+        @Query("machine_uid") machineUid: String? = null
+    ): Response<DeviceConfigResponse>
+
+    @GET("device/commands")
     suspend fun getDeviceCommands(@Query("device_id") deviceId: String): Response<DeviceCommandsResponse>
 
-    @POST("v2/device/command-ack")
+    @POST("device/command-ack")
     suspend fun acknowledgeCommand(@Body params: Map<String, String>): Response<GenericResponse>
 
-    @POST("v2/device/log")
+    @POST("device/log")
     suspend fun sendDeviceLogs(@Body params: Map<String, Any>): Response<GenericResponse>
 
-    @POST("v2/device/sms-report")
+    @POST("device/sms-report")
     suspend fun reportSms(@Body params: Map<String, String>): Response<GenericResponse>
 
-    @POST("v2/sync/transactions")
+    @POST("sync/transactions")
     suspend fun syncOfflineTransactions(@Body params: Map<String, Any>): Response<GenericResponse>
 
-    @GET("v2/sync/providers")
+    @GET("sync/providers")
     suspend fun getSyncProviders(): Response<GenericResponse>
 
-    @GET("v2/sync/config")
+    @GET("sync/config")
     suspend fun getSystemConfig(): Response<GenericResponse>
 }
