@@ -43,6 +43,8 @@ class PosService : Service() {
         private set
     var hidScannerDriver: HidScannerDriver? = null
     var onCameraScanRequested: (() -> Unit)? = null
+    /** Request USB permission from the foreground activity (deviceId, callback). */
+    var onRequestUsbPermission: ((deviceId: Int, onResult: (Boolean) -> Unit) -> Unit)? = null
     val ioPreferences: IoPreferencesStore by lazy { IoPreferencesStore(this) }
     private var usbReceiver: BroadcastReceiver? = null
 
@@ -90,7 +92,11 @@ class PosService : Service() {
                         getDatabase = { offlineDb },
                         getSyncEngine = { syncEngine },
                         ioPreferences = ioPreferences,
-                        launchCameraScan = { onCameraScanRequested?.invoke() }
+                        launchCameraScan = { onCameraScanRequested?.invoke() },
+                        requestUsbPermission = { deviceId, onResult ->
+                            onRequestUsbPermission?.invoke(deviceId, onResult)
+                                ?: onResult(false)
+                        }
                     )
                     localServer?.start()
                     Log.i(TAG, "Local server started on port ${PosLocalServer.PORT}")

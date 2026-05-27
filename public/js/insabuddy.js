@@ -179,10 +179,13 @@ const INSABuddy = {
     },
 
     /**
-     * Send a test print to the currently selected printer.
+     * Send a test print to the selected printer (type/name optional but recommended).
      */
-    async testPrint() {
-        return this._post('/printer/test', {});
+    async testPrint(type, name) {
+        const body = {};
+        if (type) body.type = type;
+        if (name) body.name = name;
+        return this._post('/printer/test', body);
     },
 
     /**
@@ -295,6 +298,26 @@ const INSABuddy = {
     isSuccessResponse(data) {
         if (!data) return false;
         return data.ok === true || data.success === true;
+    },
+
+    /**
+     * Whether a print/test response indicates the job was sent.
+     */
+    isPrintSuccess(data) {
+        if (!data) return false;
+        return data.printed === true
+            || (this.isSuccessResponse(data) && data.printed !== false);
+    },
+
+    /**
+     * Extract a user-facing error from a bridge API response.
+     */
+    parseApiError(data, fallback = 'Request failed') {
+        if (!data) return 'Local hardware service unavailable';
+        if (data.error) return String(data.error);
+        if (data.message) return String(data.message);
+        if (data.reason) return String(data.reason);
+        return fallback;
     },
 
     /**

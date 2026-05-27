@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.insapos.v2.db.OfflineDatabase
 import com.insapos.v2.printers.PrinterManager
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import com.insapos.v2.sync.SyncEngine
 import fi.iki.elonen.NanoHTTPD
 import org.json.JSONArray
@@ -16,7 +18,8 @@ class PosLocalServer(
     private val getDatabase: () -> OfflineDatabase?,
     private val getSyncEngine: () -> SyncEngine?,
     private val ioPreferences: IoPreferencesStore,
-    private val launchCameraScan: (() -> Unit)? = null
+    private val launchCameraScan: (() -> Unit)? = null,
+    private val requestUsbPermission: ((deviceId: Int, onResult: (Boolean) -> Unit) -> Unit)? = null
 ) : NanoHTTPD("127.0.0.1", PORT) {
 
     companion object {
@@ -49,7 +52,7 @@ class PosLocalServer(
                 uri == "/printer/status" -> handlePrinterStatus()
                 uri == "/printer/list" -> handlePrinterList()
                 uri == "/printer/select" && method == Method.POST -> handlePrinterSelect(session)
-                uri == "/printer/test" && method == Method.POST -> handlePrinterTest()
+                uri == "/printer/test" && method == Method.POST -> handlePrinterTest(session)
                 uri == "/scan" -> handleCameraScan()
                 uri == "/scan/hid" -> handleHidScan()
                 uri == "/device/io/scan" -> handleIoScan()
@@ -146,20 +149,80 @@ class PosLocalServer(
 
     private fun handlePrinterSelect(session: IHTTPSession): Response {
         val body = readBody(session)
-        val json = JSONObject(body)
-        val name = json.optString("name", "")
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
         if (name.isBlank()) return jsonError("Printer name required")
 
-        val pm = getPrinterManager() ?: return jsonError("Service not ready")
-        val type = json.optString("type", "")
-        val ok = if (type.isNotBlank()) pm.selectByTypeAndName(type, name) else pm.selectByName(name)
-        return jsonOk(JSONObject().put("ok", ok).put("selected", name))
+        val pm = getPrinterManager() ?: return jsonError("Printer service not ready")
+        val type = json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+
+        val usbGranted = ensureUsbPermissionIfNeeded(pm, type, name)
+        if (usbGranted == false) {
+            return jsonError("USB permission denied for $name")
+        }
+
+        val (ok, err) = pm.selectByTypeAndNameWithMessage(type, name)
+        return if (ok) {
+            val active = pm.getActivePrinter()
+            jsonOk(JSONObject().apply {
+                put("ok", true)
+                put("success", true)
+                put("selected", name)
+                put("name", active?.name ?: name)
+                put("type", active?.type ?: type)
+                put("connected", true)
+            })
+        } else {
+            jsonError(err ?: "Could not connect to $name")
+        }
     }
 
-    private fun handlePrinterTest(): Response {
-        val pm = getPrinterManager() ?: return jsonError("Service not ready")
-        val printer = pm.getActivePrinter() ?: return jsonError("No printer connected")
-        val text = "================================\n" +
+    private fun handlePrinterTest(session: IHTTPSession): Response {
+        val pm = getPrinterManager() ?: return jsonError("Printer service not ready")
+
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
+        val type = json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+
+        val usbGranted = ensureUsbPermissionIfNeeded(
+            pm,
+            type.ifBlank { pm.lastSelectedType },
+            name.ifBlank { pm.lastSelectedName }
+        )
+        if (usbGranted == false) {
+            return jsonError("USB permission denied — allow access when prompted, then try again")
+        }
+
+        val (printer, ensureErr) = pm.ensureActivePrinter(
+            type.ifBlank { null },
+            name.ifBlank { null }
+        )
+        if (printer == null) {
+            return jsonError(ensureErr ?: "No printer connected — select a printer first")
+        }
+
+        if (!printer.isConnected() && !printer.connect()) {
+            return jsonError("Printer disconnected — could not reconnect to ${printer.name}")
+        }
+
+        val text = buildTestPrintText()
+        val ok = pm.printText(text)
+        return if (ok) {
+            jsonOk(JSONObject().apply {
+                put("ok", true)
+                put("success", true)
+                put("printed", true)
+                put("name", printer.name)
+                put("type", printer.type)
+            })
+        } else {
+            jsonError("Print failed on ${printer.name} — check paper, power, and connection")
+        }
+    }
+
+    private fun buildTestPrintText(): String =
+        "================================\n" +
             "      INSAPOS v${BuildConfig.VERSION_NAME}      \n" +
             "         Test Print               \n" +
             "================================\n" +
@@ -167,8 +230,25 @@ class PosLocalServer(
             "Date: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\n" +
             "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n" +
             "================================\n"
-        val ok = pm.printText(text)
-        return jsonOk(JSONObject().put("ok", ok).put("printed", ok))
+
+    /**
+     * @return null if not USB / no request needed, true if granted, false if denied.
+     */
+    private fun ensureUsbPermissionIfNeeded(pm: PrinterManager, type: String?, name: String?): Boolean? {
+        val requester = requestUsbPermission ?: return null
+        val printerName = name?.takeIf { it.isNotBlank() } ?: return null
+        val usb = pm.findUsbPrinterByName(printerName) ?: return null
+        if (type != null && type.isNotBlank() && type != "usb") return null
+        if (usb.hasUsbPermission()) return true
+
+        val latch = CountDownLatch(1)
+        var granted = false
+        requester.invoke(usb.usbDevice.deviceId) { ok ->
+            granted = ok
+            latch.countDown()
+        }
+        latch.await(20, TimeUnit.SECONDS)
+        return granted
     }
 
     private fun handleCameraScan(): Response {

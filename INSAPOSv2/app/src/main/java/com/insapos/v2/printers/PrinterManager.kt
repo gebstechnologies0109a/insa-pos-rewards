@@ -21,6 +21,11 @@ class PrinterManager(private val context: Context) {
     var currentPrinter: Printer? = null
         private set
 
+    var lastSelectedType: String? = null
+        private set
+    var lastSelectedName: String? = null
+        private set
+
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -57,6 +62,8 @@ class PrinterManager(private val context: Context) {
         val connected = printer.connect()
         if (connected) {
             currentPrinter = printer
+            lastSelectedType = printer.type
+            lastSelectedName = printer.name
             savePrinter(printer)
             notifyChange(printer.getStatus())
         }
@@ -75,6 +82,65 @@ class PrinterManager(private val context: Context) {
             ?: all.find { it.name == name }
             ?: return false
         return selectPrinter(match)
+    }
+
+    /**
+     * Select by type/name; returns a user-facing error when selection or connect fails.
+     */
+    fun selectByTypeAndNameWithMessage(type: String, name: String): Pair<Boolean, String?> {
+        if (name.isBlank()) return false to "Printer name required"
+        val all = scanAll()
+        val match = if (type.isNotBlank()) {
+            all.find { it.type == type && it.name == name } ?: all.find { it.name == name }
+        } else {
+            all.find { it.name == name }
+        }
+        if (match == null) {
+            return false to "Printer not found: $name"
+        }
+        if (match is UsbPrinter && !match.hasUsbPermission()) {
+            return false to "USB permission required for ${match.name}"
+        }
+        if (!selectPrinter(match)) {
+            val hint = when (match.type) {
+                "usb" -> "Grant USB permission when prompted, then try again"
+                "bluetooth" -> "Ensure the printer is paired, powered on, and in range"
+                else -> "Check that the printer is available"
+            }
+            return false to "Could not connect to ${match.name}. $hint"
+        }
+        return true to null
+    }
+
+    /**
+     * Ensures a connected printer for printing; optionally re-selects from request body.
+     */
+    fun ensureActivePrinter(type: String?, name: String?): Pair<Printer?, String?> {
+        if (!type.isNullOrBlank() && !name.isNullOrBlank()) {
+            val (ok, err) = selectByTypeAndNameWithMessage(type, name)
+            if (!ok) return null to err
+            return currentPrinter to null
+        }
+        val active = currentPrinter
+        if (active != null) {
+            if (active.isConnected()) return active to null
+            if (active is UsbPrinter && !active.hasUsbPermission()) {
+                return null to "USB permission required for ${active.name}"
+            }
+            if (active.connect()) return active to null
+        }
+        val savedType = lastSelectedType
+        val savedName = lastSelectedName
+        if (!savedName.isNullOrBlank()) {
+            val (ok, err) = selectByTypeAndNameWithMessage(savedType ?: "", savedName)
+            if (ok) return currentPrinter to null
+            return null to (err ?: "Could not reconnect to $savedName")
+        }
+        return null to "No printer connected — select a printer first"
+    }
+
+    fun findUsbPrinterByName(name: String): UsbPrinter? {
+        return scanUsbPrinters().find { it.name == name }
     }
 
     @SuppressLint("MissingPermission")
@@ -152,6 +218,8 @@ class PrinterManager(private val context: Context) {
                     scanAllBluetoothDevices().find { it.name == savedAddress }?.let {
                         if (it.connect()) {
                             currentPrinter = it
+                            lastSelectedType = it.type
+                            lastSelectedName = it.name
                             notifyChange(it.getStatus())
                         }
                     }
@@ -162,6 +230,8 @@ class PrinterManager(private val context: Context) {
                         val printer = NetworkPrinter(parts[0], parts[1].toIntOrNull() ?: 9100)
                         if (printer.connect()) {
                             currentPrinter = printer
+                            lastSelectedType = printer.type
+                            lastSelectedName = printer.name
                             notifyChange(printer.getStatus())
                         }
                     }
@@ -170,6 +240,8 @@ class PrinterManager(private val context: Context) {
                     scanBuiltInPrinter()?.let {
                         if (it.connect()) {
                             currentPrinter = it
+                            lastSelectedType = it.type
+                            lastSelectedName = it.name
                             notifyChange(it.getStatus())
                         }
                     }
@@ -178,6 +250,8 @@ class PrinterManager(private val context: Context) {
                     scanUsbPrinters().find { it.name == savedAddress }?.let {
                         if (it.connect()) {
                             currentPrinter = it
+                            lastSelectedType = it.type
+                            lastSelectedName = it.name
                             notifyChange(it.getStatus())
                         }
                     }

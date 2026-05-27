@@ -1745,15 +1745,18 @@ function posApp() {
             this.printerStatusMessage = `Connecting to ${printer.name}...`;
             try {
                 const selectResult = await INSABuddy.selectPrinter(printer.type, printer.name);
-                const selected = INSABuddy.isSuccessResponse(selectResult) || selectResult?.ok || selectResult?.success;
+                const selected = INSABuddy.isSuccessResponse(selectResult)
+                    || selectResult?.ok === true
+                    || selectResult?.success === true;
                 if (!selected) {
-                    this.printerStatusMessage = 'Could not connect to printer — try another device.';
-                    this.showToast('Printer connection failed', 'error');
+                    const selectErr = INSABuddy.parseApiError(selectResult, 'Could not connect to printer');
+                    this.printerStatusMessage = selectErr;
+                    this.showToast(selectErr, 'error');
                     return;
                 }
                 this.printerStatusMessage = 'Sending test print...';
-                const testResult = await INSABuddy.testPrint();
-                const printed = INSABuddy.isSuccessResponse(testResult) || testResult?.printed;
+                const testResult = await INSABuddy.testPrint(printer.type, printer.name);
+                const printed = INSABuddy.isPrintSuccess(testResult);
                 if (printed) {
                     this.printerTestPassed = true;
                     this.printerStatusMessage = 'Test print sent! Save as default in the next step.';
@@ -1761,8 +1764,9 @@ function posApp() {
                     this.printerStep = 3;
                     await this.loadPrinterDefaultStatus();
                 } else {
-                    this.printerStatusMessage = 'Test print failed — check paper and connection.';
-                    this.showToast('Test print failed', 'error');
+                    const testErr = INSABuddy.parseApiError(testResult, 'Test print failed — check paper and connection');
+                    this.printerStatusMessage = testErr;
+                    this.showToast(testErr, 'error');
                 }
             } catch {
                 this.printerStatusMessage = 'Test print error — local service may be unavailable.';
@@ -1782,14 +1786,17 @@ function posApp() {
             this.printerStatusMessage = `Saving ${printer.name} as default...`;
             try {
                 const result = await INSABuddy.selectPrinter(printer.type, printer.name);
-                const saved = INSABuddy.isSuccessResponse(result) || result?.ok || result?.success;
+                const saved = INSABuddy.isSuccessResponse(result)
+                    || result?.ok === true
+                    || result?.success === true;
                 if (saved) {
                     await this.loadPrinterDefaultStatus();
                     this.printerStatusMessage = `Default printer saved: ${printer.name}`;
                     this.showToast('Default printer saved', 'success');
                 } else {
-                    this.printerStatusMessage = 'Could not save default printer.';
-                    this.showToast('Save failed', 'error');
+                    const saveErr = INSABuddy.parseApiError(result, 'Could not save default printer');
+                    this.printerStatusMessage = saveErr;
+                    this.showToast(saveErr, 'error');
                 }
             } catch {
                 this.printerStatusMessage = 'Save error — local service may be unavailable.';

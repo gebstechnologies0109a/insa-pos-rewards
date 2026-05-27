@@ -40,13 +40,17 @@ class BluetoothPrinter(private val device: BluetoothDevice) : Printer {
                 }
             }
 
-            val connected = try {
+            var connected = try {
                 future.get(CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
             } catch (_: Exception) {
                 future.cancel(true)
                 false
             } finally {
                 executor.shutdownNow()
+            }
+
+            if (!connected) {
+                connected = connectFallbackRfcomm()
             }
 
             if (connected) {
@@ -72,6 +76,23 @@ class BluetoothPrinter(private val device: BluetoothDevice) : Printer {
         } catch (_: IOException) { }
         outputStream = null
         socket = null
+    }
+
+    /** Fallback for devices that reject SPP UUID connect (channel 1). */
+    private fun connectFallbackRfcomm(): Boolean {
+        return try {
+            disconnect()
+            val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+            socket = method.invoke(device, 1) as BluetoothSocket
+            socket?.connect()
+            outputStream = socket?.outputStream
+            Log.i(TAG, "Connected via RFCOMM fallback to $name")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "RFCOMM fallback failed for $name: ${e.message}")
+            disconnect()
+            false
+        }
     }
 
     override fun isConnected(): Boolean = socket?.isConnected == true

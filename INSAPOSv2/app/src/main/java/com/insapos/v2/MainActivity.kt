@@ -2,10 +2,15 @@ package com.insapos.v2
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.ServiceConnection
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.http.SslError
@@ -45,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "INSAPOSv2"
         private const val PERMISSION_REQUEST = 1001
+        private const val ACTION_USB_PERMISSION = "com.insapos.v2.USB_PERMISSION"
     }
 
     private lateinit var webView: WebView
@@ -67,6 +73,17 @@ class MainActivity : AppCompatActivity() {
     private var usingHttp = false
 
     private var hidScanner: HidScannerDriver? = null
+    private var usbPermissionCallback: ((Boolean) -> Unit)? = null
+
+    private val usbPermissionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_USB_PERMISSION) return
+            val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+            Log.i(TAG, "USB permission result: granted=$granted")
+            usbPermissionCallback?.invoke(granted)
+            usbPermissionCallback = null
+        }
+    }
 
     private val barcodeLauncher: ActivityResultLauncher<ScanOptions> =
         registerForActivityResult(ScanContract()) { result ->
@@ -88,6 +105,9 @@ class MainActivity : AppCompatActivity() {
             posService = service
             service.hidScannerDriver = hidScanner
             service.onCameraScanRequested = { launchCameraScanner() }
+            service.onRequestUsbPermission = { deviceId, onResult ->
+                runOnUiThread { requestUsbPermissionForDevice(deviceId, onResult) }
+            }
             serviceBound = true
             Log.i(TAG, "PosService bound")
 
@@ -135,6 +155,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         requestPermissions()
+        registerUsbPermissionReceiver()
         setupCookies()
         setupConnectivity()
         setupWebView()
@@ -152,6 +173,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        try {
+            unregisterReceiver(usbPermissionReceiver)
+        } catch (_: Exception) { }
         if (serviceBound) {
             unbindService(serviceConnection)
             serviceBound = false
@@ -217,6 +241,46 @@ class MainActivity : AppCompatActivity() {
         if (needed.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, needed.toTypedArray(), PERMISSION_REQUEST)
         }
+    }
+
+    private fun registerUsbPermissionReceiver() {
+        val filter = IntentFilter(ACTION_USB_PERMISSION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbPermissionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(usbPermissionReceiver, filter)
+        }
+    }
+
+    private fun requestUsbPermissionForDevice(deviceId: Int, onResult: (Boolean) -> Unit) {
+        val usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        val device = usbManager.deviceList.values.find { it.deviceId == deviceId }
+        if (device == null) {
+            Log.w(TAG, "USB device $deviceId not found")
+            onResult(false)
+            return
+        }
+        requestUsbPermissionForDevice(device, onResult)
+    }
+
+    private fun requestUsbPermissionForDevice(device: UsbDevice, onResult: (Boolean) -> Unit) {
+        val usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        if (usbManager.hasPermission(device)) {
+            onResult(true)
+            return
+        }
+        usbPermissionCallback = onResult
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_MUTABLE
+        } else {
+            0
+        }
+        val intent = Intent(ACTION_USB_PERMISSION).setPackage(packageName)
+        val pendingIntent = PendingIntent.getBroadcast(
+            this, device.deviceId, intent, flags
+        )
+        Log.i(TAG, "Requesting USB permission for ${device.productName ?: device.deviceId}")
+        usbManager.requestPermission(device, pendingIntent)
     }
 
     // --- Cookie management ---

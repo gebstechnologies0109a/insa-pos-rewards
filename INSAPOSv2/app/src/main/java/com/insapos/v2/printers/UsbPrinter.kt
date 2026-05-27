@@ -22,9 +22,16 @@ class UsbPrinter(
     override val type = "usb"
     override val name: String get() = device.productName ?: "USB Printer (${device.deviceId})"
 
+    val usbDevice: UsbDevice get() = device
+
     private var connection: UsbDeviceConnection? = null
     private var endpoint: UsbEndpoint? = null
     private var usbInterface: UsbInterface? = null
+
+    fun hasUsbPermission(): Boolean {
+        val manager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+        return manager.hasPermission(device)
+    }
 
     override fun connect(): Boolean {
         return try {
