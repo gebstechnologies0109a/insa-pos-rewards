@@ -20,6 +20,7 @@ import com.insapos.v2.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class PosService : Service() {
@@ -35,6 +36,8 @@ class PosService : Service() {
 
     var printerManager: PrinterManager? = null
         private set
+    private val printerInitLock = Any()
+    private var printerInitScheduled = false
     var localServer: PosLocalServer? = null
         private set
     var offlineDb: OfflineDatabase? = null
@@ -52,7 +55,10 @@ class PosService : Service() {
         fun getService(): PosService = this@PosService
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onBind(intent: Intent?): IBinder {
+        scheduleDeferredPrinterInit()
+        return binder
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -68,14 +74,31 @@ class PosService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "Offline DB init failed", e)
             }
+        }
+    }
 
-            try {
-                printerManager = PrinterManager(this@PosService)
-                printerManager?.initialize()
-                Log.i(TAG, "PrinterManager initialized")
-            } catch (e: Exception) {
-                Log.e(TAG, "PrinterManager init failed", e)
+    fun ensurePrinterManagerReady() {
+        if (printerManager != null) return
+        synchronized(printerInitLock) {
+            if (printerManager != null) return
+            scope.launch {
+                try {
+                    printerManager = PrinterManager(this@PosService)
+                    printerManager?.initialize()
+                    Log.i(TAG, "PrinterManager initialized")
+                } catch (e: Exception) {
+                    Log.e(TAG, "PrinterManager init failed", e)
+                }
             }
+        }
+    }
+
+    private fun scheduleDeferredPrinterInit() {
+        if (printerInitScheduled) return
+        printerInitScheduled = true
+        scope.launch {
+            delay(15_000)
+            ensurePrinterManagerReady()
         }
     }
 
@@ -87,7 +110,10 @@ class PosService : Service() {
                 try {
                     localServer = PosLocalServer(
                         context = this@PosService,
-                        getPrinterManager = { printerManager },
+                        getPrinterManager = {
+                            ensurePrinterManagerReady()
+                            printerManager
+                        },
                         getHidScanner = { hidScannerDriver },
                         getDatabase = { offlineDb },
                         getSyncEngine = { syncEngine },
@@ -123,6 +149,7 @@ class PosService : Service() {
                     UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
                         Log.i(TAG, "USB device attached — reconnecting printer")
                         scope.launch {
+                            ensurePrinterManagerReady()
                             printerManager?.scanUsbPrinters()?.forEach { /* refresh list */ }
                             printerManager?.reconnect()
                         }

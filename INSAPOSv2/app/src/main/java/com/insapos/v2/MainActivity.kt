@@ -78,6 +78,9 @@ class MainActivity : AppCompatActivity() {
     /** After a successful sign-in, do not switch HTTP/HTTPS (would drop session cookies). */
     private var protocolLocked = false
     private var protocolProbeComplete = false
+    private var cachedDeviceInfoJson: String? = null
+    private var syncBadgeUpdatePending = false
+    private var lastProgressUpdate = 0
 
     private var hidScanner: HidScannerDriver? = null
     private var usbPermissionCallback: ((Boolean) -> Unit)? = null
@@ -331,11 +334,13 @@ class MainActivity : AppCompatActivity() {
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
 
-            cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
 
             val appUa = "INSAPOSv3/${BuildConfig.VERSION_NAME} Android/${Build.VERSION.RELEASE}"
             userAgentString = "$userAgentString $appUa"
         }
+
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
         webView.isFocusable = true
         webView.isFocusableInTouchMode = true
@@ -356,7 +361,7 @@ class MainActivity : AppCompatActivity() {
                 persistCookies()
 
                 url?.let {
-                    if (!isSuperAdminPath(it)) {
+                    if (!isSuperAdminPath(it) && !isLoginPath(it)) {
                         session.lastUrl = it
                     }
                     if (isAuthenticatedPosPath(it)) {
@@ -430,9 +435,9 @@ class MainActivity : AppCompatActivity() {
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                if (newProgress < 100) {
-                    showStatus("Loading $newProgress%...")
-                }
+                if (newProgress >= 100 || newProgress - lastProgressUpdate < 15) return
+                lastProgressUpdate = newProgress
+                showStatus("Loading $newProgress%...")
             }
 
             override fun onPermissionRequest(request: PermissionRequest?) {
@@ -478,17 +483,20 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        showStatus("Connecting...")
+        protocolProbeComplete = true
+        loadPosUrl()
+
         Thread {
             val httpsOk = probeHttpsAvailable()
-            runOnUiThread {
-                protocolProbeComplete = true
-                if (!httpsOk && !protocolLocked) {
-                    Log.i(TAG, "HTTPS unavailable, using HTTP for this device")
-                    usingHttp = true
-                    session.useHttp = true
+            if (!httpsOk && !protocolLocked) {
+                runOnUiThread {
+                    if (!usingHttp && !protocolLocked) {
+                        Log.i(TAG, "HTTPS unavailable, using HTTP for this device")
+                        usingHttp = true
+                        session.useHttp = true
+                        loadPosUrl()
+                    }
                 }
-                loadPosUrl()
             }
         }.start()
     }
@@ -497,8 +505,8 @@ class MainActivity : AppCompatActivity() {
         return try {
             val url = java.net.URL("https://${session.serverDomain}/api/pos/ping")
             val conn = url.openConnection() as javax.net.ssl.HttpsURLConnection
-            conn.connectTimeout = 2500
-            conn.readTimeout = 2500
+            conn.connectTimeout = 1200
+            conn.readTimeout = 1200
             conn.requestMethod = "HEAD"
             val code = conn.responseCode
             conn.disconnect()
@@ -550,9 +558,44 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadPosUrl() {
         allowSuperAdminPanel = false
+        if (shouldStartAtLogin()) {
+            loadLoginUrl()
+            return
+        }
         val url = session.getPosUrl()
         Log.i(TAG, "Loading: $url")
         webView.loadUrl(url)
+    }
+
+    private fun loadLoginUrl() {
+        val url = "${session.getBaseUrl()}/login"
+        Log.i(TAG, "Loading login: $url")
+        webView.loadUrl(url)
+    }
+
+    /** Skip cashier redirect when the last visit was login or we have no authenticated POS URL saved. */
+    private fun shouldStartAtLogin(): Boolean {
+        val last = session.lastUrl ?: return true
+        if (isLoginPath(last)) return true
+        return !isAuthenticatedPosPath(last) && !isStockmanPath(last)
+    }
+
+    private fun isStockmanPath(url: String): Boolean {
+        return try {
+            val path = Uri.parse(url).path?.lowercase() ?: return false
+            path.startsWith("/stockman/")
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isLoginPath(url: String): Boolean {
+        return try {
+            val path = Uri.parse(url).path?.lowercase() ?: return false
+            path == "/login" || path.startsWith("/login/")
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun setSuperAdminFromWeb(isSuperAdmin: Boolean) {
@@ -684,24 +727,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateSyncBadge() {
-        val db = posService?.offlineDb ?: return
-        Thread {
-            val unsynced = db.getUnsyncedCount()
-            val queueCount = db.getSyncQueueCount()
-            val total = unsynced + queueCount
-            runOnUiThread {
-                if (total > 0) {
-                    syncBadge.visibility = View.VISIBLE
-                    tvSyncBadge.text = "$total pending"
-                    val dot = findViewById<View>(R.id.syncDot)
-                    dot.setBackgroundColor(
-                        if (connectivity.isConnected()) 0xFFFF9800.toInt() else 0xFFF44336.toInt()
-                    )
-                } else {
-                    syncBadge.visibility = View.GONE
+        if (syncBadgeUpdatePending) return
+        syncBadgeUpdatePending = true
+        handler.postDelayed({
+            syncBadgeUpdatePending = false
+            val db = posService?.offlineDb ?: return@postDelayed
+            Thread {
+                val unsynced = db.getUnsyncedCount()
+                val queueCount = db.getSyncQueueCount()
+                val total = unsynced + queueCount
+                runOnUiThread {
+                    if (total > 0) {
+                        syncBadge.visibility = View.VISIBLE
+                        tvSyncBadge.text = "$total pending"
+                        val dot = findViewById<View>(R.id.syncDot)
+                        dot.setBackgroundColor(
+                            if (connectivity.isConnected()) 0xFFFF9800.toInt() else 0xFFF44336.toInt()
+                        )
+                    } else {
+                        syncBadge.visibility = View.GONE
+                    }
                 }
-            }
-        }.start()
+            }.start()
+        }, 400)
     }
 
     private fun showStatus(text: String) {
@@ -716,7 +764,7 @@ class MainActivity : AppCompatActivity() {
     // --- JS Bridge ready notification ---
 
     private fun injectBridgeReady() {
-        val deviceInfo = DeviceInfo.toJsonString(this)
+        val deviceInfo = getDeviceInfoJson()
             .replace("'", "\\'")
             .replace("\n", "")
 
@@ -762,6 +810,11 @@ class MainActivity : AppCompatActivity() {
                 posService?.localServer?.lastCameraScanResult = ""
             }
         }
+    }
+
+    private fun getDeviceInfoJson(): String {
+        cachedDeviceInfoJson?.let { return it }
+        return DeviceInfo.toJsonString(this).also { cachedDeviceInfoJson = it }
     }
 
     // --- Service ---

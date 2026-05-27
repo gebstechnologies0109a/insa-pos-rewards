@@ -25,10 +25,14 @@ class PosLocalServer(
     companion object {
         const val PORT = 18182
         private const val TAG = "INSAPOSv3Server"
+        private const val IO_SCAN_CACHE_MS = 30_000L
     }
 
     @Volatile
     var lastCameraScanResult: String? = null
+
+    private var cachedIoScan: JSONObject? = null
+    private var cachedIoScanAt: Long = 0
 
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri.trimEnd('/')
@@ -276,10 +280,16 @@ class PosLocalServer(
     }
 
     private fun handleIoScan(): Response {
-        val scan = HardwareDetector.scanAll(context)
-        scan.put("preferences", ioPreferences.toJson())
-        scan.put("io_api", true)
-        return jsonOk(scan)
+        val now = System.currentTimeMillis()
+        val base = cachedIoScan?.takeIf { now - cachedIoScanAt < IO_SCAN_CACHE_MS }
+            ?: HardwareDetector.scanAll(context).also {
+                cachedIoScan = it
+                cachedIoScanAt = now
+            }
+        return jsonOk(JSONObject(base.toString()).apply {
+            put("preferences", ioPreferences.toJson())
+            put("io_api", true)
+        })
     }
 
     private fun handleIoStatus(): Response {

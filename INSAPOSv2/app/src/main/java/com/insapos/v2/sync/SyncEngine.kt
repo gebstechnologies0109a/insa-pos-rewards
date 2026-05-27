@@ -2,6 +2,7 @@ package com.insapos.v2.sync
 
 import android.content.Context
 import android.util.Log
+import com.insapos.v2.BuildConfig
 import com.insapos.v2.ConnectivityMonitor
 import com.insapos.v2.SessionManager
 import com.insapos.v2.db.OfflineDatabase
@@ -24,9 +25,10 @@ class SyncEngine(
 ) {
     companion object {
         private const val TAG = "SyncEngine"
-        private const val SYNC_INTERVAL_MS = 45_000L
+        private const val PUSH_INTERVAL_ACTIVE_MS = 45_000L
+        private const val PUSH_INTERVAL_IDLE_MS = 120_000L
         private const val PULL_INTERVAL_MS = 300_000L
-        private const val STARTUP_PULL_DELAY_MS = 90_000L
+        private const val STARTUP_PULL_DELAY_MS = 120_000L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -63,11 +65,11 @@ class SyncEngine(
     private fun startPushLoop() {
         pushJob = scope.launch {
             while (isActive) {
+                var hadWork = false
                 if (connectivity.isConnected()) {
-                    pushTransactions()
-                    pushSyncQueue()
+                    hadWork = pushTransactions() || pushSyncQueue()
                 }
-                delay(SYNC_INTERVAL_MS)
+                delay(if (hadWork) PUSH_INTERVAL_ACTIVE_MS else PUSH_INTERVAL_IDLE_MS)
             }
         }
     }
@@ -84,12 +86,14 @@ class SyncEngine(
         }
     }
 
-    private suspend fun pushTransactions() {
+    private suspend fun pushTransactions(): Boolean {
         val unsynced = db.getUnsyncedTransactions()
-        if (unsynced.length() == 0) return
+        if (unsynced.length() == 0) return false
 
         updateStatus(SyncStatus.PUSHING)
-        Log.i(TAG, "Pushing ${unsynced.length()} unsynced transactions")
+        if (BuildConfig.DEBUG) {
+            Log.i(TAG, "Pushing ${unsynced.length()} unsynced transactions")
+        }
 
         var synced = 0
         for (i in 0 until unsynced.length()) {
@@ -116,12 +120,14 @@ class SyncEngine(
         val remaining = db.getUnsyncedCount()
         db.logSync("push", "transactions", synced, "completed")
         updateStatus(if (remaining > 0) SyncStatus.PARTIAL else SyncStatus.IDLE)
+        return synced > 0
     }
 
-    private suspend fun pushSyncQueue() {
+    private suspend fun pushSyncQueue(): Boolean {
         val items = db.getPendingSyncItems()
-        if (items.length() == 0) return
+        if (items.length() == 0) return false
 
+        var processed = 0
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i)
             try {
@@ -142,6 +148,7 @@ class SyncEngine(
                 val response = httpPost(endpoint, body)
                 if (response != null && (response.optBoolean("success") || response.optBoolean("ok"))) {
                     db.markSyncItemDone(item.getLong("id"))
+                    processed++
                 } else {
                     db.markSyncItemFailed(
                         item.getLong("id"),
@@ -152,11 +159,12 @@ class SyncEngine(
                 db.markSyncItemFailed(item.getLong("id"), e.message ?: "Exception")
             }
         }
+        return processed > 0
     }
 
     private suspend fun pullData() {
         updateStatus(SyncStatus.PULLING)
-        Log.i(TAG, "Pulling data from server")
+        if (BuildConfig.DEBUG) Log.i(TAG, "Pulling data from server")
 
         try {
             val branchId = session.branchId
