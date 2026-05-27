@@ -16,6 +16,7 @@ use App\Http\Controllers\EPayAdmin\KioskController;
 use App\Http\Controllers\EPayAdmin\LicenseController;
 use App\Http\Controllers\EPayAdmin\MayaBillerIntegrationController;
 use App\Http\Controllers\EPayAdmin\MayaNegosyoIntegrationController;
+use App\Http\Controllers\EPayAdmin\PosWebApiController;
 use App\Http\Controllers\EPayAdmin\PosWebController;
 use App\Http\Controllers\EPayAdmin\PricingController;
 use App\Http\Controllers\EPayAdmin\ProviderController;
@@ -80,8 +81,16 @@ Route::middleware(['auth', 'role:owner,admin,super_admin'])->prefix('epayplus')-
     Route::put('/providers/{provider}', [ProviderController::class, 'update'])->name('epayplus.providers.update');
     Route::post('/providers/{provider}/toggle-status', [ProviderController::class, 'toggleStatus'])->name('epayplus.providers.toggle-status');
 
-    // ── POS Mode ──
+    // ── POS Mode (single-page web) ──
     Route::get('/pos', [PosWebController::class, 'index'])->name('epayplus.pos');
+    Route::post('/pos/checkout', [PosWebController::class, 'checkout'])->name('epayplus.pos.checkout');
+    Route::prefix('pos/api')->name('epayplus.pos.api.')->group(function () {
+        Route::get('/providers', [PosWebApiController::class, 'providers'])->name('providers');
+        Route::get('/products', [PosWebApiController::class, 'products'])->name('products');
+        Route::get('/bill-categories', [PosWebApiController::class, 'billCategories'])->name('bill-categories');
+        Route::get('/bill-billers', [PosWebApiController::class, 'billBillers'])->name('bill-billers');
+        Route::get('/balance', [PosWebApiController::class, 'balance'])->name('balance');
+    });
 
     // ── Products ──
     Route::get('/products', [EPayProductController::class, 'index'])->name('epayplus.products');
