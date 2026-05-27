@@ -35,9 +35,30 @@ Wrong product for the current host → **404** (routes are not registered for th
 
 Helpers in Blade and PHP: `current_product()`, `is_epayplus_product()`, `is_insa_product()`.
 
+## Parted deploy branches
+
+INSA and ePay Plus **no longer share a single production deploy branch**. Each Forge site tracks its own branch so releases are independent.
+
+| Forge site | Deploy branch | Script |
+|------------|---------------|--------|
+| insapos.diybizrewards.com | `deploy/insa` | `scripts/forge-deploy-insa.sh` |
+| epayplus.diybizrewards.com | `deploy/epayplus` | `scripts/forge-deploy-epayplus.sh` |
+
+- `main` stays the integration branch; merge `main` → `deploy/insa` or `deploy/epayplus` when that product is ready to ship.
+- Full workflow, Forge UI steps, and Phase 2 repo-split notes: [DEPLOYMENT_SEPARATION.md](./DEPLOYMENT_SEPARATION.md).
+
+### Forge UI — change deploy branch (one-time)
+
+For **each** site: **Forge → Site → App → Deployment → Deploy branch**
+
+1. **insapos** — set branch to `deploy/insa`; paste `scripts/forge-deploy-insa.sh` as the deploy script (or append its steps).
+2. **epayplus** — set branch to `deploy/epayplus`; paste `scripts/forge-deploy-epayplus.sh`.
+
+Enable **Quick Deploy** only on the branch that site should auto-deploy from. Do not point both sites at `main`.
+
 ## Laravel Forge (recommended)
 
-Use **two sites** from the same Git repository, each with its own `.env`:
+Use **two sites** from the same Git repository, each with its own `.env` and **its own deploy branch** (see above):
 
 ### Site A — INSA POS
 
@@ -48,7 +69,7 @@ INSA_HOSTS=insapos.diybizrewards.com
 EPAYPLUS_HOSTS=epayplus.diybizrewards.com
 ```
 
-Deploy script: standard `composer install`, `php artisan migrate --force`, etc. No ePay Plus–specific steps required beyond shared migrations.
+Deploy branch: `deploy/insa`. Deploy script: `scripts/forge-deploy-insa.sh` (verifies `APP_PRODUCT=insa`, migrations, cache). No ePay Plus–specific steps.
 
 ### Site B — ePay Plus
 
@@ -59,6 +80,8 @@ EPAYPLUS_HOSTS=epayplus.diybizrewards.com
 INSA_HOSTS=insapos.diybizrewards.com
 MAYA_BILLER_PUBLIC_BASE_URL=https://epayplus.diybizrewards.com
 ```
+
+Deploy branch: `deploy/epayplus`. Deploy script: `scripts/forge-deploy-epayplus.sh` (verifies `APP_PRODUCT=epayplus`, migrations, `epay:sync-dual-wallets`, cache).
 
 Configure Maya Biller callbacks and mobile app base URL to this hostname only.
 

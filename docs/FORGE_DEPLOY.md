@@ -1,6 +1,15 @@
 ﻿# Laravel Forge deployment (INSA POS)
 
-This repository includes a standard Forge deploy script at the repo root: `deploy.sh`. Forge injects `FORGE_SITE_PATH`, `FORGE_SITE_BRANCH`, and `FORGE_COMPOSER` when the script runs on the server.
+Production sites use **parted deploy branches** — see [DEPLOYMENT_SEPARATION.md](./DEPLOYMENT_SEPARATION.md).
+
+| Site | Branch | Script |
+|------|--------|--------|
+| insapos.diybizrewards.com | `deploy/insa` | `scripts/forge-deploy-insa.sh` |
+| epayplus.diybizrewards.com | `deploy/epayplus` | `scripts/forge-deploy-epayplus.sh` |
+
+The repo root `deploy.sh` is a legacy generic template. New Forge sites should use the product scripts above.
+
+Forge injects `FORGE_SITE_PATH`, `FORGE_SITE_BRANCH`, and `FORGE_COMPOSER` when the script runs on the server.
 
 ## SSH access
 
@@ -20,7 +29,7 @@ Do not commit or share private keys. Only the public key belongs in Forge.
 In **Forge → Site → insapos (insapos.diybizrewards.com) → Deployment**:
 
 1. Paste the contents of `deploy.sh`, **or**
-2. Enable **Quick Deploy** / deploy on push to `main`, then use **Deploy Now** after pushes.
+2. Set **Deploy branch** to `deploy/insa` (not `main`). Enable **Quick Deploy** on that branch if desired.
 
 Forge sets `FORGE_SITE_PATH` automatically; the script falls back to `/home/forge/insapos.diybizrewards.com` if needed.
 

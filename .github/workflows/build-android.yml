@@ -2,18 +2,47 @@ name: Build Android APKs
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - deploy/insa
+      - deploy/epayplus
     paths:
       - 'INSABuddy/**'
       - 'INSAPOS/**'
       - 'INSAPOSv2/**'
       - 'INSAPOSlight/**'
+      - 'ePayPlus/**'
       - '.github/workflows/build-android.yml'
   workflow_dispatch:
 
 jobs:
+  changes:
+    name: Detect product paths
+    runs-on: ubuntu-latest
+    outputs:
+      insa: ${{ steps.filter.outputs.insa }}
+      epayplus: ${{ steps.filter.outputs.epayplus }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            insa:
+              - 'INSABuddy/**'
+              - 'INSAPOS/**'
+              - 'INSAPOSv2/**'
+              - 'INSAPOSlight/**'
+            epayplus:
+              - 'ePayPlus/**'
+
   build-insabuddy:
     name: Build INSABuddy APK
+    needs: changes
+    if: |
+      needs.changes.outputs.insa == 'true' ||
+      github.ref == 'refs/heads/deploy/insa' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -55,6 +84,11 @@ jobs:
 
   build-insapos:
     name: Build INSAPOS WebView APK
+    needs: changes
+    if: |
+      needs.changes.outputs.insa == 'true' ||
+      github.ref == 'refs/heads/deploy/insa' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -96,6 +130,11 @@ jobs:
 
   build-insaposv3:
     name: Build INSAPOS v3.0 APK
+    needs: changes
+    if: |
+      needs.changes.outputs.insa == 'true' ||
+      github.ref == 'refs/heads/deploy/insa' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -148,6 +187,11 @@ jobs:
 
   build-insaposlight:
     name: Build INSA POS Lite APK
+    needs: changes
+    if: |
+      needs.changes.outputs.insa == 'true' ||
+      github.ref == 'refs/heads/deploy/insa' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -185,4 +229,50 @@ jobs:
         with:
           name: INSAPOSlight-debug
           path: INSAPOSlight/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 90
+
+  build-epayplus:
+    name: Build ePay Plus APK
+    needs: changes
+    if: |
+      needs.changes.outputs.epayplus == 'true' ||
+      github.ref == 'refs/heads/deploy/epayplus' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Install required SDK platforms
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Create Gradle Wrapper
+        working-directory: ePayPlus
+        run: gradle wrapper --gradle-version 8.11.1
+
+      - name: Build Debug APK
+        working-directory: ePayPlus
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload ePay Plus Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ePayPlus-debug
+          path: ePayPlus/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 90

@@ -1,0 +1,25 @@
+name: Deploy branch sync reminder
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync-instructions:
+    name: Remind to sync deploy branches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print release instructions
+        run: |
+          echo "## Deploy branches are not auto-updated from main"
+          echo ""
+          echo "This push to \`main\` does **not** deploy to production."
+          echo "Merge to a deploy branch when each product is ready:"
+          echo ""
+          echo "### INSA (insapos.diybizrewards.com)"
+          echo "  git checkout deploy/insa && git merge origin/main && git push origin deploy/insa"
+          echo ""
+          echo "### ePay Plus (epayplus.diybizrewards.com)"
+          echo "  git checkout deploy/epayplus && git merge origin/main && git push origin deploy/epayplus"
+          echo ""
+          echo "See docs/DEPLOYMENT_SEPARATION.md for Forge branch settings."
