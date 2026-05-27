@@ -96,16 +96,18 @@ class InventoryService
         $batches = [];
 
         foreach ($items as $item) {
-            $batch = InventoryBatch::create([
-                'branch_id'     => $branchId,
-                'product_id'    => $item['product_id'],
-                'batch_code'    => $item['batch_code'] ?? null,
-                'expiry_date'   => $item['expiry_date'] ?? null,
-                'quantity'      => $item['qty'],
-                'cost_price'    => $item['cost'] ?? null,
-                'supplier_name' => $supplierName,
-                'received_at'   => now(),
-            ]);
+            $batch = InventoryBatch::create(
+                $this->filterBatchAttributes([
+                    'branch_id'     => $branchId,
+                    'product_id'    => $item['product_id'],
+                    'batch_code'    => $item['batch_code'] ?? null,
+                    'expiry_date'   => $item['expiry_date'] ?? null,
+                    'quantity'      => $item['qty'],
+                    'cost_price'    => $item['cost'] ?? null,
+                    'supplier_name' => $supplierName,
+                    'received_at'   => now(),
+                ]),
+            );
 
             $this->recordMovement(
                 branchId: $branchId,
@@ -445,6 +447,19 @@ class InventoryService
     protected function batchInventoryEnabled(): bool
     {
         return Schema::hasTable('inventory_batches');
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    protected function filterBatchAttributes(array $attributes): array
+    {
+        return array_filter(
+            $attributes,
+            fn ($value, string $column) => Schema::hasColumn('inventory_batches', $column),
+            ARRAY_FILTER_USE_BOTH,
+        );
     }
 
     protected function recordMovement(
