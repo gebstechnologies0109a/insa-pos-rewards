@@ -75,7 +75,17 @@
                     <tr>
                         <td><code class="small">{{ $product->code }}</code></td>
                         <td class="fw-medium">{{ $product->name }}</td>
-                        <td><small>{{ $product->provider?->name }}</small></td>
+                        <td>
+                            @if($product->provider)
+                            @php $pIcon = provider_icon_url($product->provider->code, $product->provider->logo_url); @endphp
+                            <div class="d-flex align-items-center gap-1">
+                                @if($pIcon)
+                                <img src="{{ $pIcon }}" alt="" width="22" height="22" class="rounded bg-light object-fit-contain">
+                                @endif
+                                <small>{{ $product->provider->name }}</small>
+                            </div>
+                            @endif
+                        </td>
                         <td><span class="badge bg-{{ match($product->type) { 'ELOAD'=>'success','BILLS'=>'primary','ECASH'=>'danger','WIFI'=>'info',default=>'secondary' } }}">{{ $product->type }}</span></td>
                         <td class="text-end">₱{{ number_format($product->amount, 2) }}</td>
                         <td class="text-end">₱{{ number_format($product->retailer_price ?? 0, 2) }}</td>

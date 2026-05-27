@@ -19,9 +19,19 @@
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div>
+                    <div class="d-flex align-items-center gap-2">
+                        @php $iconUrl = provider_icon_url($provider->code, $provider->logo_url); @endphp
+                        @if($iconUrl)
+                        <img src="{{ $iconUrl }}" alt="{{ $provider->name }}" width="40" height="40" class="rounded-circle bg-light object-fit-contain p-1">
+                        @else
+                        <span class="rounded-circle bg-light d-inline-flex align-items-center justify-content-center" style="width:40px;height:40px">
+                            <i class="bi bi-building text-muted"></i>
+                        </span>
+                        @endif
+                        <div>
                         <h6 class="fw-bold mb-0">{{ $provider->name }}</h6>
                         <code class="small">{{ $provider->code }}</code>
+                        </div>
                     </div>
                     <span class="badge {{ $provider->is_active ? 'text-bg-success' : 'text-bg-danger' }}">
                         {{ $provider->is_active ? 'Active' : 'Disabled' }}

@@ -68,9 +68,25 @@ class EPayPlusSeeder extends Seeder
         foreach ($providers as $i => $provider) {
             Provider::updateOrCreate(
                 ['code' => $provider['code']],
-                array_merge($provider, ['sort_order' => $i])
+                array_merge($provider, [
+                    'logo_url' => $this->localProviderLogoPath($provider['code']),
+                    'sort_order' => $i,
+                ])
             );
         }
+    }
+
+    private function localProviderLogoPath(string $code): ?string
+    {
+        $slug = provider_code_to_slug($code);
+        foreach (['webp', 'png'] as $ext) {
+            $relative = "images/providers/ic_provider_{$slug}.{$ext}";
+            if (file_exists(public_path($relative))) {
+                return '/' . $relative;
+            }
+        }
+
+        return null;
     }
 
     private function seedProducts(): void
