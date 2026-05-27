@@ -16,7 +16,7 @@
                 <select name="branch_id" required class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                     <option value="">Select branch...</option>
                     @foreach($branches as $branch)
-                        <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                        <option value="{{ $branch->id }}">{{ $branch->company?->name }} — {{ $branch->name }}</option>
                     @endforeach
                 </select>
             </div>
@@ -40,6 +40,7 @@
         <table class="w-full text-sm">
             <thead class="bg-gray-50">
                 <tr>
+                    <th class="text-left px-6 py-3 font-medium text-gray-600">Company</th>
                     <th class="text-left px-6 py-3 font-medium text-gray-600">Branch</th>
                     <th class="text-center px-6 py-3 font-medium text-gray-600">POS Slots</th>
                     <th class="text-center px-6 py-3 font-medium text-gray-600">Active Sessions</th>
@@ -55,6 +56,7 @@
                     $isActive = $license?->isCurrentlyActive() ?? false;
                 @endphp
                 <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-3 text-gray-600">{{ $branch->company?->name ?? '—' }}</td>
                     <td class="px-6 py-3 font-medium text-gray-900">{{ $branch->name }}</td>
                     <td class="px-6 py-3 text-center">
                         <span class="font-semibold">{{ $slots }}</span>

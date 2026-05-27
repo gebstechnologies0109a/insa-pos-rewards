@@ -3,6 +3,7 @@
 namespace Tests\Concerns;
 
 use App\Models\POS\Branch;
+use App\Models\POS\Company;
 use App\Models\POS\Product;
 use App\Models\User;
 
@@ -12,7 +13,15 @@ trait AuthenticatesPosApi
 
     protected function authenticatePosApi(): void
     {
-        Branch::firstOrCreate(['id' => 1], ['name' => 'Main Branch']);
+        $company = Company::firstOrCreate(
+            ['name' => 'GEBS'],
+            ['status' => Company::STATUS_ACTIVE],
+        );
+
+        Branch::firstOrCreate(
+            ['id' => 1],
+            ['name' => 'Main Branch', 'company_id' => $company->id],
+        );
 
         if (Product::count() === 0) {
             Product::create(['name' => 'Coke Mismo', 'sku' => 'COKE-001', 'price' => 25]);

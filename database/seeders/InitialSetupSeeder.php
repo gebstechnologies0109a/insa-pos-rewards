@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\POS\Branch;
+use App\Models\POS\Company;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -11,9 +12,14 @@ class InitialSetupSeeder extends Seeder
 {
     public function run(): void
     {
+        $company = Company::firstOrCreate(
+            ['name' => 'GEBS'],
+            ['status' => Company::STATUS_ACTIVE],
+        );
+
         $branch = Branch::firstOrCreate(
             ['name' => 'Main Branch'],
-            ['address' => 'Default location'],
+            ['address' => 'Default location', 'company_id' => $company->id],
         );
 
         $accounts = [

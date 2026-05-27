@@ -15,6 +15,7 @@ class PosTerminalSession extends Model
     protected $fillable = [
         'id',
         'branch_id',
+        'device_id',
         'user_id',
         'device_fingerprint',
         'started_at',
@@ -34,6 +35,11 @@ class PosTerminalSession extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function device(): BelongsTo
+    {
+        return $this->belongsTo(Device::class);
     }
 
     public function user(): BelongsTo

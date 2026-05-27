@@ -24,8 +24,10 @@ use App\Http\Controllers\POS\PosSettingsController;
 use App\Http\Controllers\POS\ReadingController;
 use App\Http\Controllers\Admin\PosSessionController;
 use App\Http\Controllers\Stockman\StockmanController;
-use App\Http\Controllers\SuperAdmin\BranchOverviewController;
+use App\Http\Controllers\SuperAdmin\BranchController as SuperAdminBranchController;
+use App\Http\Controllers\SuperAdmin\CompanyController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
+use App\Http\Controllers\SuperAdmin\DeviceController;
 use App\Http\Controllers\SuperAdmin\LicenseController;
 use Illuminate\Support\Facades\Route;
 
@@ -195,10 +197,24 @@ Route::middleware(['auth', 'role:super_admin'])->prefix('super-admin')->group(fu
     Route::post('/sessions/{session}/end', [\App\Http\Controllers\SuperAdmin\PosSessionController::class, 'end'])
         ->name('super-admin.sessions.end');
 
-    Route::get('/branches', [BranchOverviewController::class, 'index'])
-        ->name('super-admin.branches.index');
-    Route::get('/branches/{branch}', [BranchOverviewController::class, 'show'])
-        ->name('super-admin.branches.show');
+    Route::get('/companies', [CompanyController::class, 'index'])->name('super-admin.companies.index');
+    Route::get('/companies/create', [CompanyController::class, 'create'])->name('super-admin.companies.create');
+    Route::post('/companies', [CompanyController::class, 'store'])->name('super-admin.companies.store');
+    Route::get('/companies/{company}/edit', [CompanyController::class, 'edit'])->name('super-admin.companies.edit');
+    Route::put('/companies/{company}', [CompanyController::class, 'update'])->name('super-admin.companies.update');
+
+    Route::get('/branches', [SuperAdminBranchController::class, 'index'])->name('super-admin.branches.index');
+    Route::get('/branches/create', [SuperAdminBranchController::class, 'create'])->name('super-admin.branches.create');
+    Route::post('/branches', [SuperAdminBranchController::class, 'store'])->name('super-admin.branches.store');
+    Route::get('/branches/{branch}', [SuperAdminBranchController::class, 'show'])->name('super-admin.branches.show');
+    Route::get('/branches/{branch}/edit', [SuperAdminBranchController::class, 'edit'])->name('super-admin.branches.edit');
+    Route::put('/branches/{branch}', [SuperAdminBranchController::class, 'update'])->name('super-admin.branches.update');
+
+    Route::get('/devices', [DeviceController::class, 'index'])->name('super-admin.devices.index');
+    Route::get('/devices/create', [DeviceController::class, 'create'])->name('super-admin.devices.create');
+    Route::post('/devices', [DeviceController::class, 'store'])->name('super-admin.devices.store');
+    Route::get('/devices/{device}/edit', [DeviceController::class, 'edit'])->name('super-admin.devices.edit');
+    Route::put('/devices/{device}', [DeviceController::class, 'update'])->name('super-admin.devices.update');
 });
 
 }); // end insa.product

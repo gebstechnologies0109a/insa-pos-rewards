@@ -3,6 +3,7 @@
 namespace App\Services\POS;
 
 use App\Models\POS\Branch;
+use App\Models\POS\Device;
 use App\Models\POS\PosLicense;
 use App\Models\POS\PosTerminalSession;
 use Illuminate\Support\Str;
@@ -78,6 +79,7 @@ class PosTerminalSessionService
         $session = PosTerminalSession::create([
             'id'                 => (string) Str::uuid(),
             'branch_id'          => $branchId,
+            'device_id'          => $this->resolveDeviceId($branchId, $fingerprint),
             'user_id'            => $userId,
             'device_fingerprint' => $fingerprint,
             'started_at'         => now(),
@@ -129,7 +131,12 @@ class PosTerminalSessionService
      */
     public function activeSessionsForBranch(?int $branchId = null)
     {
-        $query = PosTerminalSession::with(['user:id,name,email', 'branch:id,name'])
+        $query = PosTerminalSession::with([
+            'user:id,name,email',
+            'branch:id,name,company_id',
+            'branch.company:id,name',
+            'device:id,device_name,device_fingerprint',
+        ])
             ->active()
             ->orderByDesc('started_at');
 
@@ -138,5 +145,13 @@ class PosTerminalSessionService
         }
 
         return $query->get();
+    }
+
+    protected function resolveDeviceId(int $branchId, string $fingerprint): ?int
+    {
+        return Device::query()
+            ->where('branch_id', $branchId)
+            ->where('device_fingerprint', $fingerprint)
+            ->value('id');
     }
 }

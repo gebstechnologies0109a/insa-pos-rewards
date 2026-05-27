@@ -8,6 +8,12 @@
     <a href="{{ route('super-admin.branches.index') }}" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">&larr; Back to Branches</a>
 </div>
 
+<div class="bg-white rounded-xl shadow-sm border p-5 mb-6">
+    <div class="text-sm text-gray-500">Company</div>
+    <div class="text-lg font-semibold text-gray-900">{{ $branch->company?->name ?? '—' }}</div>
+    <div class="text-sm text-gray-600 mt-1">{{ $branch->address ?? 'No address on file' }}</div>
+</div>
+
 <!-- Stats -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
     <div class="bg-white rounded-xl shadow-sm border p-5">
@@ -29,9 +35,9 @@
     </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Users -->
-    <div class="bg-white rounded-xl shadow-sm border">
+    <div class="bg-white rounded-xl shadow-sm border lg:col-span-1">
         <div class="px-6 py-4 border-b">
             <h3 class="font-semibold text-gray-900">Users ({{ $branch->users->count() }})</h3>
         </div>
@@ -51,7 +57,7 @@
     </div>
 
     <!-- Recent Shifts -->
-    <div class="bg-white rounded-xl shadow-sm border">
+    <div class="bg-white rounded-xl shadow-sm border lg:col-span-1">
         <div class="px-6 py-4 border-b">
             <h3 class="font-semibold text-gray-900">Recent Shifts</h3>
         </div>
@@ -86,6 +92,24 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- Devices -->
+    <div class="bg-white rounded-xl shadow-sm border lg:col-span-1">
+        <div class="px-6 py-4 border-b flex items-center justify-between">
+            <h3 class="font-semibold text-gray-900">Devices ({{ $branch->devices->count() }})</h3>
+            <a href="{{ route('super-admin.devices.create') }}" class="text-xs text-indigo-600 hover:underline">Add</a>
+        </div>
+        <div class="divide-y max-h-72 overflow-y-auto">
+            @forelse($branch->devices as $device)
+            <div class="px-6 py-3">
+                <div class="font-medium text-gray-900 text-sm">{{ $device->device_name ?? 'Unnamed device' }}</div>
+                <div class="text-xs font-mono text-gray-500 mt-1">{{ Str::limit($device->device_fingerprint, 28) }}</div>
+            </div>
+            @empty
+            <div class="px-6 py-4 text-sm text-gray-500">No devices registered.</div>
+            @endforelse
         </div>
     </div>
 </div>

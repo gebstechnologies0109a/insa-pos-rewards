@@ -3,13 +3,24 @@
 namespace App\Models\POS;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Models\User;
 
 class Branch extends Model
 {
-    protected $fillable = ['name', 'address'];
+    protected $fillable = ['company_id', 'name', 'address'];
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function devices(): HasMany
+    {
+        return $this->hasMany(Device::class);
+    }
 
     public function users(): HasMany
     {

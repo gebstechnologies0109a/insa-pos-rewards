@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\POS\Branch;
+use App\Models\POS\Company;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,15 @@ class BranchController extends Controller
             'name'    => 'required|string|max:255',
             'address' => 'nullable|string|max:500',
         ]);
+
+        $data['company_id'] = Company::query()->value('id');
+
+        if (! $data['company_id']) {
+            $data['company_id'] = Company::create([
+                'name'   => 'GEBS',
+                'status' => Company::STATUS_ACTIVE,
+            ])->id;
+        }
 
         Branch::create($data);
 

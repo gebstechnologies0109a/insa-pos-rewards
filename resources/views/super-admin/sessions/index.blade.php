@@ -12,6 +12,7 @@
         <table class="w-full text-sm">
             <thead class="bg-gray-50">
                 <tr>
+                    <th class="text-left px-6 py-3 font-medium text-gray-600">Company</th>
                     <th class="text-left px-6 py-3 font-medium text-gray-600">Branch</th>
                     <th class="text-left px-6 py-3 font-medium text-gray-600">User</th>
                     <th class="text-left px-6 py-3 font-medium text-gray-600">Device</th>
@@ -22,9 +23,12 @@
             <tbody class="divide-y">
                 @forelse($sessions as $session)
                 <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-3">{{ $session->branch?->company?->name ?? '—' }}</td>
                     <td class="px-6 py-3">{{ $session->branch?->name ?? '—' }}</td>
                     <td class="px-6 py-3">{{ $session->user?->name ?? '—' }}</td>
-                    <td class="px-6 py-3 font-mono text-xs text-gray-600">{{ Str::limit($session->device_fingerprint, 24) }}</td>
+                    <td class="px-6 py-3 font-mono text-xs text-gray-600">
+                        {{ $session->device?->device_name ?? Str::limit($session->device_fingerprint, 24) }}
+                    </td>
                     <td class="px-6 py-3">{{ $session->started_at?->diffForHumans() }}</td>
                     <td class="px-6 py-3 text-center">
                         <form method="POST" action="{{ route('super-admin.sessions.end', $session) }}" onsubmit="return confirm('End this session?');">
@@ -35,7 +39,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="5" class="px-6 py-8 text-center text-gray-500">No active POS sessions.</td>
+                    <td colspan="6" class="px-6 py-8 text-center text-gray-500">No active POS sessions.</td>
                 </tr>
                 @endforelse
             </tbody>

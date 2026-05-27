@@ -27,10 +27,24 @@
 
                 <div class="px-5 pt-4 pb-1 text-xs uppercase text-indigo-500 tracking-wider font-semibold">Management</div>
 
-                <a href="{{ route('super-admin.licenses.index') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition {{ request()->routeIs('super-admin.licenses.*') ? 'bg-indigo-900 text-white' : '' }}">
+                <a href="{{ route('super-admin.companies.index') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition {{ request()->routeIs('super-admin.companies.*') ? 'bg-indigo-900 text-white' : '' }}">
                     <span class="flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                        Licenses
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                        Companies
+                    </span>
+                </a>
+
+                <a href="{{ route('super-admin.branches.index') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition {{ request()->routeIs('super-admin.branches.*') ? 'bg-indigo-900 text-white' : '' }}">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                        Branches
+                    </span>
+                </a>
+
+                <a href="{{ route('super-admin.devices.index') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition {{ request()->routeIs('super-admin.devices.*') ? 'bg-indigo-900 text-white' : '' }}">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                        Devices
                     </span>
                 </a>
 
@@ -41,10 +55,10 @@
                     </span>
                 </a>
 
-                <a href="{{ route('super-admin.branches.index') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition {{ request()->routeIs('super-admin.branches.*') ? 'bg-indigo-900 text-white' : '' }}">
+                <a href="{{ route('super-admin.licenses.index') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition {{ request()->routeIs('super-admin.licenses.*') ? 'bg-indigo-900 text-white' : '' }}">
                     <span class="flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-                        Branches
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                        Licenses
                     </span>
                 </a>
 

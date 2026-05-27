@@ -11,7 +11,7 @@ class LicenseController extends Controller
 {
     public function index()
     {
-        $branches = Branch::with('license')
+        $branches = Branch::with(['license', 'company'])
             ->withCount(['openShifts', 'activeTerminalSessions'])
             ->orderBy('name')
             ->get();
