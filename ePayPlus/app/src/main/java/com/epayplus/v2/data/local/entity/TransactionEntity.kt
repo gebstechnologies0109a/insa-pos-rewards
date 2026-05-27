@@ -38,6 +38,8 @@ data class ProductEntity(
     val isActive: Boolean = true,
     val sortOrder: Int = 0,
     val category: String = "",
+    val productKind: String = "regular",
+    val validityDays: Int? = null,
     val updatedAt: Long = System.currentTimeMillis()
 )
 

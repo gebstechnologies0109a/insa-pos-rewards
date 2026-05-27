@@ -15,7 +15,7 @@ import com.epayplus.v2.data.local.entity.*
         SalesSummaryEntity::class,
         SmsTemplateEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class EPayDatabase : RoomDatabase() {

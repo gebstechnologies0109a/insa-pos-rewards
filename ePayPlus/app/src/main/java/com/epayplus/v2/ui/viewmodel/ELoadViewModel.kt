@@ -51,6 +51,12 @@ class ELoadViewModel @Inject constructor(
     fun getProductsByProvider(providerCode: String): Flow<List<ProductEntity>> =
         productRepository.getProductsByProvider(providerCode)
 
+    fun getRegularProductsByProvider(providerCode: String): Flow<List<ProductEntity>> =
+        productRepository.getRegularProductsByProvider(providerCode)
+
+    fun getPromoProductsByProvider(providerCode: String): Flow<List<ProductEntity>> =
+        productRepository.getPromoProductsByProvider(providerCode)
+
     fun processEload(providerCode: String, productId: Long, phoneNumber: String) {
         viewModelScope.launch {
             _processState.value = ProcessState.Processing

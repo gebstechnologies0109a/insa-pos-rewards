@@ -17,6 +17,12 @@ class ProductRepository @Inject constructor(
     fun getProductsByProvider(providerCode: String): Flow<List<ProductEntity>> =
         productDao.getProductsByProvider(providerCode)
 
+    fun getRegularProductsByProvider(providerCode: String): Flow<List<ProductEntity>> =
+        productDao.getRegularProductsByProvider(providerCode)
+
+    fun getPromoProductsByProvider(providerCode: String): Flow<List<ProductEntity>> =
+        productDao.getPromoProductsByProvider(providerCode)
+
     fun getProvidersByType(type: String) = productDao.getProvidersByType(type)
 
     fun getCategoriesByType(type: String): Flow<List<String>> =
@@ -43,9 +49,10 @@ class ProductRepository @Inject constructor(
 
             if (response.isSuccessful && response.body()?.success == true) {
                 val products = response.body()!!.products.mapIndexed { index, product ->
+                    val kind = product.productKind.ifBlank { "regular" }
                     val category = when {
                         product.category.isNotBlank() -> product.category
-                        product.productKind == "promo" -> "Promo"
+                        kind == "promo" -> "Promo"
                         type == "ELOAD" -> "Prepaid Load"
                         else -> product.category
                     }
@@ -60,6 +67,8 @@ class ProductRepository @Inject constructor(
                         description = product.description,
                         keyword = product.keyword,
                         category = category,
+                        productKind = kind,
+                        validityDays = product.validityDays,
                         sortOrder = index
                     )
                 }
@@ -126,12 +135,12 @@ class ProductRepository @Inject constructor(
             for (amount in amounts) {
                 products += createProduct(
                     "ELOAD", code, name, "${code}_$amount", "$name $amount", amount.toDouble(),
-                    "$name prepaid load", category = "Prepaid Load"
+                    "$name prepaid load", category = "Prepaid Load", productKind = "regular"
                 )
             }
             products += createProduct(
                 "ELOAD", code, name, "${code}_PROMO_GO50", "$name GO50", 50.0,
-                "$name promo", category = "Promo"
+                "$name promo", category = "Promo", productKind = "promo", validityDays = 3
             )
         }
         return products
@@ -203,7 +212,9 @@ class ProductRepository @Inject constructor(
         amount: Double,
         description: String,
         keyword: String = "",
-        category: String = ""
+        category: String = "",
+        productKind: String = "regular",
+        validityDays: Int? = null
     ) = ProductEntity(
         type = type,
         providerCode = providerCode,
@@ -213,6 +224,8 @@ class ProductRepository @Inject constructor(
         amount = amount,
         description = description,
         keyword = keyword,
-        category = category
+        category = category,
+        productKind = productKind,
+        validityDays = validityDays
     )
 }

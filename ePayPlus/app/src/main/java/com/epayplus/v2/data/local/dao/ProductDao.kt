@@ -33,6 +33,22 @@ interface ProductDao {
     """)
     fun getProductsByProvider(providerCode: String): Flow<List<ProductEntity>>
 
+    @Query("""
+        SELECT * FROM products
+        WHERE providerCode = :providerCode AND isActive = 1 AND amount > 0
+        AND productKind = 'regular'
+        ORDER BY sortOrder, amount
+    """)
+    fun getRegularProductsByProvider(providerCode: String): Flow<List<ProductEntity>>
+
+    @Query("""
+        SELECT * FROM products
+        WHERE providerCode = :providerCode AND isActive = 1 AND amount > 0
+        AND productKind = 'promo'
+        ORDER BY amount ASC
+    """)
+    fun getPromoProductsByProvider(providerCode: String): Flow<List<ProductEntity>>
+
     @Query("SELECT DISTINCT providerCode, providerName FROM products WHERE type = :type AND isActive = 1 ORDER BY providerName")
     fun getProvidersByType(type: String): Flow<List<ProviderInfo>>
 
