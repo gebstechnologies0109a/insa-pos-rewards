@@ -59,4 +59,30 @@ return [
 
     'http_timeout' => (int) env('MAYA_BILLER_HTTP_TIMEOUT', 30),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Fee contract (Validate + optional Get Fee)
+    |--------------------------------------------------------------------------
+    | Maya requires fees on successful Validate so the app can build the payment
+    | slip. Values must match the commercial contract signed with Maya RM.
+    | Per-biller overrides take precedence, then epay_products.fee (BILLS), then default.
+    */
+    'fees' => [
+        'contract_note' => env(
+            'MAYA_BILLER_FEE_CONTRACT_NOTE',
+            'Fees returned on Validate must match the Maya Partner Biller commercial agreement. Update biller_overrides or epay_products.fee before go-live.'
+        ),
+
+        'default' => [
+            'convenience_fee' => (float) env('MAYA_BILLER_DEFAULT_CONVENIENCE_FEE', 0),
+            'service_fee' => (float) env('MAYA_BILLER_DEFAULT_SERVICE_FEE', 5),
+        ],
+
+        /*
+        | Keys: Maya billerCode or mapped epay provider code (uppercase).
+        | Example: 'MERALCO' => ['convenience_fee' => 0, 'service_fee' => 15]
+        */
+        'biller_overrides' => [],
+    ],
+
 ];

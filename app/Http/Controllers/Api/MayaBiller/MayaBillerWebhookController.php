@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers\Api\MayaBiller;
 
-use App\Enums\MayaBillerState;
 use App\Http\Controllers\Controller;
+use App\Jobs\MayaBiller\ProcessMayaBillerPostingJob;
 use App\Http\Requests\MayaBiller\GetFeeRequest;
 use App\Http\Requests\MayaBiller\InquireTransactionRequest;
 use App\Http\Requests\MayaBiller\PostPaymentRequest;
 use App\Http\Requests\MayaBiller\ValidateBillsPaymentRequest;
+use App\Services\MayaBiller\MayaBillerFeeService;
 use App\Services\MayaBiller\MayaBillerTransactionService;
 use App\Services\MayaBiller\MayaBillerValidatePaymentService;
 use App\Support\MayaBiller\MayaBillerResponse;
@@ -18,7 +19,8 @@ class MayaBillerWebhookController extends Controller
 {
     public function __construct(
         private readonly MayaBillerTransactionService $transactionService,
-        private readonly MayaBillerValidatePaymentService $validatePaymentService
+        private readonly MayaBillerValidatePaymentService $validatePaymentService,
+        private readonly MayaBillerFeeService $feeService
     ) {}
 
     /**
@@ -56,7 +58,8 @@ class MayaBillerWebhookController extends Controller
     }
 
     /**
-     * Post Bills Payment (Maya → Partner) — customer debited; partner must post/credit.
+     * Step 2: Post Bills Payment (Maya → Partner).
+     * Respond immediately with 202 Accepted; background job posts and callbacks.
      */
     public function postPayment(PostPaymentRequest $request): JsonResponse
     {
@@ -65,9 +68,24 @@ class MayaBillerWebhookController extends Controller
         }
 
         $rrn = $this->requestReferenceNo($request);
+        $validated = $request->validated();
+
+        $validation = $this->validatePaymentService->validate(
+            billerCode: (string) $validated['billerCode'],
+            accountNumber: (string) $validated['accountNumber'],
+            amount: (float) $validated['amount'],
+            mobileNo: $validated['customerPhone'] ?? $validated['mobileNo'] ?? null,
+        );
+
+        if ($validation['code'] !== '0000') {
+            return MayaBillerResponse::error(
+                $validation['code'],
+                $validation['message'] ?? 'Validation failed.'
+            );
+        }
 
         try {
-            $txn = $this->transactionService->recordPost($rrn, $request->validated());
+            ['txn' => $txn, 'dispatch' => $dispatch] = $this->transactionService->acceptPost($rrn, $validated);
         } catch (\InvalidArgumentException $e) {
             return response()->json([
                 'resultCode' => '4002',
@@ -76,9 +94,8 @@ class MayaBillerWebhookController extends Controller
             ], 409);
         }
 
-        if ($txn->state === MayaBillerState::Posting) {
-            $this->transactionService->sendPostingCallback($txn, fulfilled: true);
-            $txn = $txn->fresh();
+        if ($dispatch) {
+            ProcessMayaBillerPostingJob::dispatch($txn->id);
         }
 
         return response()->json([
@@ -87,7 +104,8 @@ class MayaBillerWebhookController extends Controller
             'requestReferenceNo' => $txn->request_reference_no,
             'transactionId' => $txn->maya_transaction_id,
             'status' => $txn->state->value,
-        ]);
+            'queued' => true,
+        ], 202);
     }
 
     /**
@@ -128,17 +146,12 @@ class MayaBillerWebhookController extends Controller
             return $this->disabledResponse();
         }
 
-        $amount = (float) $request->input('amount');
-        $fee = round($amount * 0.01, 2);
+        $fees = $this->feeService->compute(
+            $request->billerCode(),
+            (float) $request->input('amount')
+        );
 
-        return response()->json([
-            'resultCode' => '0000',
-            'resultMessage' => 'SUCCESS',
-            'billerCode' => $request->billerCode(),
-            'amount' => $amount,
-            'fee' => $fee,
-            'currency' => config('maya_biller.default_currency', 'PHP'),
-        ]);
+        return MayaBillerResponse::success($fees);
     }
 
     protected function requestReferenceNo(Request $request): string

@@ -29,12 +29,18 @@ class MayaBillerIntegrationController extends Controller
             ->limit(25)
             ->get();
 
+        $defaultFees = config('maya_biller.fees.default', []);
+        $feeOverrides = config('maya_biller.fees.biller_overrides', []);
+
         return view('epayplus.integrations.maya', [
             'enabled' => $enabled,
             'environment' => config('maya_biller.environment'),
             'endpoints' => $endpoints,
             'validateUrl' => $validateUrl,
             'transactions' => $transactions,
+            'feeContractNote' => config('maya_biller.fees.contract_note'),
+            'defaultFees' => $defaultFees,
+            'feeOverrides' => $feeOverrides,
         ]);
     }
 }
