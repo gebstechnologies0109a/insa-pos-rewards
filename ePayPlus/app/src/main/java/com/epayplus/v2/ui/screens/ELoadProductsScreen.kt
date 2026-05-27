@@ -31,6 +31,11 @@ import com.epayplus.v2.ui.layout.productGridColumns
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.ELoadViewModel
 
+private enum class ELoadProductTab(val label: String) {
+    REGULAR("Regular Load"),
+    PROMOS("Promos")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ELoadProductsScreen(
@@ -38,13 +43,11 @@ fun ELoadProductsScreen(
     providerCode: String,
     viewModel: ELoadViewModel = hiltViewModel()
 ) {
-    val products by viewModel.getProductsByProvider(providerCode).collectAsState(initial = emptyList())
-    val regularProducts = remember(products) {
-        products.filter { it.category != "Promo" }
-    }
-    val promoProducts = remember(products) {
-        products.filter { it.category == "Promo" }
-    }
+    val regularProducts by viewModel.getRegularProductsByProvider(providerCode)
+        .collectAsState(initial = emptyList())
+    val promoProducts by viewModel.getPromoProductsByProvider(providerCode)
+        .collectAsState(initial = emptyList())
+    var selectedTab by remember { mutableStateOf(ELoadProductTab.REGULAR) }
     var phoneNumber by remember { mutableStateOf("") }
     var selectedProduct by remember { mutableStateOf<ProductEntity?>(null) }
     var showConfirmDialog by remember { mutableStateOf(false) }
@@ -69,7 +72,7 @@ fun ELoadProductsScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     Text(providerCode, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Text("Select load amount", fontSize = 13.sp, color = Color.White.copy(alpha = 0.8f))
+                    Text("Select load or promo", fontSize = 13.sp, color = Color.White.copy(alpha = 0.8f))
                 }
             }
         }
@@ -93,7 +96,9 @@ fun ELoadProductsScreen(
                     }
                 }
                 Column(modifier = Modifier.weight(0.65f)) {
-                    ELoadProductSections(
+                    ELoadProductTabContent(
+                        selectedTab = selectedTab,
+                        onTabSelected = { selectedTab = it },
                         regularProducts = regularProducts,
                         promoProducts = promoProducts,
                         selectedProduct = selectedProduct,
@@ -114,7 +119,9 @@ fun ELoadProductsScreen(
                     onClear = { phoneNumber = "" }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                ELoadProductSections(
+                ELoadProductTabContent(
+                    selectedTab = selectedTab,
+                    onTabSelected = { selectedTab = it },
                     regularProducts = regularProducts,
                     promoProducts = promoProducts,
                     selectedProduct = selectedProduct,
@@ -133,17 +140,24 @@ fun ELoadProductsScreen(
     }
 
     if (showConfirmDialog && selectedProduct != null) {
+        val product = selectedProduct!!
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
             icon = { Icon(Icons.Filled.PhoneAndroid, "E-Load", tint = EPayGreen) },
             title = { Text("Confirm E-Load", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ConfirmRow("Network", selectedProduct!!.providerName)
-                    ConfirmRow("Amount", "₱${String.format("%,.2f", selectedProduct!!.amount)}")
+                    ConfirmRow("Network", product.providerName)
+                    if (product.productKind == "promo") {
+                        ConfirmRow("Promo", product.productName)
+                    }
+                    ConfirmRow("Amount", "₱${String.format("%,.2f", product.amount)}")
+                    product.validityDays?.let { days ->
+                        ConfirmRow("Validity", "$days day${if (days == 1) "" else "s"}")
+                    }
                     ConfirmRow("Number", phoneNumber)
-                    Divider()
-                    ConfirmRow("Total", "₱${String.format("%,.2f", selectedProduct!!.amount)}")
+                    HorizontalDivider()
+                    ConfirmRow("Total", "₱${String.format("%,.2f", product.amount)}")
                 }
             },
             confirmButton = {
@@ -152,7 +166,7 @@ fun ELoadProductsScreen(
                         showConfirmDialog = false
                         navController.navigate(
                             NavRoutes.ELoadProcess.createRoute(
-                                providerCode, selectedProduct!!.id, phoneNumber
+                                providerCode, product.id, phoneNumber
                             )
                         )
                     },
@@ -165,6 +179,104 @@ fun ELoadProductsScreen(
             },
             shape = RoundedCornerShape(20.dp)
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ELoadProductTabContent(
+    selectedTab: ELoadProductTab,
+    onTabSelected: (ELoadProductTab) -> Unit,
+    regularProducts: List<ProductEntity>,
+    promoProducts: List<ProductEntity>,
+    selectedProduct: ProductEntity?,
+    phoneNumber: String,
+    onProductSelected: (ProductEntity) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            ELoadProductTab.entries.forEachIndexed { index, tab ->
+                SegmentedButton(
+                    selected = selectedTab == tab,
+                    onClick = { onTabSelected(tab) },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = ELoadProductTab.entries.size
+                    ),
+                    colors = SegmentedButtonDefaults.colors(
+                        activeContainerColor = EPayGreen,
+                        activeContentColor = Color.White,
+                        inactiveContainerColor = MaterialTheme.colorScheme.surface,
+                        inactiveContentColor = EPayGreenDark
+                    )
+                ) {
+                    Text(tab.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        when (selectedTab) {
+            ELoadProductTab.REGULAR -> {
+                if (regularProducts.isEmpty()) {
+                    ELoadEmptyState("No load products available. Pull to refresh from home.")
+                } else {
+                    LazyVerticalGrid(
+                        columns = productGridColumns(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        regularProductGridItems(
+                            regularProducts,
+                            selectedProduct,
+                            onProductSelected
+                        )
+                    }
+                }
+            }
+            ELoadProductTab.PROMOS -> {
+                if (promoProducts.isEmpty()) {
+                    ELoadEmptyState("No promos available")
+                } else {
+                    LazyVerticalGrid(
+                        columns = productGridColumns(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        promoProductGridItems(
+                            promoProducts,
+                            selectedProduct,
+                            onProductSelected
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ELoadEmptyState(message: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Filled.LocalOffer,
+                contentDescription = null,
+                tint = EPayMediumGray,
+                modifier = Modifier.size(40.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(message, color = EPayMediumGray, fontSize = 14.sp, textAlign = TextAlign.Center)
+        }
     }
 }
 
@@ -213,59 +325,13 @@ private fun PhoneWarningCard() {
     }
 }
 
-@Composable
-private fun ELoadProductSections(
-    regularProducts: List<ProductEntity>,
-    promoProducts: List<ProductEntity>,
-    selectedProduct: ProductEntity?,
-    phoneNumber: String,
-    onProductSelected: (ProductEntity) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    if (regularProducts.isEmpty() && promoProducts.isEmpty()) {
-        Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Text("No load products available. Pull to refresh from home.", color = EPayMediumGray, fontSize = 14.sp)
-        }
-        return
-    }
-
-    Column(modifier = modifier) {
-        if (regularProducts.isNotEmpty()) {
-            Text("Regular Load", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = EPayMediumGray)
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyVerticalGrid(
-                columns = productGridColumns(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.heightIn(max = if (promoProducts.isEmpty()) 600.dp else 280.dp)
-            ) {
-                productGridItems(regularProducts, selectedProduct, phoneNumber, onProductSelected)
-            }
-        }
-        if (promoProducts.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Promos", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = EPayMediumGray)
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyVerticalGrid(
-                columns = productGridColumns(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                productGridItems(promoProducts, selectedProduct, phoneNumber, onProductSelected, showPromoLabel = true)
-            }
-        }
-    }
-}
-
-private fun LazyGridScope.productGridItems(
+private fun LazyGridScope.regularProductGridItems(
     products: List<ProductEntity>,
     selectedProduct: ProductEntity?,
-    phoneNumber: String,
-    onProductSelected: (ProductEntity) -> Unit,
-    showPromoLabel: Boolean = false
+    onProductSelected: (ProductEntity) -> Unit
 ) {
-    items(products) { product ->
-        val isSelected = selectedProduct == product
+    items(products, key = { it.id }) { product ->
+        val isSelected = selectedProduct?.id == product.id
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -291,13 +357,58 @@ private fun LazyGridScope.productGridItems(
                     color = if (isSelected) Color.White else EPayGreenDark,
                     textAlign = TextAlign.Center
                 )
-                if (showPromoLabel) {
+            }
+        }
+    }
+}
+
+private fun LazyGridScope.promoProductGridItems(
+    products: List<ProductEntity>,
+    selectedProduct: ProductEntity?,
+    onProductSelected: (ProductEntity) -> Unit
+) {
+    items(products, key = { it.id }) { product ->
+        val isSelected = selectedProduct?.id == product.id
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onProductSelected(product) },
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isSelected) EPayGreen else Color.White
+            ),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = if (isSelected) 4.dp else 1.dp
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    product.productName,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    color = if (isSelected) Color.White else EPayDarkGray,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2
+                )
+                Text(
+                    "₱${String.format("%,.2f", product.amount)}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = if (isSelected) Color.White else EPayGreenDark,
+                    textAlign = TextAlign.Center
+                )
+                product.validityDays?.let { days ->
                     Text(
-                        product.productName,
+                        "${days} day${if (days == 1) "" else "s"} validity",
                         fontSize = 10.sp,
-                        color = if (isSelected) Color.White.copy(alpha = 0.9f) else EPayMediumGray,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2
+                        color = if (isSelected) Color.White.copy(alpha = 0.85f) else EPayMediumGray,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
