@@ -1,12 +1,16 @@
 package com.epayplus.v2.ui.navigation
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.epayplus.v2.ui.screens.*
 
@@ -15,11 +19,28 @@ fun KioskNavigation(
     navController: NavHostController,
     onAdminExitRequested: () -> Unit
 ) {
-    NavHost(
-        navController = navController,
-        startDestination = NavRoutes.KioskHome.route,
-        modifier = Modifier.fillMaxSize()
-    ) {
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val onKioskRoot = isKioskRootRoute(currentRoute)
+
+    Scaffold(
+        bottomBar = {
+            if (!onKioskRoot) {
+                KioskNavBar(
+                    showBack = navController.previousBackStackEntry != null,
+                    onBack = { navController.popBackStack() },
+                    onHome = { navigateToKioskHome(navController) }
+                )
+            }
+        }
+    ) { paddingValues ->
+        NavHost(
+            navController = navController,
+            startDestination = NavRoutes.KioskHome.route,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
         val kioskHome: @Composable () -> Unit = {
             KioskHomeScreen(
                 navController = navController,
@@ -148,6 +169,7 @@ fun KioskNavigation(
                 transactionId = transactionId,
                 transactionType = type
             )
+        }
         }
     }
 }
