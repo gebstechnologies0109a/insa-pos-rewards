@@ -204,9 +204,8 @@ const INSABuddy = {
      */
     parsePrinterStatus(data) {
         if (!data) return { connected: false, name: null, type: null };
-        const connected = !!(data.connected || data.ok && data.name);
         return {
-            connected,
+            connected: !!data.connected,
             name: data.name && data.name !== 'No printer' ? data.name : null,
             type: data.type && data.type !== 'none' ? data.type : null,
         };
