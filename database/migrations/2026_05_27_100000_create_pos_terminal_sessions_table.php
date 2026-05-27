@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('pos_terminal_sessions')) {
+            return;
+        }
+
         Schema::create('pos_terminal_sessions', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->unsignedBigInteger('branch_id');

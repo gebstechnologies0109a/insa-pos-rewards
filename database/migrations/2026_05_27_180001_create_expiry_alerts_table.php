@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        if (Schema::hasTable('expiry_alerts')) {
+            return;
+        }
+
         Schema::create('expiry_alerts', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('inventory_batch_id');

@@ -8,9 +8,15 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('stock_movements', function (Blueprint $table) {
-            $table->unsignedBigInteger('user_id')->nullable()->after('product_id');
-            $table->unsignedBigInteger('inventory_batch_id')->nullable()->after('user_id');
-            $table->string('reason')->nullable()->after('reference_number');
+            if (!Schema::hasColumn('stock_movements', 'user_id')) {
+                $table->unsignedBigInteger('user_id')->nullable()->after('product_id');
+            }
+            if (!Schema::hasColumn('stock_movements', 'inventory_batch_id')) {
+                $table->unsignedBigInteger('inventory_batch_id')->nullable()->after('user_id');
+            }
+            if (!Schema::hasColumn('stock_movements', 'reason')) {
+                $table->string('reason')->nullable()->after('reference_number');
+            }
         });
     }
 

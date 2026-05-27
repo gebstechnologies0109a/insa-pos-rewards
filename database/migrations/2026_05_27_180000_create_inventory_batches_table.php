@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        if (Schema::hasTable('inventory_batches')) {
+            return;
+        }
+
         Schema::create('inventory_batches', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('branch_id');

@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('epay_maya_checkout_sessions')) {
+            return;
+        }
+
         Schema::create('epay_maya_checkout_sessions', function (Blueprint $table) {
             $table->id();
             $table->string('checkout_id')->nullable()->index();

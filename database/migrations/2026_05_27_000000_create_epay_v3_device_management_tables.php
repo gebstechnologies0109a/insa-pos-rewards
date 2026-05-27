@@ -8,7 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('epay_devices', function (Blueprint $table) {
+        if (!Schema::hasTable('epay_devices')) {
+            Schema::create('epay_devices', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('retailer_id')->nullable();
             $table->string('device_id', 100)->unique();
@@ -28,9 +29,11 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['retailer_id', 'status']);
             $table->index('type');
-        });
+            });
+        }
 
-        Schema::create('epay_device_commands', function (Blueprint $table) {
+        if (!Schema::hasTable('epay_device_commands')) {
+            Schema::create('epay_device_commands', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('device_id');
             $table->string('command', 100);
@@ -43,9 +46,11 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['device_id', 'status']);
             $table->foreign('device_id')->references('id')->on('epay_devices')->cascadeOnDelete();
-        });
+            });
+        }
 
-        Schema::create('epay_device_logs', function (Blueprint $table) {
+        if (!Schema::hasTable('epay_device_logs')) {
+            Schema::create('epay_device_logs', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('device_id');
             $table->enum('level', ['debug', 'info', 'warning', 'error', 'critical'])->default('info');
@@ -55,9 +60,11 @@ return new class extends Migration
             $table->timestamp('created_at')->useCurrent();
             $table->index(['device_id', 'level', 'created_at']);
             $table->foreign('device_id')->references('id')->on('epay_devices')->cascadeOnDelete();
-        });
+            });
+        }
 
-        Schema::create('epay_sms_logs', function (Blueprint $table) {
+        if (!Schema::hasTable('epay_sms_logs')) {
+            Schema::create('epay_sms_logs', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('device_id')->nullable();
             $table->enum('direction', ['incoming', 'outgoing']);
@@ -70,9 +77,11 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['device_id', 'direction', 'created_at']);
             $table->index(['number', 'created_at']);
-        });
+            });
+        }
 
-        Schema::create('epay_commissions', function (Blueprint $table) {
+        if (!Schema::hasTable('epay_commissions')) {
+            Schema::create('epay_commissions', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('retailer_id')->nullable();
             $table->string('provider_code', 50)->nullable();
@@ -84,9 +93,11 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['retailer_id', 'provider_code', 'product_code']);
             $table->index('tier');
-        });
+            });
+        }
 
-        Schema::create('epay_kiosk_collections', function (Blueprint $table) {
+        if (!Schema::hasTable('epay_kiosk_collections')) {
+            Schema::create('epay_kiosk_collections', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('device_id');
             $table->decimal('amount', 12, 2);
@@ -101,7 +112,8 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['device_id', 'collected_at']);
             $table->foreign('device_id')->references('id')->on('epay_devices')->cascadeOnDelete();
-        });
+            });
+        }
     }
 
     public function down(): void

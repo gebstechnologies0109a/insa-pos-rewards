@@ -9,12 +9,16 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('pos_licenses', function (Blueprint $table) {
-            $table->string('status', 20)->default('active')->after('pos_slots');
-        });
+        if (!Schema::hasColumn('pos_licenses', 'status')) {
+            Schema::table('pos_licenses', function (Blueprint $table) {
+                $table->string('status', 20)->default('active')->after('pos_slots');
+            });
+        }
 
-        DB::table('pos_licenses')->where('active', true)->update(['status' => 'active']);
-        DB::table('pos_licenses')->where('active', false)->update(['status' => 'suspended']);
+        if (Schema::hasColumn('pos_licenses', 'status') && Schema::hasColumn('pos_licenses', 'active')) {
+            DB::table('pos_licenses')->where('active', true)->update(['status' => 'active']);
+            DB::table('pos_licenses')->where('active', false)->update(['status' => 'suspended']);
+        }
     }
 
     public function down(): void
