@@ -6,7 +6,11 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="fw-bold mb-0">Transactions</h4>
-        <small class="text-muted">{{ $transactions->total() }} total transactions</small>
+        <small class="text-muted">{{ $transactions->total() }} transactions
+            @if(!empty($filterMeta['label']))
+                &mdash; {{ $filterMeta['label'] }}
+            @endif
+        </small>
     </div>
     <a href="{{ route('epayplus.transactions.export', request()->all()) }}" class="btn btn-outline-success btn-sm">
         <i class="bi bi-download"></i> Export CSV
@@ -54,7 +58,7 @@
                 <label class="form-label small mb-0">Type</label>
                 <select name="type" class="form-select form-select-sm">
                     <option value="">All Types</option>
-                    @foreach(['ELOAD', 'BILLS', 'ECASH', 'WIFI'] as $type)
+                    @foreach(['ELOAD', 'BILLS', 'ECASH', 'WIFI', 'RFID'] as $type)
                     <option value="{{ $type }}" {{ request('type') == $type ? 'selected' : '' }}>{{ $type }}</option>
                     @endforeach
                 </select>
@@ -73,21 +77,22 @@
                 <select name="retailer_id" class="form-select form-select-sm">
                     <option value="">All Retailers</option>
                     @foreach($retailers as $r)
-                    <option value="{{ $r->id }}" {{ request('retailer_id') == $r->id ? 'selected' : '' }}>{{ $r->business_name }}</option>
+                    <option value="{{ $r->id }}" {{ request('retailer_id') == $r->id ? 'selected' : '' }}>{{ $r->business_name }} ({{ $r->account_id }})</option>
                     @endforeach
                 </select>
             </div>
             <div class="col-auto">
                 <label class="form-label small mb-0">From</label>
-                <input type="date" name="date_from" class="form-control form-control-sm" value="{{ request('date_from') }}">
+                <input type="date" name="date_from" class="form-control form-control-sm" value="{{ request('date_from', $filterMeta['date_from'] ?? '') }}">
             </div>
             <div class="col-auto">
                 <label class="form-label small mb-0">To</label>
-                <input type="date" name="date_to" class="form-control form-control-sm" value="{{ request('date_to') }}">
+                <input type="date" name="date_to" class="form-control form-control-sm" value="{{ request('date_to', $filterMeta['date_to'] ?? '') }}">
             </div>
             <div class="col-auto">
                 <button type="submit" class="btn btn-sm btn-success">Filter</button>
-                <a href="{{ route('epayplus.transactions') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+                <a href="{{ route('epayplus.transactions', array_merge(request()->except(['date_from', 'date_to', 'page']), ['all' => 1])) }}" class="btn btn-sm btn-outline-primary">All Time</a>
+                <a href="{{ route('epayplus.transactions', request()->except(['all', 'date_from', 'date_to', 'page'])) }}" class="btn btn-sm btn-outline-secondary">Last 90 Days</a>
             </div>
         </form>
     </div>
@@ -130,7 +135,7 @@
                             @php $sBadge = match($txn->status) { 'SUCCESS'=>'text-bg-success','FAILED'=>'text-bg-danger','PROCESSING'=>'text-bg-warning',default=>'text-bg-secondary' }; @endphp
                             <span class="badge {{ $sBadge }}">{{ $txn->status }}</span>
                         </td>
-                        <td><small class="text-muted">{{ $txn->created_at->format('M d, Y H:i') }}</small></td>
+                        <td><small class="text-muted">{{ $txn->created_at->timezone(config('app.timezone'))->format('M d, Y H:i') }}</small></td>
                         <td>
                             <a href="{{ route('epayplus.transactions.show', $txn) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
                         </td>

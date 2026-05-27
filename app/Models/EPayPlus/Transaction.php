@@ -2,6 +2,7 @@
 
 namespace App\Models\EPayPlus;
 
+use App\Support\ManilaDateRange;
 use Illuminate\Database\Eloquent\Model;
 
 class Transaction extends Model
@@ -52,7 +53,31 @@ class Transaction extends Model
 
     public function scopeToday($query)
     {
-        return $query->whereDate('created_at', today());
+        return ManilaDateRange::applyBetween($query, 'created_at', ManilaDateRange::todayBounds());
+    }
+
+    public function scopeThisWeek($query)
+    {
+        return ManilaDateRange::applyBetween($query, 'created_at', ManilaDateRange::thisWeekBounds());
+    }
+
+    public function scopeThisMonth($query)
+    {
+        return ManilaDateRange::applyBetween($query, 'created_at', ManilaDateRange::thisMonthBounds());
+    }
+
+    public function scopeCreatedInRange($query, ?string $from, ?string $to)
+    {
+        $bounds = ManilaDateRange::fromStrings($from, $to);
+
+        return $bounds
+            ? ManilaDateRange::applyBetween($query, 'created_at', $bounds)
+            : $query;
+    }
+
+    public function scopeOpenStatuses($query)
+    {
+        return $query->whereIn('status', ['PENDING', 'PROCESSING']);
     }
 
     public function markSuccess(string $externalRef = null): void

@@ -11,37 +11,43 @@ use App\Models\EPayPlus\Topup;
 use App\Models\EPayPlus\Provider;
 use App\Models\EPayPlus\Product;
 use App\Models\EPayPlus\AuditLog;
+use App\Support\ManilaDateRange;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
     public function index()
     {
         $stats = [
-            'totalRetailers'    => Retailer::count(),
-            'activeRetailers'   => Retailer::where('is_active', true)->count(),
-            'todayTransactions' => Transaction::today()->count(),
-            'todaySales'        => Transaction::today()->successful()->sum('amount'),
-            'todayCommissions'  => Transaction::today()->successful()->sum('commission'),
-            'todayEarnings'     => Transaction::today()->successful()->sum('commission'),
-            'pendingTopups'     => Topup::where('status', 'PENDING')->count(),
-            'totalBalance'      => Retailer::sum('balance'),
-            'totalEloadWallet'  => Retailer::sum('eload_balance'),
-            'totalBillsWallet'  => Retailer::sum('bills_balance'),
-            'machinesOnline'    => Device::where('last_seen_at', '>=', now()->subMinutes(5))->count(),
-            'machinesTotal'     => Device::count(),
-            'pendingAlerts'     => DeviceAlert::where('status', 'active')->count(),
-            'monthTransactions' => Transaction::whereMonth('created_at', now()->month)->count(),
-            'monthSales'        => Transaction::whereMonth('created_at', now()->month)->successful()->sum('amount'),
-            'totalProviders'    => Provider::count(),
-            'activeProviders'   => Provider::where('is_active', true)->count(),
-            'totalProducts'     => Product::count(),
-            'failedToday'       => Transaction::today()->where('status', 'FAILED')->count(),
-            'processingCount'   => Transaction::where('status', 'PROCESSING')->count(),
+            'totalRetailers'     => Retailer::count(),
+            'activeRetailers'    => Retailer::where('is_active', true)->count(),
+            'todayTransactions'  => Transaction::today()->count(),
+            'todaySales'         => Transaction::today()->successful()->sum('amount'),
+            'todayCommissions'   => Transaction::today()->successful()->sum('commission'),
+            'todayEarnings'      => Transaction::today()->successful()->sum('commission'),
+            'weekTransactions'   => Transaction::thisWeek()->count(),
+            'weekSales'          => Transaction::thisWeek()->successful()->sum('amount'),
+            'pendingTopups'      => Topup::where('status', 'PENDING')->count(),
+            'totalBalance'       => Retailer::sum('balance'),
+            'totalEloadWallet'   => Retailer::sum('eload_balance'),
+            'totalBillsWallet'   => Retailer::sum('bills_balance'),
+            'machinesOnline'     => Device::where('last_seen_at', '>=', now()->subMinutes(5))->count(),
+            'machinesTotal'      => Device::count(),
+            'pendingAlerts'      => DeviceAlert::where('status', 'active')->count(),
+            'monthTransactions'  => Transaction::thisMonth()->count(),
+            'monthSales'         => Transaction::thisMonth()->successful()->sum('amount'),
+            'totalTransactions'  => Transaction::count(),
+            'totalSales'         => Transaction::successful()->sum('amount'),
+            'totalProviders'     => Provider::count(),
+            'activeProviders'    => Provider::where('is_active', true)->count(),
+            'totalProducts'      => Product::count(),
+            'failedToday'        => Transaction::today()->where('status', 'FAILED')->count(),
+            'processingCount'    => Transaction::openStatuses()->count(),
+            'pendingCount'       => Transaction::where('status', 'PENDING')->count(),
         ];
 
         $recentTransactions = Transaction::with('retailer')
+            ->orderByRaw("CASE WHEN status IN ('PENDING', 'PROCESSING') THEN 0 ELSE 1 END")
             ->orderByDesc('created_at')
             ->limit(20)
             ->get();
@@ -64,27 +70,51 @@ class DashboardController extends Controller
             default  => 7,
         };
 
-        $salesData = Transaction::successful()
-            ->where('created_at', '>=', now()->subDays($days))
-            ->selectRaw('DATE(created_at) as date, SUM(amount) as total_sales, SUM(commission) as total_commission, COUNT(*) as count')
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
+        [$start, $end] = ManilaDateRange::lastDaysBounds($days);
+        $tz = ManilaDateRange::timezone();
 
-        $typeBreakdown = Transaction::successful()
-            ->where('created_at', '>=', now()->subDays($days))
-            ->selectRaw('type, SUM(amount) as total, COUNT(*) as count')
-            ->groupBy('type')
-            ->get();
+        $rows = Transaction::successful()
+            ->whereBetween('created_at', [$start, $end])
+            ->get(['created_at', 'amount', 'commission', 'type']);
+
+        $salesByDate = $rows->groupBy(fn ($t) => $t->created_at->timezone($tz)->toDateString())
+            ->map(fn ($group) => [
+                'total_sales' => $group->sum('amount'),
+                'total_commission' => $group->sum('commission'),
+                'count' => $group->count(),
+            ]);
+
+        $labels = [];
+        $sales = [];
+        $commissions = [];
+        $counts = [];
+
+        $cursor = $start->copy();
+        while ($cursor->lte($end)) {
+            $key = $cursor->toDateString();
+            $day = $salesByDate->get($key, ['total_sales' => 0, 'total_commission' => 0, 'count' => 0]);
+
+            $labels[] = $cursor->format('M d');
+            $sales[] = (float) $day['total_sales'];
+            $commissions[] = (float) $day['total_commission'];
+            $counts[] = (int) $day['count'];
+            $cursor->addDay();
+        }
+
+        $typeBreakdown = $rows->groupBy('type')
+            ->map(fn ($group) => [
+                'total' => $group->sum('amount'),
+                'count' => $group->count(),
+            ]);
 
         return response()->json([
-            'labels'      => $salesData->pluck('date')->map(fn ($d) => \Carbon\Carbon::parse($d)->format('M d')),
-            'sales'       => $salesData->pluck('total_sales'),
-            'commissions' => $salesData->pluck('total_commission'),
-            'counts'      => $salesData->pluck('count'),
-            'typeLabels'  => $typeBreakdown->pluck('type'),
-            'typeTotals'  => $typeBreakdown->pluck('total'),
-            'typeCounts'  => $typeBreakdown->pluck('count'),
+            'labels'      => $labels,
+            'sales'       => $sales,
+            'commissions' => $commissions,
+            'counts'      => $counts,
+            'typeLabels'  => $typeBreakdown->keys()->values(),
+            'typeTotals'  => $typeBreakdown->pluck('total')->values(),
+            'typeCounts'  => $typeBreakdown->pluck('count')->values(),
         ]);
     }
 
@@ -96,7 +126,8 @@ class DashboardController extends Controller
             $query->where('action', $request->action);
         }
         if ($request->date) {
-            $query->whereDate('created_at', $request->date);
+            $bounds = ManilaDateRange::fromStrings($request->date, $request->date);
+            ManilaDateRange::applyBetween($query, 'created_at', $bounds);
         }
         if ($request->user_id) {
             $query->where('user_id', $request->user_id);

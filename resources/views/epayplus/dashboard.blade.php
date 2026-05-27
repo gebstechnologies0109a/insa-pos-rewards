@@ -275,7 +275,7 @@
                                     @php $sBadge = match($txn->status) { 'SUCCESS'=>'text-bg-success','FAILED'=>'text-bg-danger','PROCESSING'=>'text-bg-warning', default=>'text-bg-secondary' }; @endphp
                                     <span class="badge {{ $sBadge }}">{{ $txn->status }}</span>
                                 </td>
-                                <td><small class="text-muted">{{ $txn->created_at->format('H:i') }}</small></td>
+                                <td><small class="text-muted">{{ $txn->created_at->timezone(config('app.timezone'))->format('M d H:i') }}</small></td>
                             </tr>
                             @endforeach
                         </tbody>
@@ -286,18 +286,44 @@
     </div>
 </div>
 
-{{-- Monthly Summary --}}
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
+{{-- Monthly Summary + Demo test activity --}}
+<div class="row mt-4 g-3">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm h-100">
             <div class="card-body text-center py-3">
+                <span class="text-muted">This Week:</span>
+                <strong>{{ number_format($stats['weekTransactions']) }} transactions</strong> &bull;
+                <strong class="text-success">₱{{ number_format($stats['weekSales'], 2) }} sales</strong>
+                &nbsp;|&nbsp;
                 <span class="text-muted">This Month:</span>
                 <strong>{{ number_format($stats['monthTransactions']) }} transactions</strong> &bull;
-                <strong class="text-success">₱{{ number_format($stats['monthSales'], 2) }} total sales</strong> &bull;
+                <strong class="text-success">₱{{ number_format($stats['monthSales'], 2) }} sales</strong>
+                &nbsp;|&nbsp;
+                <span class="text-muted">All Time:</span>
+                <strong>{{ number_format($stats['totalTransactions']) }} transactions</strong> &bull;
+                <strong class="text-success">₱{{ number_format($stats['totalSales'], 2) }} sales</strong> &bull;
                 <strong class="text-primary">₱{{ number_format($stats['totalBalance'], 2) }} retailer balances</strong>
+                @if(($stats['pendingCount'] ?? 0) + ($stats['processingCount'] ?? 0) > 0)
+                &nbsp;|&nbsp;
+                <span class="text-muted">Open:</span>
+                <strong class="text-warning">{{ ($stats['pendingCount'] ?? 0) + ($stats['processingCount'] ?? 0) }} pending/processing</strong>
+                @endif
             </div>
         </div>
     </div>
+    @if(!empty($stats['demoRetailerId']))
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm h-100 border-start border-info border-3">
+            <div class="card-body py-3">
+                <p class="text-muted mb-1 small">EPDEMO001 — last 24 hours</p>
+                <div class="fw-bold">{{ number_format($stats['demoLast24hTxns'] ?? 0) }} txns</div>
+                <div class="text-success">₱{{ number_format($stats['demoLast24hSales'] ?? 0, 2) }} sales</div>
+                <a href="{{ route('epayplus.transactions', ['retailer_id' => $stats['demoRetailerId'], 'date_from' => now()->subDay()->format('Y-m-d')]) }}"
+                   class="small text-decoration-none">View demo transactions →</a>
+            </div>
+        </div>
+    </div>
+    @endif
 </div>
 @endsection
 
