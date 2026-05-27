@@ -17,6 +17,7 @@ class EPayPlusSeeder extends Seeder
         $this->seedProviders();
         $this->seedProducts();
         $this->seedDemoRetailer();
+        $this->syncRetailerDualWallets();
     }
 
     private function seedSettings(): void
@@ -576,5 +577,14 @@ class EPayPlusSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+    }
+
+    /**
+     * 70% E-Load / 30% Bills from combined balance for retailers not yet split.
+     * Skips EPDEMO001 and any retailer that already has bills_balance > 0.
+     */
+    private function syncRetailerDualWallets(): void
+    {
+        Retailer::syncAllDualWallets();
     }
 }
