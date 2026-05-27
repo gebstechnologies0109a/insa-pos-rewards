@@ -37,6 +37,7 @@ class ProductRepository @Inject constructor(
                 "ELOAD" -> apiService.getEloadProducts()
                 "BILLS" -> apiService.getBillsProducts()
                 "ECASH" -> apiService.getEcashProducts()
+                "RFID" -> apiService.getRfidProducts()
                 else -> return Result.failure(Exception("Unknown product type"))
             }
 
@@ -72,7 +73,8 @@ class ProductRepository @Inject constructor(
     suspend fun ensureProductsExist() {
         val total = productDao.getProductCountByType("ELOAD") +
                 productDao.getProductCountByType("BILLS") +
-                productDao.getProductCountByType("ECASH")
+                productDao.getProductCountByType("ECASH") +
+                productDao.getProductCountByType("RFID")
         if (total == 0) {
             insertDefaultProducts()
         }
@@ -177,7 +179,16 @@ class ProductRepository @Inject constructor(
             createProduct("ECASH", "LAZADA", "Lazada Wallet", "LAZADA_CASHIN", "Lazada Wallet Cash-In", 0.0, "Lazada Wallet top-up"),
         )
 
-        productDao.insertAll(eloadProviders + billsProviders + ecashProviders)
+        val rfidProviders = listOf(
+            createProduct("RFID", "EASYTRIP", "EasyTrip", "EASYTRIP_RELOAD", "EasyTrip Reload", 0.0, "EasyTrip RFID reload", category = "RFID Services"),
+            createProduct("RFID", "AUTOSWEEP", "Autosweep", "AUTOSWEEP_RELOAD", "Autosweep Reload", 0.0, "Autosweep RFID reload", category = "RFID Services"),
+            createProduct("RFID", "TAPNGO", "Tap&Go", "TAPNGO_RELOAD", "Tap&Go Reload", 0.0, "Tap&Go RFID reload", category = "RFID Services"),
+            createProduct("RFID", "CONNECT", "Connect RFID", "CONNECT_RELOAD", "Connect Reload", 0.0, "Connect RFID reload", category = "RFID Services"),
+            createProduct("RFID", "ETC", "ETC RFID", "ETC_RELOAD", "ETC Reload", 0.0, "ETC RFID reload", category = "RFID Services"),
+            createProduct("RFID", "OTHER", "Other Toll RFID", "OTHER_RELOAD", "Other RFID Reload", 0.0, "Other toll RFID reload", category = "RFID Services"),
+        )
+
+        productDao.insertAll(eloadProviders + billsProviders + ecashProviders + rfidProviders)
     }
 
     private fun createProduct(

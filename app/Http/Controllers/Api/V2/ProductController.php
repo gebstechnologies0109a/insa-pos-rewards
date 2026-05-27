@@ -26,6 +26,11 @@ class ProductController extends Controller
         return $this->getProductsByType('ECASH');
     }
 
+    public function rfidProducts(Request $request): JsonResponse
+    {
+        return $this->getProductsByType('RFID');
+    }
+
     public function providers(Request $request): JsonResponse
     {
         $type = $request->query('type');

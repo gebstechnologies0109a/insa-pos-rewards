@@ -180,6 +180,56 @@ class TransactionRepository @Inject constructor(
         }
     }
 
+    suspend fun processRfid(
+        providerCode: String,
+        accountNumber: String,
+        amount: Double,
+        providerName: String,
+        tagId: String? = null
+    ): Result<TransactionEntity> {
+        val refNumber = generateReferenceNumber()
+        val transaction = TransactionEntity(
+            type = "RFID",
+            provider = providerName,
+            product = "RFID Reload",
+            amount = amount,
+            fee = 0.0,
+            targetNumber = accountNumber,
+            referenceNumber = refNumber,
+            status = "PENDING",
+            paymentMethod = "WALLET",
+            remarks = tagId?.let { "tag:$it" } ?: ""
+        )
+        val localId = transactionDao.insert(transaction)
+
+        return try {
+            val response = apiService.processRfid(
+                RfidRequest(
+                    providerCode = providerCode,
+                    accountNumber = accountNumber,
+                    amount = amount,
+                    referenceId = refNumber,
+                    tagId = tagId
+                )
+            )
+            if (response.isSuccessful && response.body()?.success == true) {
+                val serverRef = response.body()?.referenceNumber ?: refNumber
+                transactionDao.updateStatus(localId, "SUCCESS")
+                transactionDao.updateReferenceNumber(localId, serverRef)
+                Result.success(transactionDao.getTransactionById(localId)!!)
+            } else {
+                val msg = response.body()?.message ?: "Transaction failed"
+                transactionDao.updateStatus(localId, "FAILED")
+                transactionDao.updateRemarks(localId, msg)
+                Result.failure(Exception(msg))
+            }
+        } catch (e: Exception) {
+            transactionDao.updateStatus(localId, "FAILED")
+            transactionDao.updateRemarks(localId, e.localizedMessage ?: "Network error")
+            Result.failure(e)
+        }
+    }
+
     suspend fun syncPendingTransactions(): Result<Int> {
         return try {
             val unsynced = transactionDao.getUnsyncedTransactions()

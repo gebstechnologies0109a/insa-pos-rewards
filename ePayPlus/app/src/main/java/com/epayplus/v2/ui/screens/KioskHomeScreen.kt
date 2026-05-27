@@ -116,7 +116,7 @@ private fun navigateKioskService(navController: NavController, routeKey: String)
         "eload" -> NavRoutes.ELoadProviders.route
         "bills" -> NavRoutes.BillsCategories.route
         "ecash" -> NavRoutes.ECashProviders.route
-        "rfid" -> NavRoutes.Rfid.route
+        "rfid" -> NavRoutes.RfidProviders.route
         else -> return
     }
     navController.navigate(destination)

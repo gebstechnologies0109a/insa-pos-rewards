@@ -110,8 +110,24 @@ fun KioskNavigation(
             )
         }
 
-        composable(NavRoutes.Rfid.route) {
-            RfidScreen(navController = navController)
+        composable(NavRoutes.RfidProviders.route) {
+            RfidProvidersScreen(navController = navController)
+        }
+
+        composable(
+            route = NavRoutes.RfidProcess.route,
+            arguments = listOf(
+                navArgument("providerCode") { type = NavType.StringType },
+                navArgument("providerName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val providerCode = backStackEntry.arguments?.getString("providerCode") ?: ""
+            val providerName = backStackEntry.arguments?.getString("providerName") ?: ""
+            RfidProcessScreen(
+                navController = navController,
+                providerCode = providerCode,
+                providerName = providerName
+            )
         }
 
         composable(

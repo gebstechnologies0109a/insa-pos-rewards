@@ -26,7 +26,13 @@ sealed class NavRoutes(val route: String) {
             "ecash/process/$providerCode/$providerName"
     }
     object Sales : NavRoutes("sales")
-    object Rfid : NavRoutes("rfid")
+    object RfidProviders : NavRoutes("rfid/providers")
+    object RfidProcess : NavRoutes("rfid/process/{providerCode}/{providerName}") {
+        fun createRoute(providerCode: String, providerName: String) =
+            "rfid/process/$providerCode/$providerName"
+    }
+    /** @deprecated Use [RfidProviders]; kept for deep links */
+    object Rfid : NavRoutes("rfid/providers")
     object TransactionHistory : NavRoutes("transactions")
     object TransactionResult : NavRoutes("result/{transactionId}/{type}") {
         fun createRoute(transactionId: Long, type: String) = "result/$transactionId/$type"

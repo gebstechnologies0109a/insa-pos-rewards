@@ -13,6 +13,26 @@ return [
     'enabled' => (bool) env('MAYA_BILLER_ENABLED', false),
 
     /*
+    | Return HTTP 503 on Post when true (Maya will retry).
+    */
+    'maintenance' => (bool) env('MAYA_BILLER_MAINTENANCE', false),
+
+    /*
+    | HTTP status for successful Post acceptance (200 or 202).
+    */
+    'post_accept_status' => (int) env('MAYA_BILLER_POST_ACCEPT_STATUS', 202),
+
+    /*
+    | Minutes to remember a successful Validate RRN for Post revalidation gate.
+    */
+    'validate_proof_ttl_minutes' => (int) env('MAYA_BILLER_VALIDATE_PROOF_TTL', 30),
+
+    /*
+    | Retailer account_id used for Maya-originated bill payment ledger rows.
+    */
+    'system_retailer_account_id' => env('MAYA_BILLER_SYSTEM_RETAILER', 'EPDEMO001'),
+
+    /*
     | Skip paymaya-signature verification (local/testing only).
     */
     'skip_signature' => (bool) env('MAYA_BILLER_SKIP_SIGNATURE', false),

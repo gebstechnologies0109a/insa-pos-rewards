@@ -153,6 +153,15 @@ data class EcashRequest(
     @SerializedName("reference_id") val referenceId: String = ""
 )
 
+data class RfidRequest(
+    @SerializedName("provider_code") val providerCode: String,
+    @SerializedName("product_code") val productCode: String = "",
+    @SerializedName("account_number") val accountNumber: String,
+    val amount: Double,
+    @SerializedName("reference_id") val referenceId: String = "",
+    @SerializedName("tag_id") val tagId: String? = null
+)
+
 data class TransactionResponse(
     val success: Boolean = false,
     @SerializedName("referenceNumber") val referenceNumber: String? = null,

@@ -44,6 +44,7 @@ Route::prefix('v2')->group(function () {
         Route::get('/products/eload', [ProductController::class, 'eloadProducts']);
         Route::get('/products/bills', [ProductController::class, 'billsProducts']);
         Route::get('/products/ecash', [ProductController::class, 'ecashProducts']);
+        Route::get('/products/rfid', [ProductController::class, 'rfidProducts']);
         Route::get('/products/providers', [ProductController::class, 'providers']);
         Route::get('/products/announcements', [ProductController::class, 'announcements']);
 
@@ -51,6 +52,7 @@ Route::prefix('v2')->group(function () {
         Route::post('/transactions/eload', [TransactionController::class, 'processEload']);
         Route::post('/transactions/bills', [TransactionController::class, 'processBillPayment']);
         Route::post('/transactions/ecash', [TransactionController::class, 'processEcash']);
+        Route::post('/transactions/rfid', [TransactionController::class, 'processRfid']);
         Route::get('/transactions/history', [TransactionController::class, 'history']);
         Route::post('/transactions/sync', [TransactionController::class, 'sync']);
     });

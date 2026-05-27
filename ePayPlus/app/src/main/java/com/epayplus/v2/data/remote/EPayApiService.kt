@@ -24,6 +24,9 @@ interface EPayApiService {
     @GET("products/ecash")
     suspend fun getEcashProducts(): Response<ProductListResponse>
 
+    @GET("products/rfid")
+    suspend fun getRfidProducts(): Response<ProductListResponse>
+
     @GET("products/providers")
     suspend fun getProviders(): Response<ProvidersResponse>
 
@@ -35,6 +38,9 @@ interface EPayApiService {
 
     @POST("transactions/ecash")
     suspend fun processEcash(@Body request: EcashRequest): Response<TransactionResponse>
+
+    @POST("transactions/rfid")
+    suspend fun processRfid(@Body request: RfidRequest): Response<TransactionResponse>
 
     @GET("transactions/history")
     suspend fun getTransactionHistory(

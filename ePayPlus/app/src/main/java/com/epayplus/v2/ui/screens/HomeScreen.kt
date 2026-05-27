@@ -133,7 +133,7 @@ fun HomeScreen(
                     navController.navigate(NavRoutes.ECashProviders.route)
                 }
                 ServiceButton("RFID", CategoryRfid, iconRes = R.drawable.ic_quick_rfid) {
-                    navController.navigate(NavRoutes.Rfid.route)
+                    navController.navigate(NavRoutes.RfidProviders.route)
                 }
             }
 

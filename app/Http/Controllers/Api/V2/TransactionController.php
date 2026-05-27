@@ -180,6 +180,63 @@ class TransactionController extends Controller
         });
     }
 
+    public function processRfid(Request $request): JsonResponse
+    {
+        $request->validate([
+            'provider_code' => 'required|string',
+            'account_number' => 'required|string|min:4|max:32',
+            'amount' => 'required|numeric|min:1',
+            'reference_id' => 'nullable|string',
+            'tag_id' => 'nullable|string|max:64',
+        ]);
+
+        $retailer = $request->attributes->get('retailer');
+        $product = Product::where('code', $request->provider_code . '_RELOAD')->active()->first();
+        $fee = $product?->fee ?? 0;
+        $totalCost = $request->amount + $fee;
+
+        if (!$retailer->hasSufficientBalance($totalCost)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Insufficient balance.',
+            ], 400);
+        }
+
+        return DB::transaction(function () use ($retailer, $request, $totalCost, $fee, $product) {
+            $balanceBefore = $retailer->balance;
+            $retailer->deductBalance($totalCost);
+
+            $transaction = Transaction::create([
+                'retailer_id' => $retailer->id,
+                'product_id' => $product?->id,
+                'type' => 'RFID',
+                'reference_number' => $this->generateRefNumber(),
+                'provider_code' => $request->provider_code,
+                'product_code' => $product?->code,
+                'product_name' => $product?->name ?? 'RFID Reload',
+                'target_number' => $request->account_number,
+                'amount' => $request->amount,
+                'fee' => $fee,
+                'retailer_cost' => $totalCost,
+                'status' => 'PROCESSING',
+                'payment_method' => 'WALLET',
+                'balance_before' => $balanceBefore,
+                'balance_after' => $retailer->fresh()->balance,
+                'device_id' => $request->header('X-Device-Id'),
+                'ip_address' => $request->ip(),
+                'remarks' => $request->tag_id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'referenceNumber' => $transaction->reference_number,
+                'status' => 'PROCESSING',
+                'message' => 'RFID reload is being processed.',
+                'balance' => (float) $retailer->fresh()->balance,
+            ]);
+        });
+    }
+
     public function history(Request $request): JsonResponse
     {
         $retailer = $request->attributes->get('retailer');
