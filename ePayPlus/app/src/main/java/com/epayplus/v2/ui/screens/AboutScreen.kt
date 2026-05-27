@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.epayplus.v2.BuildConfig
 import com.epayplus.v2.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,7 +56,7 @@ fun AboutScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(20.dp))
 
             Text("ePayPlus", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = EPayGreen)
-            Text("Version 2.2", fontSize = 14.sp, color = EPayMediumGray)
+            Text("Version ${BuildConfig.VERSION_NAME}", fontSize = 14.sp, color = EPayMediumGray)
 
             Spacer(modifier = Modifier.height(24.dp))
 
