@@ -1,10 +1,10 @@
 # ePayPlus ADB login — matches LoginScreen.kt + LoginRequest API
-# Fields: Account ID + PIN (max 6 digits). Button: "Sign In".
-# Credentials: EPDEMO001 / 1234 (EPayPlusSeeder.php)
+# Fields: Mobile Number + PIN (max 6 digits). Button: "Sign In".
+# Credentials: 09171234567 / 1234 (EPayPlusSeeder.php, retailer EPDEMO001)
 param(
     [string]$Adb = "C:\Users\Admin\Android\Sdk\platform-tools\adb.exe",
     [string]$Serial = "",
-    [string]$AccountId = "EPDEMO001",
+    [string]$MobileNumber = "09171234567",
     [string]$Pin = "1234",
     [string]$Package = "com.epayplus.v2.debug",
     [string]$ScreenshotOut = "C:\Users\Admin\Downloads\epayplus-logged-in.png",
@@ -83,7 +83,6 @@ function Tap-Bounds {
 function Tap-LabelField {
     param([string[]]$LabelTerms, [int]$FallbackX, [int]$FallbackY)
     $xml = Get-UiXml
-    # Prefer EditText after focusing label row
     $labelBounds = Find-Bounds -Xml $xml -Terms $LabelTerms
     if ($labelBounds) {
         Tap-Bounds $labelBounds | Out-Null
@@ -110,7 +109,6 @@ function Clear-And-Type {
     for ($i = 0; $i -lt 24; $i++) {
         Invoke-Adb @("shell", "input", "keyevent", "KEYCODE_DEL") | Out-Null
     }
-    # Uppercase account IDs: send per-character (%s = space in adb)
     $escaped = $Text -replace ' ', '%s'
     Invoke-Adb @("shell", "input", "text", $escaped) | Out-Null
 }
@@ -119,7 +117,6 @@ function Tap-SignIn {
     $xml = Get-UiXml
     $b = Find-Bounds -Xml $xml -Terms @("Sign In", "Login")
     if ($b) { Tap-Bounds $b | Out-Null; return $true }
-    # Material button often has content-desc Login
     $b = Find-Bounds -Xml $xml -Terms @("Sign in", "sign in")
     if ($b) { Tap-Bounds $b | Out-Null; return $true }
     return $false
@@ -143,7 +140,7 @@ function Test-LoggedIn {
 # --- Main ---
 if (-not $Serial) { $Serial = Get-AdbSerial -AdbPath $Adb }
 Write-Host "ADB device: $Serial" -ForegroundColor Cyan
-Write-Host "Package: $Package | Account: $AccountId" -ForegroundColor Cyan
+Write-Host "Package: $Package | Mobile: $MobileNumber" -ForegroundColor Cyan
 
 $main = "$Package/com.epayplus.v2.ui.MainActivity"
 
@@ -174,14 +171,14 @@ if (Test-LoggedIn) {
     exit 0
 }
 
-if ($xml -notmatch "Account ID|Sign In|Welcome Back") {
+if ($xml -notmatch "Mobile Number|Sign In|Welcome Back") {
     Write-Warning "Login screen not detected. UI texts may differ; attempting login anyway."
 }
 
-Write-Host "Filling Account ID..." -ForegroundColor Yellow
-Tap-LabelField -LabelTerms @("Account ID", "Account") -FallbackX 640 -FallbackY 380
+Write-Host "Filling Mobile Number..." -ForegroundColor Yellow
+Tap-LabelField -LabelTerms @("Mobile Number", "Mobile", "09") -FallbackX 640 -FallbackY 380
 Wait-Sec 1
-Clear-And-Type $AccountId
+Clear-And-Type $MobileNumber
 Wait-Sec 1
 
 Write-Host "Filling PIN..." -ForegroundColor Yellow
@@ -196,10 +193,9 @@ if (-not (Tap-SignIn)) {
 }
 Wait-Sec 6
 
-# Capture logcat snippet
 $log = Invoke-Adb @("logcat", "-d", "-t", "80", "OkHttp:I", "AndroidRuntime:E", "*:S")
 $log | Out-File "$env:TEMP\epay_login_logcat.txt" -Encoding UTF8
-if ($log -match "401|Invalid account|Connection error|FATAL") {
+if ($log -match "401|Invalid mobile|Invalid account|Connection error|FATAL") {
     Write-Warning "Logcat may show errors — see $env:TEMP\epay_login_logcat.txt"
 }
 
@@ -211,7 +207,7 @@ if (Test-LoggedIn) {
 }
 
 $xml2 = Get-UiXml
-if ($xml2 -match "Invalid account|Please enter|Login failed|Connection error") {
+if ($xml2 -match "Invalid mobile|Invalid account|Please enter|Login failed|Connection error") {
     $err = [regex]::Match($xml2, 'text="([^"]*(?:Invalid|failed|error|enter)[^"]*)"').Groups[1].Value
     Write-Error "Login failed on device. Message: $err"
 }

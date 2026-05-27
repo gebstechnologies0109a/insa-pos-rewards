@@ -5,4 +5,8 @@
     <!-- Admin/docs only: Maya Partner Biller is server-side (Laravel), not in-app -->
     <string name="maya_biller_integration_coming_soon">Maya bill pay via Maya app is handled on the server. Retailer bills flow unchanged.</string>
     <string name="insa_pos_not_installed">INSA POS app not found. POS Mode opens INSA in-app; install INSA POS v3 for offline printing.</string>
+    <string name="login_mobile_label">Mobile Number</string>
+    <string name="login_mobile_hint">09XXXXXXXXX</string>
+    <string name="login_mobile_required">Please enter your mobile number</string>
+    <string name="login_mobile_invalid">Enter a valid Philippine mobile number (e.g. 09171234567)</string>
 </resources>

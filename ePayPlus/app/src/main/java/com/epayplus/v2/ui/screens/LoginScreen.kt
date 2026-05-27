@@ -35,6 +35,7 @@ import com.epayplus.v2.ui.layout.CenteredContent
 import com.epayplus.v2.ui.layout.isLandscape
 import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
+import com.epayplus.v2.BuildConfig
 import com.epayplus.v2.ui.viewmodel.LoginViewModel
 
 @Composable
@@ -132,17 +133,18 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     OutlinedTextField(
-                        value = uiState.accountId,
-                        onValueChange = viewModel::updateAccountId,
-                        label = { Text("Account ID") },
+                        value = uiState.mobileNumber,
+                        onValueChange = viewModel::updateMobileNumber,
+                        label = { Text("Mobile Number") },
+                        placeholder = { Text("09XXXXXXXXX") },
                         leadingIcon = {
-                            Icon(Icons.Outlined.Person, "Account", tint = EPayGreen)
+                            Icon(Icons.Outlined.Phone, "Mobile", tint = EPayGreen)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
+                            keyboardType = KeyboardType.Phone,
                             imeAction = ImeAction.Next
                         ),
                         keyboardActions = KeyboardActions(
@@ -270,7 +272,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(if (landscape) 16.dp else 40.dp))
 
             Text(
-                "Version 3.1.4",
+                "Version ${BuildConfig.VERSION_NAME}",
                 fontSize = 12.sp,
                 color = Color.White.copy(alpha = 0.6f)
             )

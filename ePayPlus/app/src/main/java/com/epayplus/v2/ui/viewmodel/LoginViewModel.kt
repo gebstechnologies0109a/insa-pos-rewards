@@ -5,13 +5,14 @@ import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.epayplus.v2.data.repository.AccountRepository
+import com.epayplus.v2.util.PhoneNumberUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class LoginUiState(
-    val accountId: String = "",
+    val mobileNumber: String = "",
     val pin: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -27,8 +28,8 @@ class LoginViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
-    fun updateAccountId(value: String) {
-        _uiState.update { it.copy(accountId = value, error = null) }
+    fun updateMobileNumber(value: String) {
+        _uiState.update { it.copy(mobileNumber = PhoneNumberUtils.sanitizeInput(value), error = null) }
     }
 
     fun updatePin(value: String) {
@@ -39,8 +40,15 @@ class LoginViewModel @Inject constructor(
 
     fun login() {
         val state = _uiState.value
-        if (state.accountId.isBlank()) {
-            _uiState.update { it.copy(error = "Please enter your Account ID") }
+        if (state.mobileNumber.isBlank()) {
+            _uiState.update { it.copy(error = "Please enter your mobile number") }
+            return
+        }
+        val normalized = PhoneNumberUtils.normalizeForApi(state.mobileNumber)
+        if (normalized == null) {
+            _uiState.update {
+                it.copy(error = "Enter a valid Philippine mobile number (e.g. 09171234567)")
+            }
             return
         }
         if (state.pin.isBlank()) {
@@ -56,7 +64,7 @@ class LoginViewModel @Inject constructor(
                 Settings.Secure.ANDROID_ID
             )
 
-            accountRepository.login(state.accountId, state.pin, deviceId)
+            accountRepository.login(normalized, state.pin, deviceId)
                 .onSuccess {
                     _uiState.update { it.copy(isLoading = false, isSuccess = true) }
                 }

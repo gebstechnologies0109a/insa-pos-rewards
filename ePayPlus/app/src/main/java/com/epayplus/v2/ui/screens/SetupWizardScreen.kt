@@ -32,7 +32,7 @@ fun SetupWizardScreen(
     val serverUrl by viewModel.serverUrl.collectAsState()
     val licenseCode by viewModel.licenseCode.collectAsState()
     val machineUid by viewModel.machineUid.collectAsState()
-    val accountId by viewModel.accountId.collectAsState()
+    val mobileNumber by viewModel.mobileNumber.collectAsState()
     val pin by viewModel.pin.collectAsState()
     val deviceMode by viewModel.deviceMode.collectAsState()
 
@@ -99,9 +99,9 @@ fun SetupWizardScreen(
                         error = errorMessage
                     )
                     2 -> AccountActivationStep(
-                        accountId = accountId,
+                        mobileNumber = mobileNumber,
                         pin = pin,
-                        onAccountIdChange = { viewModel.updateAccountId(it) },
+                        onMobileNumberChange = { viewModel.updateMobileNumber(it) },
                         onPinChange = { viewModel.updatePin(it) },
                         onNext = { viewModel.activateAccount() },
                         isLoading = isLoading,
@@ -236,9 +236,9 @@ private fun LicenseActivationStep(
 
 @Composable
 private fun AccountActivationStep(
-    accountId: String,
+    mobileNumber: String,
     pin: String,
-    onAccountIdChange: (String) -> Unit,
+    onMobileNumberChange: (String) -> Unit,
     onPinChange: (String) -> Unit,
     onNext: () -> Unit,
     isLoading: Boolean,
@@ -257,13 +257,14 @@ private fun AccountActivationStep(
         Spacer(modifier = Modifier.height(16.dp))
         Text("Step 3: Account Activation", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(8.dp))
-        Text("Enter your retailer account credentials", textAlign = TextAlign.Center, color = Color.Gray)
+        Text("Enter your mobile number and PIN", textAlign = TextAlign.Center, color = Color.Gray)
         Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
-            value = accountId,
-            onValueChange = onAccountIdChange,
-            label = { Text("Account ID") },
+            value = mobileNumber,
+            onValueChange = onMobileNumberChange,
+            label = { Text("Mobile Number") },
+            placeholder = { Text("09XXXXXXXXX") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -286,7 +287,7 @@ private fun AccountActivationStep(
         Button(
             onClick = onNext,
             modifier = Modifier.fillMaxWidth().height(50.dp),
-            enabled = accountId.isNotBlank() && pin.isNotBlank() && !isLoading
+            enabled = mobileNumber.isNotBlank() && pin.isNotBlank() && !isLoading
         ) {
             if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
             else Text("Activate & Continue")

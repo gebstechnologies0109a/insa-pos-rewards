@@ -19,9 +19,9 @@ class AccountRepository @Inject constructor(
 
     suspend fun getAccountSync(): AccountEntity? = accountDao.getAccountSync()
 
-    suspend fun login(accountId: String, pin: String, deviceId: String): Result<AccountEntity> {
+    suspend fun login(mobileNumber: String, pin: String, deviceId: String): Result<AccountEntity> {
         return try {
-            val response = apiService.login(LoginRequest(accountId, pin, deviceId))
+            val response = apiService.login(LoginRequest(mobileNumber, pin, deviceId))
             if (response.isSuccessful && response.body()?.success == true) {
                 val body = response.body()!!
                 val accountInfo = body.account!!

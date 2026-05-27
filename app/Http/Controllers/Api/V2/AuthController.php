@@ -4,31 +4,52 @@ namespace App\Http\Controllers\Api\V2;
 
 use App\Http\Controllers\Controller;
 use App\Models\EPayPlus\Retailer;
+use App\Support\PhilippineMobile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
     public function login(Request $request): JsonResponse
     {
         $request->validate([
-            'account_id' => 'required|string',
+            'mobile_number' => 'required_without:account_id|nullable|string|max:20',
+            'account_id' => 'nullable|string',
             'pin' => 'required|string|min:4',
             'device_id' => 'nullable|string',
         ]);
 
-        $retailer = Retailer::where('account_id', $request->account_id)->first();
+        $retailer = null;
 
-        if (!$retailer || !Hash::check($request->pin, $retailer->pin)) {
+        if ($request->filled('mobile_number')) {
+            $normalized = PhilippineMobile::normalize($request->mobile_number);
+
+            if (! PhilippineMobile::isValid($normalized)) {
+                throw ValidationException::withMessages([
+                    'mobile_number' => ['Enter a valid Philippine mobile number (e.g. 09171234567).'],
+                ]);
+            }
+
+            $retailer = Retailer::where('mobile_number', $normalized)->first();
+        } elseif ($request->filled('account_id')) {
+            $retailer = Retailer::where('account_id', $request->account_id)->first();
+        }
+
+        if (! $retailer || ! Hash::check($request->pin, $retailer->pin)) {
+            $message = $request->filled('account_id') && ! $request->filled('mobile_number')
+                ? 'Invalid account ID or PIN.'
+                : 'Invalid mobile number or PIN.';
+
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid account ID or PIN.',
+                'message' => $message,
             ], 401);
         }
 
-        if (!$retailer->is_active) {
+        if (! $retailer->is_active) {
             return response()->json([
                 'success' => false,
                 'message' => 'Account has been deactivated. Contact admin.',
@@ -80,13 +101,13 @@ class AuthController extends Controller
             'pin' => 'required|string|min:4|max:6',
         ]);
 
-        $accountId = 'EP' . strtoupper(Str::random(8));
+        $accountId = 'EP'.strtoupper(Str::random(8));
 
         $retailer = Retailer::create([
             'account_id' => $accountId,
             'business_name' => $request->business_name,
             'owner_name' => $request->owner_name,
-            'mobile_number' => $request->mobile_number,
+            'mobile_number' => PhilippineMobile::normalize($request->mobile_number),
             'email' => $request->email,
             'address' => $request->address,
             'pin' => Hash::make($request->pin),
@@ -95,7 +116,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Registration successful. Your Account ID: ' . $accountId,
+            'message' => 'Registration successful. Your Account ID: '.$accountId,
             'account_id' => $accountId,
         ], 201);
     }
@@ -109,7 +130,7 @@ class AuthController extends Controller
 
         $retailer = $request->attributes->get('retailer');
 
-        if (!Hash::check($request->current_pin, $retailer->pin)) {
+        if (! Hash::check($request->current_pin, $retailer->pin)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Current PIN is incorrect.',

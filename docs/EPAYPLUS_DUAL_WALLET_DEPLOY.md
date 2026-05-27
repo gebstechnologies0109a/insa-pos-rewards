@@ -43,7 +43,7 @@
 # Login
 curl -s -X POST https://YOUR_HOST/api/v2/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"account_id":"EPDEMO001","pin":"1234","device_id":"deploy-check"}'
+  -d '{"mobile_number":"09171234567","pin":"1234","device_id":"deploy-check"}'
 
 # Use token from response
 curl -s https://YOUR_HOST/api/v2/account/balance -H "Authorization: Bearer TOKEN"

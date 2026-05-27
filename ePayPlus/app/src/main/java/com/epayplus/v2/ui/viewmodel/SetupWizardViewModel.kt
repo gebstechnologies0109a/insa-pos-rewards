@@ -9,6 +9,7 @@ import com.epayplus.v2.data.local.TokenManager
 import com.epayplus.v2.data.remote.EPayApiService
 import com.epayplus.v2.domain.model.DeviceRegisterRequest
 import com.epayplus.v2.util.MachineIdHelper
+import com.epayplus.v2.util.PhoneNumberUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,8 +43,8 @@ class SetupWizardViewModel @Inject constructor(
     private val _machineUid = MutableStateFlow(MachineIdHelper.getMachineUid(context))
     val machineUid: StateFlow<String> = _machineUid.asStateFlow()
 
-    private val _accountId = MutableStateFlow("")
-    val accountId: StateFlow<String> = _accountId.asStateFlow()
+    private val _mobileNumber = MutableStateFlow("")
+    val mobileNumber: StateFlow<String> = _mobileNumber.asStateFlow()
 
     private val _pin = MutableStateFlow("")
     val pin: StateFlow<String> = _pin.asStateFlow()
@@ -54,7 +55,10 @@ class SetupWizardViewModel @Inject constructor(
     fun updateServerUrl(url: String) { _serverUrl.value = url; _errorMessage.value = null }
     fun updateLicenseCode(code: String) { _licenseCode.value = code.uppercase(); _errorMessage.value = null }
     fun updateMachineUid(uid: String) { _machineUid.value = uid.uppercase(); _errorMessage.value = null }
-    fun updateAccountId(id: String) { _accountId.value = id; _errorMessage.value = null }
+    fun updateMobileNumber(value: String) {
+        _mobileNumber.value = PhoneNumberUtils.sanitizeInput(value)
+        _errorMessage.value = null
+    }
     fun updatePin(p: String) { _pin.value = p; _errorMessage.value = null }
     fun updateDeviceMode(mode: String) { _deviceMode.value = mode }
 
@@ -118,10 +122,16 @@ class SetupWizardViewModel @Inject constructor(
             _isLoading.value = true
             _errorMessage.value = null
             try {
+                val normalized = PhoneNumberUtils.normalizeForApi(_mobileNumber.value)
+                if (normalized == null) {
+                    _errorMessage.value = "Enter a valid Philippine mobile number (e.g. 09171234567)"
+                    _isLoading.value = false
+                    return@launch
+                }
                 val deviceId = tokenManager.getDeviceId() ?: MachineIdHelper.getDeviceId(context)
                 val response = apiService.login(
                     com.epayplus.v2.domain.model.LoginRequest(
-                        accountId = _accountId.value,
+                        mobileNumber = normalized,
                         pin = _pin.value,
                         deviceId = deviceId
                     )
@@ -130,7 +140,7 @@ class SetupWizardViewModel @Inject constructor(
                     val body = response.body()!!
                     tokenManager.saveSession(
                         body.token ?: "",
-                        _accountId.value,
+                        body.account?.id ?: "",
                         body.account?.businessName ?: "",
                         body.account?.ownerName ?: ""
                     )

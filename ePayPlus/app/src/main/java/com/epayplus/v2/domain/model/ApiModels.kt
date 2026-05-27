@@ -3,7 +3,7 @@ package com.epayplus.v2.domain.model
 import com.google.gson.annotations.SerializedName
 
 data class LoginRequest(
-    @SerializedName("account_id") val accountId: String,
+    @SerializedName("mobile_number") val mobileNumber: String,
     val pin: String,
     @SerializedName("device_id") val deviceId: String
 )
