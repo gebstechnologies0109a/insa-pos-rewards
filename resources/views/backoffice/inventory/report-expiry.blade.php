@@ -9,6 +9,16 @@
 <div class="mb-4 p-3 bg-green-100 text-green-800 rounded">{{ session('success') }}</div>
 @endif
 
+@if(session('error'))
+<div class="mb-4 p-3 bg-red-100 text-red-800 rounded">{{ session('error') }}</div>
+@endif
+
+@if(!empty($migrationPending))
+<div class="mb-4 p-3 bg-amber-100 text-amber-900 rounded">
+    Expiry alerts are not available yet. Run <code class="text-sm">php artisan migrate</code> on the server to create the <code class="text-sm">expiry_alerts</code> table.
+</div>
+@endif
+
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
     <div class="bg-white rounded-lg shadow p-4">
         <div class="text-sm text-gray-500">30-day warnings</div>
@@ -119,6 +129,8 @@
         </tbody>
     </table>
 </div>
+@if($alerts->total() > 0)
 <div class="mt-4">{{ $alerts->links() }}</div>
+@endif
 @endif
 @endsection

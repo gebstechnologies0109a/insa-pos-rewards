@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Concerns;
 
+use App\Models\POS\Branch;
 use Illuminate\Http\Request;
 
 trait ResolvesInventoryBranch
@@ -10,19 +11,25 @@ trait ResolvesInventoryBranch
     {
         $user = auth()->user();
 
-        if ($user->isSuperAdmin()) {
-            return (int) $request->input('branch_id', $user->branch_id ?? 1);
+        if ($request->filled('branch_id')) {
+            return (int) $request->input('branch_id');
         }
 
-        if ($user->isBranchScoped()) {
-            if (! $user->branch_id) {
-                abort(422, 'Your account is not assigned to a branch.');
-            }
-
+        if ($user->branch_id) {
             return (int) $user->branch_id;
         }
 
-        return (int) $request->input('branch_id', $user->branch_id ?? 1);
+        if ($user->isBranchScoped()) {
+            abort(422, 'Your account is not assigned to a branch.');
+        }
+
+        $fallback = Branch::orderBy('name')->value('id');
+
+        if (! $fallback) {
+            abort(422, 'No branches are configured. Create a branch first.');
+        }
+
+        return (int) $fallback;
     }
 
     protected function authorizeInventoryBranch(int $branchId): void
