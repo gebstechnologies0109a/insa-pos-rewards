@@ -11,22 +11,25 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         then: function () {
-            Route::middleware(['web', 'auth'])
+            Route::middleware(['web', 'auth', 'insa.product'])
                 ->prefix('api/pos')
                 ->group(base_path('routes/pos/api.php'));
 
-            Route::prefix('api')
+            Route::middleware('epayplus.product')
+                ->prefix('api')
                 ->group(base_path('routes/epayplus-api.php'));
 
-            Route::prefix('api')
+            Route::middleware('epayplus.product')
+                ->prefix('api')
                 ->group(base_path('routes/maya-biller.php'));
 
-            Route::post('/api/maya-checkout/webhook', [
-                \App\Http\Controllers\Api\MayaCheckoutController::class,
-                'webhook',
-            ]);
+            Route::middleware('epayplus.product')
+                ->post('/api/maya-checkout/webhook', [
+                    \App\Http\Controllers\Api\MayaCheckoutController::class,
+                    'webhook',
+                ]);
 
-            Route::middleware(['web'])
+            Route::middleware(['web', 'epayplus.product'])
                 ->group(base_path('routes/epayplus-web.php'));
         },
     )
@@ -35,6 +38,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
+            'epayplus.product' => \App\Http\Middleware\EnsureEpayPlusProduct::class,
+            'insa.product' => \App\Http\Middleware\EnsureInsaProduct::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [

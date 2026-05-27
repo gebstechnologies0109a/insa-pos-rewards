@@ -31,6 +31,9 @@ Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
+// ── INSA POS (blocked on ePayPlus host / APP_PRODUCT=epayplus) ─
+Route::middleware('insa.product')->group(function () {
+
 // ── POS Cashier (cashier, manager, admin, owner) ─
 Route::middleware(['auth', 'role:cashier,manager,admin,owner'])->group(function () {
     Route::get('/pos/cashier', function () {
@@ -160,3 +163,5 @@ Route::middleware(['auth', 'role:super_admin'])->prefix('super-admin')->group(fu
     Route::get('/branches/{branch}', [BranchOverviewController::class, 'show'])
         ->name('super-admin.branches.show');
 });
+
+}); // end insa.product

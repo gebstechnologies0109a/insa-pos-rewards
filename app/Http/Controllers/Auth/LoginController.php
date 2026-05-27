@@ -27,6 +27,14 @@ class LoginController extends Controller
 
             $user = Auth::user();
 
+            if (is_epayplus_product($request)) {
+                if ($user->isSuperAdmin() || in_array($user->role, ['owner', 'admin'], true)) {
+                    return redirect()->intended(route('epayplus.dashboard'));
+                }
+
+                abort(403, 'This account is not authorized for ePay Plus Admin.');
+            }
+
             if ($user->isSuperAdmin()) {
                 return redirect()->intended(route('super-admin.dashboard'));
             }

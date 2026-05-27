@@ -1,5 +1,5 @@
 @php
-    $isEpayPlus = str_contains(request()->getHost(), 'epayplus');
+    $isEpayPlus = is_epayplus_product();
     $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS';
 @endphp
 <!DOCTYPE html>

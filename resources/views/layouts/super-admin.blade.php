@@ -1,4 +1,4 @@
-@php $isEpayPlus = str_contains(request()->getHost(), 'epayplus'); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
+@php $isEpayPlus = is_epayplus_product(); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
 <!DOCTYPE html>
 <html>
 <head>
@@ -41,6 +41,7 @@
                     </span>
                 </a>
 
+                @if(is_epayplus_product())
                 <div class="px-5 pt-4 pb-1 text-xs uppercase text-indigo-500 tracking-wider font-semibold">ePayPlus</div>
 
                 <a href="{{ route('epayplus.dashboard') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition {{ request()->routeIs('epayplus.*') ? 'bg-indigo-900 text-white' : '' }}">
@@ -49,6 +50,7 @@
                         ePayPlus Admin
                     </span>
                 </a>
+                @endif
 
                 <div class="px-5 pt-4 pb-1 text-xs uppercase text-indigo-500 tracking-wider font-semibold">Quick Links</div>
 

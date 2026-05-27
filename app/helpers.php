@@ -1,5 +1,32 @@
 <?php
 
+use App\Support\ProductMode;
+use Illuminate\Http\Request;
+
+if (! function_exists('current_product')) {
+    /**
+     * @return 'insa'|'epayplus'
+     */
+    function current_product(?Request $request = null): string
+    {
+        return ProductMode::currentProduct($request);
+    }
+}
+
+if (! function_exists('is_epayplus_product')) {
+    function is_epayplus_product(?Request $request = null): bool
+    {
+        return ProductMode::isEpayPlusHost($request);
+    }
+}
+
+if (! function_exists('is_insa_product')) {
+    function is_insa_product(?Request $request = null): bool
+    {
+        return ProductMode::isInsaHost($request);
+    }
+}
+
 if (! function_exists('provider_code_to_slug')) {
     /**
      * Map epay provider code to ic_provider_{slug} filename slug.

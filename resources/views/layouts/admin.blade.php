@@ -1,4 +1,4 @@
-@php $isEpayPlus = str_contains(request()->getHost(), 'epayplus'); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
+@php $isEpayPlus = is_epayplus_product(); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
 <!DOCTYPE html>
 <html>
 <head>

@@ -23,7 +23,7 @@
     </style>
 </head>
 <body>
-    @php $brandName = str_contains(request()->getHost(), 'epayplus') ? 'ePay Plus' : 'INSA POS'; @endphp
+    @php $brandName = is_epayplus_product() ? 'ePay Plus' : 'INSA POS'; @endphp
     <h1>{{ $brandName }} — Shift Report</h1>
     <div class="subtitle">Generated {{ now()->format('M d, Y h:i A') }}</div>
 
