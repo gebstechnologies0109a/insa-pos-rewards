@@ -317,7 +317,7 @@ class MainActivity : AppCompatActivity() {
 
             cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
 
-            val appUa = "INSAPOSv2/${BuildConfig.VERSION_NAME} Android/${Build.VERSION.RELEASE}"
+            val appUa = "INSAPOSv3/${BuildConfig.VERSION_NAME} Android/${Build.VERSION.RELEASE}"
             userAgentString = "$userAgentString $appUa"
         }
 

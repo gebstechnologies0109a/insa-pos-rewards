@@ -116,7 +116,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginStart="8dp"
-            android:text="INSAPOS v2"
+            android:text="INSA POS v3"
             android:textColor="@color/white"
             android:textSize="11sp" />
 
@@ -124,7 +124,7 @@
             android:id="@+id/versionText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="v2.0.0"
+            android:text="v3.0.0"
             android:textColor="@color/offline_text"
             android:textSize="10sp" />
 

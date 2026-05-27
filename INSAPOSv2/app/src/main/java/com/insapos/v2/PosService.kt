@@ -181,7 +181,7 @@ class PosService : Service() {
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("INSAPOS v2")
+                .setContentTitle("INSA POS v3")
                 .setContentText("POS hardware bridge running")
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentIntent(pi)
@@ -190,7 +190,7 @@ class PosService : Service() {
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
-                .setContentTitle("INSAPOS v2")
+                .setContentTitle("INSA POS v3")
                 .setContentText("POS hardware bridge running")
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentIntent(pi)
