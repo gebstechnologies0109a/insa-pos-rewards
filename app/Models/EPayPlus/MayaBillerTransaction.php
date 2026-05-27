@@ -21,6 +21,7 @@ class MayaBillerTransaction extends Model
         'currency',
         'customer_name',
         'customer_phone',
+        'callback_url',
         'raw_validate_payload',
         'raw_post_payload',
         'callback_sent_at',

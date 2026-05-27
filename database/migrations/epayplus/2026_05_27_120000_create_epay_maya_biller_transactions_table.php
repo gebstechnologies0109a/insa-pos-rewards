@@ -28,6 +28,7 @@ return new class extends Migration
             $table->string('currency', 3)->default('PHP');
             $table->string('customer_name')->nullable();
             $table->string('customer_phone')->nullable();
+            $table->string('callback_url', 512)->nullable();
             $table->json('raw_validate_payload')->nullable();
             $table->json('raw_post_payload')->nullable();
             $table->timestamp('callback_sent_at')->nullable();

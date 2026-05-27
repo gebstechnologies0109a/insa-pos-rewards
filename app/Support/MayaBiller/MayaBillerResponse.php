@@ -21,6 +21,14 @@ class MayaBillerResponse
         return response()->json(['result' => ['code' => '0000']], $status);
     }
 
+    public static function alreadyAccepted(int $status = 202): JsonResponse
+    {
+        return response()->json([
+            'result' => ['code' => '0000'],
+            'resultMessage' => 'ALREADY_ACCEPTED',
+        ], $status);
+    }
+
     /**
      * Post Bills Payment acceptance (Maya → Partner).
      */

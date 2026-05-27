@@ -1,214 +1,254 @@
-# Maya Partner Biller API — ePayPlus Integration
+# Maya Partner Biller API — ePayPlus
 
-ePayPlus acts as **Partner Biller** in the Maya Bills Payment network. Maya’s consumer app debits the customer; ePayPlus validates the account, posts the bill on the partner side, and sends a **Posting Callback** to confirm fulfillment or failure (refund path).
+ePayPlus acts as **Partner Biller**. Maya sends inbound Validate / Post / Inquire; ePayPlus posts the bill internally and sends **Posting Callbacks** (Step 3) to Maya.
 
-> **Status:** Validate (Step 1) implemented with fee contract. Post/Inquire/Callback remain scaffolding until Maya onboarding completes.
+**Base URL (production example):** `https://epayplus.diybizrewards.com`
 
-## User flow (Maya app → Partner)
+All inbound routes are prefixed with `/api/maya-biller/v1`.
 
-1. Customer fills payment details in the Maya app and taps **Continue**.
-2. Maya creates a bill payment with customer details.
-3. Maya PG calls **`POST /api/maya-biller/v1/validate`** on the partner (ePayPlus).
-4. Partner validates account, amount, expiry, etc. **No database write on validate.**
-5. Partner responds with **`result.code`** and **`fees`** (must match commercial contract; Maya builds the payment slip).
-6. Customer reviews/confirms the slip → status **Processing**.
-7. Fees may change via Maya RM or optional **`POST /api/maya-biller/v1/fee`** (Get Fee API).
+Required headers (inbound from Maya):
 
-## Public URLs (register with Maya RM)
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Request-Reference-No` | Yes | Unique idempotency key per Maya request |
+| `paymaya-signature` | Base64(SHA256(raw body + secret key)) |
+| `Content-Type` | Yes | `application/json` |
 
-Base: `{APP_URL}/api/maya-biller/v1`
+Set `MAYA_BILLER_SKIP_SIGNATURE=true` in local `.env` for testing only.
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/validate` | Step 1 — Validate Bills Payment |
-| POST | `/post` | Post Bills Payment (customer debited) |
-| POST | `/inquire` | Inquire by Request Reference No |
-| POST | `/fee` | Get Fee (optional; same fee shape as validate success) |
+---
 
-Admin: `{APP_URL}/epayplus/integrations/maya`
+## Transaction state machine
 
-## Step 1 — Validate request
+```mermaid
+stateDiagram-v2
+    [*] --> NEW
+    NEW --> PROCESSING: Post started (Step 2)
+    PROCESSING --> AUTHORIZED: Post accepted
+    AUTHORIZED --> POSTING: Background job
+    POSTING --> FULFILLED: Callback result 0000
+    POSTING --> POSTING_FAILED: Callback result ≠ 0000
+    PROCESSING --> FAILED: Post rejected 4xx/5xx
+    AUTHORIZED --> FAILED: Post / wallet failure
+    FULFILLED --> [*]
+    POSTING_FAILED --> [*]
+    FAILED --> [*]
+```
 
-Headers (required when enabled):
+| State | When | Partner action |
+|-------|------|----------------|
+| **NEW** | Step 1 Validate success (Maya-side; partner validate does **not** persist) | Return `0000` + fees only |
+| **PROCESSING** | Step 2 Post started | Receive post, queue job |
+| **AUTHORIZED** | Maya debited customer wallet | Set on post accept |
+| **POSTING** | Internal bill posting running | Save txn, run `ProcessMayaBillerPostingJob` |
+| **FAILED** | Wallet debit / post failed | Return 4xx/5xx on post (do not queue) |
+| **FULFILLED** | Step 3 callback `result.code` = **0000** | Partner **sends** callback to Maya |
+| **POSTING_FAILED** | Callback `result.code` ≠ **0000** | Maya refunds customer |
 
-- `Request-Reference-No` — unique per request
-- `paymaya-signature` — `Base64(SHA256(rawBody + secretKey))` (confirm with Maya RM)
+Flow: START → New → Processing → Authorized → Posting → Fulfilled | Failed | Posting Failed → END
 
-Example body:
+---
 
-```json
+## Step 1: Validate Bills Payment
+
+**Maya spec path:** `POST /v1/validate`  
+**ePayPlus URL:** `POST /api/maya-biller/v1/validate`
+
+**Behavior:** Stateless — **no database writes**. Successful validates store an RRN proof in cache for Post gating.
+
+### Sample request
+
+```http
+POST /api/maya-biller/v1/validate HTTP/1.1
+Host: epayplus.diybizrewards.com
+Content-Type: application/json
+Request-Reference-No: RRN-20260527-000001
+paymaya-signature: <computed>
+
 {
   "billerCode": "MERALCO",
   "accountNumber": "1234567890",
   "amount": 1500.00,
   "currency": "PHP",
-  "mobileNo": "09171234567",
-  "referenceNo": "20260527001",
-  "billExpiry": "2026-12-31",
+  "customerPhone": "09171234567",
   "data": {}
 }
 ```
 
-Snake_case aliases (`biller_code`, `account_number`, etc.) are accepted.
-
-## Step 1 — Validate success response
-
-HTTP 200. **Fees are mandatory on success.**
-
-```json
-{
-  "result": {
-    "code": "0000"
-  },
-  "fees": {
-    "convenienceFee": 0.00,
-    "serviceFee": 15.00,
-    "totalFee": 15.00
-  }
-}
-```
-
-| Field | Description |
-|-------|-------------|
-| `fees.convenienceFee` | Partner convenience fee (PHP) |
-| `fees.serviceFee` | Partner service fee (PHP); often from `epay_products.fee` |
-| `fees.totalFee` | Sum of convenience + service |
-
-## Step 1 — Validate error response
-
-HTTP 200 (Maya contract). No `fees` key on errors.
-
-```json
-{
-  "result": {
-    "code": "2559",
-    "message": "Account Number is invalid"
-  }
-}
-```
-
-## Result codes (Validate / middleware)
-
-| Code | When |
-|------|------|
-| `0000` | Validation passed; fees included |
-| `2559` | Invalid account / unknown biller / blacklist |
-| `2596` | Invalid amount, mobile, expiry, or billing data |
-| `ACQ018` | Integration disabled, missing RRN, or signature failure |
-
-Other endpoints (post/inquire) may use legacy `resultCode` fields until aligned with Maya RM.
-
-## Fee configuration
-
-File: `config/maya_biller.php`
-
-| Key | Purpose |
-|-----|---------|
-| `fees.default.convenience_fee` | Fallback convenience fee |
-| `fees.default.service_fee` | Fallback service fee |
-| `fees.biller_overrides.{CODE}` | Per-biller `convenience_fee` / `service_fee` |
-| `fees.contract_note` | Admin reminder to match Maya contract |
-
-Env overrides:
-
-- `MAYA_BILLER_DEFAULT_CONVENIENCE_FEE`
-- `MAYA_BILLER_DEFAULT_SERVICE_FEE`
-- `MAYA_BILLER_FEE_CONTRACT_NOTE`
-
-**Resolution order:** `fees.biller_overrides` → `epay_products.fee` (BILLS, matched by biller code) → `fees.default`.
-
-`epay_product_pricing` is retailer-specific and is not used for Maya consumer validate.
-
-Service: `App\Services\MayaBiller\MayaBillerFeeService`
-
-## Get Fee API (optional)
-
-`POST /api/maya-biller/v1/fee`
-
-```json
-{
-  "billerCode": "MERALCO",
-  "amount": 1500.00
-}
-```
-
-Success uses the same `result` + `fees` shape as validate.
-
-## Environment variables
-
-| Variable | Description |
-|----------|-------------|
-| `MAYA_BILLER_ENABLED` | `true` to accept traffic |
-| `MAYA_BILLER_SKIP_SIGNATURE` | `true` for local testing only |
-| `MAYA_BILLER_SECRET_KEY` | Inbound signature secret |
-| `MAYA_BILLER_CALLBACK_API_KEY` | Outbound callback Basic auth user |
-| `MAYA_BILLER_ENVIRONMENT` | `sandbox` or `production` |
-| `MAYA_BILLER_DEFAULT_CONVENIENCE_FEE` | Default convenience fee |
-| `MAYA_BILLER_DEFAULT_SERVICE_FEE` | Default service fee |
-
-See `.env.example` for full list.
-
-## Security
-
-- Middleware: `MayaBillerSignatureMiddleware`
-- Response helper: `App\Support\MayaBiller\MayaBillerResponse`
-
-## Transaction states (post flow)
-
-```
-NEW → PROCESSING → AUTHORIZED → POSTING → FULFILLED
-                                      └→ POSTING_FAILED
-```
-
-Validate does **not** create rows in `epay_maya_biller_transactions`.
-
-## Code map
-
-| Component | Path |
-|-----------|------|
-| Config | `config/maya_biller.php` |
-| Validate service | `app/Services/MayaBiller/MayaBillerValidatePaymentService.php` |
-| Fee service | `app/Services/MayaBiller/MayaBillerFeeService.php` |
-| Webhook controller | `app/Http/Controllers/Api/MayaBiller/MayaBillerWebhookController.php` |
-| Routes | `routes/maya-biller.php` |
-| Tests | `tests/Feature/MayaBiller/MayaBillerValidateTest.php`, `tests/Unit/MayaBillerFeeServiceTest.php` |
-
-## Local curl test
-
-Set `MAYA_BILLER_ENABLED=true` and `MAYA_BILLER_SKIP_SIGNATURE=true` for quick tests, or compute signature as below.
-
-```bash
-# PowerShell — signature + validate (replace APP_URL and secret)
-$body = '{"billerCode":"MERALCO","accountNumber":"1234567890","amount":1500}'
-$secret = "your-maya-secret"
-$bytes = [System.Text.Encoding]::UTF8.GetBytes($body + $secret)
-$hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
-$sig = [Convert]::ToBase64String($hash)
-
-curl -X POST "http://localhost/api/maya-biller/v1/validate" `
-  -H "Content-Type: application/json" `
-  -H "Request-Reference-No: test-rrn-001" `
-  -H "paymaya-signature: $sig" `
-  -d $body
-```
-
-Expected success (with seeded MERALCO BILLS product fee ₱15):
+### Sample success response
 
 ```json
 {
   "result": { "code": "0000" },
   "fees": {
     "convenienceFee": 0,
-    "serviceFee": 15,
-    "totalFee": 15
+    "serviceFee": 5,
+    "totalFee": 5
   }
 }
 ```
 
-## Enabling after Maya onboarding
+### Result codes (whitelist)
 
-1. `php artisan migrate`
-2. Set env credentials and fee contract values
-3. Register URLs with Maya RM
-4. Map `biller_code_map` and `fees.biller_overrides` per contract
-5. Implement internal posting in `MayaBillerTransactionService::dispatchInternalBillPosting()`
+| Code | Customer-facing | When used |
+|------|-----------------|-----------|
+| `0000` | No | Valid |
+| `2559` | Yes | Invalid biller / account |
+| `2596` | Yes | Invalid amount, mobile, billing data |
+| `ACQ018` | No | Signature, disabled, maintenance |
+
+---
+
+## Step 2: Post Bills Payment
+
+**Maya spec path:** `POST /v1/post`  
+**ePayPlus URL:** `POST /api/maya-biller/v1/post`
+
+Maya debits the customer wallet, then calls partner Post with `callbackUrl` for Step 3.
+
+### Sample request
+
+```json
+{
+  "billerCode": "MERALCO",
+  "accountNumber": "1234567890",
+  "amount": 1500.00,
+  "fee": 5.00,
+  "currency": "PHP",
+  "transactionId": "MAYA-TXN-12345",
+  "callbackUrl": "https://pg-sandbox.paymaya.com/partners/v1/billers/transactions/callback"
+}
+```
+
+### Sample acceptance response (HTTP 202)
+
+```json
+{
+  "result": { "code": "0000" }
+}
+```
+
+Partner persists txn as **PROCESSING → AUTHORIZED**, creates ledger row, and dispatches `ProcessMayaBillerPostingJob`.
+
+---
+
+## Step 3: Send Posting Callback (Partner → Maya)
+
+**Partner initiates** HTTP `POST` to `callbackUrl` from the Post request (fallback: `MAYA_BILLER_*_BASE_URL` + `MAYA_BILLER_CALLBACK_PATH`).
+
+| Item | Value |
+|------|-------|
+| Auth | `Authorization: Basic Base64(apiKey + ":")` — password empty |
+| Header | `Request-Reference-No: [RRN]` |
+| Body | `result.code` **0000** = FULFILLED; other = POSTING_FAILED (Maya refunds) |
+
+### Sample callback payload (success)
+
+```http
+POST /partners/v1/billers/transactions/callback HTTP/1.1
+Host: pg-sandbox.paymaya.com
+Authorization: Basic <base64(apiKey + ":")>
+Request-Reference-No: RRN-20260527-000001
+Content-Type: application/json
+
+{
+  "requestReferenceNo": "RRN-20260527-000001",
+  "transactionId": "MAYA-TXN-12345",
+  "result": {
+    "code": "0000"
+  }
+}
+```
+
+### Sample callback payload (posting failed)
+
+```json
+{
+  "requestReferenceNo": "RRN-20260527-000001",
+  "transactionId": "MAYA-TXN-12345",
+  "result": {
+    "code": "9999"
+  }
+}
+```
+
+Implementation: `App\Services\MayaBiller\MayaBillerCallbackClient::sendPostingCallback()` returns `MayaCallbackResult`; `MayaBillerTransactionService::applyCallbackResult()` sets **FULFILLED** or **POSTING_FAILED** and logs `callback_sent_at` / `callback_response`.
+
+### Job sequence (`ProcessMayaBillerPostingJob`)
+
+1. Transition **AUTHORIZED → POSTING**
+2. Credit / complete internal `epay_transactions` row (`markSuccess`)
+3. `POST` callback with `result.code` **0000** → **FULFILLED**
+4. On internal or callback business failure → callback **9999** → **POSTING_FAILED**
+
+---
+
+## Inquire Transaction
+
+**Maya spec path:** `POST /v1/inquire`  
+**ePayPlus URL:** `POST /api/maya-biller/v1/inquire`
+
+```json
+{
+  "requestReferenceNo": "RRN-20260527-000001"
+}
+```
+
+### Sample response
+
+```json
+{
+  "result": { "code": "0000" },
+  "requestReferenceNo": "RRN-20260527-000001",
+  "transactionId": "MAYA-TXN-12345",
+  "status": "FULFILLED",
+  "amount": 1500,
+  "fee": 5,
+  "currency": "PHP",
+  "callbackSentAt": "2026-05-27T10:15:00+08:00"
+}
+```
+
+---
+
+## Settlement reports
+
+Download settlement reports from **Maya Business Manager** ([business.maya.ph](https://business.maya.ph)) and reconcile against **FULFILLED** transactions in ePayPlus admin (**Integrations → Maya Biller**).
+
+Settlement lines include:
+
+- Bill payment amount
+- **Service fee** and **convenience fee** (must match Validate / commercial contract)
+
+Configure fees in `config/maya_biller.php` → `fees.default` and `fees.biller_overrides`.
+
+---
+
+## Get Fee (optional)
+
+`POST /api/maya-biller/v1/fee` — same fee shape as Validate success.
+
+---
+
+## Local testing
+
+```bash
+BODY='{"billerCode":"MERALCO","accountNumber":"1234567890","amount":1500,"currency":"PHP"}'
+SECRET="your-maya-secret"
+SIG=$(php -r "echo base64_encode(hash('sha256', file_get_contents('php://stdin').'$SECRET', true));" <<< "$BODY")
+
+curl -s -X POST "http://localhost/api/maya-biller/v1/validate" \
+  -H "Content-Type: application/json" \
+  -H "Request-Reference-No: test-rrn-001" \
+  -H "paymaya-signature: $SIG" \
+  -d "$BODY"
+```
+
+```env
+MAYA_BILLER_ENABLED=true
+MAYA_BILLER_SECRET_KEY=your-secret
+MAYA_BILLER_CALLBACK_API_KEY=your-callback-key
+MAYA_BILLER_SKIP_SIGNATURE=true
+```
+
+Admin UI: **ePayPlus → Integrations → Maya Biller** (`/epayplus/integrations/maya`).

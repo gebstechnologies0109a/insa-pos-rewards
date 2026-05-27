@@ -28,7 +28,7 @@ class MayaBillerWebhookController extends Controller
 
     /**
      * Step 1: Validate Bills Payment (Maya → Partner).
-     * Stateless — no database writes.
+     * Stateless — no database writes; records validate proof in cache for Post.
      */
     public function validatePayment(ValidateBillsPaymentRequest $request): JsonResponse
     {
@@ -38,6 +38,8 @@ class MayaBillerWebhookController extends Controller
                 'The biller cannot accept payments right now. Please try again later.'
             );
         }
+
+        $rrn = $this->requestReferenceNo($request);
 
         $result = $this->validatePaymentService->validate(
             billerCode: $request->billerCode(),
@@ -50,30 +52,28 @@ class MayaBillerWebhookController extends Controller
             billingData: $request->billingData()
         );
 
-        if ($result['code'] === '0000') {
-            $rrn = $this->requestReferenceNo($request);
-            $this->validateProofService->remember($rrn, [
-                'billerCode' => $request->billerCode(),
-                'accountNumber' => $request->accountNumber(),
-                'amount' => $request->amount(),
-            ]);
-
-            $fees = $this->feeService->compute(
-                $request->billerCode(),
-                $request->amount()
+        if ($result['code'] !== '0000') {
+            return MayaBillerResponse::error(
+                $result['code'],
+                $result['message'] ?? 'Validation failed.'
             );
-
-            return MayaBillerResponse::success($fees);
         }
 
-        return MayaBillerResponse::error(
-            $result['code'],
-            $result['message'] ?? 'Validation failed.'
-        );
+        $fees = $this->feeService->compute($request->billerCode(), $request->amount());
+
+        $this->validateProofService->remember($rrn, [
+            'billerCode' => $request->billerCode(),
+            'accountNumber' => $request->accountNumber(),
+            'amount' => $request->amount(),
+            'fees' => $fees,
+        ]);
+
+        return MayaBillerResponse::success($fees);
     }
 
     /**
-     * Step 2: Post Bills Payment (Maya → Partner) — customer debited; persist and queue posting.
+     * Step 2: Post Bills Payment (Maya → Partner).
+     * Respond immediately with 202 Accepted; background job posts and callbacks.
      */
     public function postPayment(PostBillsPaymentRequest $request): JsonResponse
     {
@@ -92,26 +92,50 @@ class MayaBillerWebhookController extends Controller
 
         try {
             $result = $this->postPaymentService->accept($rrn, $request);
-
-            return MayaBillerResponse::accepted($result['status']);
         } catch (\InvalidArgumentException $e) {
-            [$code, $message] = array_pad(explode(':', $e->getMessage(), 2), 2, 'Validation failed.');
+            $parts = explode(':', $e->getMessage(), 2);
+            $code = $parts[0] ?? '2596';
+            $message = $parts[1] ?? 'Validation failed.';
 
             if (in_array($code, ['2559', '2596'], true)) {
                 return MayaBillerResponse::validationError($code, $message);
             }
 
-            return MayaBillerResponse::validationError('2596', $message);
-        } catch (\RuntimeException $e) {
-            if (str_starts_with($e->getMessage(), 'ACQ018:')) {
-                return MayaBillerResponse::validationError(
-                    'ACQ018',
-                    trim(substr($e->getMessage(), 7)) ?: 'Prior validate required.'
-                );
+            if ($code === 'ACQ018') {
+                return MayaBillerResponse::validationError('ACQ018', $message);
             }
 
-            throw $e;
+            return response()->json([
+                'result' => ['code' => '4002', 'message' => $message],
+                'requestReferenceNo' => $rrn,
+            ], 409);
+        } catch (\RuntimeException $e) {
+            $message = str_replace('ACQ018:', '', $e->getMessage());
+
+            return MayaBillerResponse::validationError(
+                'ACQ018',
+                trim($message) ?: 'Prior validate required.'
+            );
         }
+
+        $txn = $result['txn'];
+
+        if ($result['idempotent']) {
+            return response()->json([
+                'resultCode' => '0000',
+                'resultMessage' => 'ALREADY_ACCEPTED',
+                'requestReferenceNo' => $txn->request_reference_no,
+                'transactionId' => $txn->maya_transaction_id,
+                'status' => $txn->state->value,
+                'queued' => false,
+            ], $result['status']);
+        }
+
+        return MayaBillerResponse::postAccepted(
+            $txn->request_reference_no,
+            $txn->state->value,
+            $result['status']
+        );
     }
 
     /**
@@ -124,15 +148,16 @@ class MayaBillerWebhookController extends Controller
 
         if (! $txn) {
             return response()->json([
-                'resultCode' => '4040',
-                'resultMessage' => 'Transaction not found.',
+                'result' => [
+                    'code' => '4040',
+                    'message' => 'Transaction not found.',
+                ],
                 'requestReferenceNo' => $rrn,
             ], 404);
         }
 
         return response()->json([
-            'resultCode' => '0000',
-            'resultMessage' => 'SUCCESS',
+            'result' => ['code' => '0000'],
             'requestReferenceNo' => $txn->request_reference_no,
             'transactionId' => $txn->maya_transaction_id,
             'status' => $txn->state->value,
@@ -149,10 +174,7 @@ class MayaBillerWebhookController extends Controller
     public function getFee(GetFeeRequest $request): JsonResponse
     {
         if (! config('maya_biller.enabled')) {
-            return MayaBillerResponse::error(
-                'ACQ018',
-                'The biller cannot accept payments right now. Please try again later.'
-            );
+            return $this->disabledResponse();
         }
 
         $fees = $this->feeService->compute(
@@ -171,5 +193,13 @@ class MayaBillerWebhookController extends Controller
             ?? $request->input('requestReferenceNo')
             ?? $request->input('request_reference_no')
         );
+    }
+
+    protected function disabledResponse(): JsonResponse
+    {
+        return response()->json([
+            'resultCode' => '5030',
+            'resultMessage' => 'Maya Biller integration is disabled.',
+        ], 503);
     }
 }

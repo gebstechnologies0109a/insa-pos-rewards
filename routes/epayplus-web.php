@@ -65,6 +65,8 @@ Route::middleware(['auth', 'role:owner,admin,super_admin'])->prefix('epayplus')-
     // ── Integrations ──
     Route::get('/integrations/maya', [MayaBillerIntegrationController::class, 'index'])
         ->name('epayplus.integrations.maya');
+    Route::get('/integrations/maya/testing', [MayaBillerIntegrationController::class, 'testingGuide'])
+        ->name('epayplus.integrations.maya.testing');
 
     // ── Providers ──
     Route::get('/providers', [ProviderController::class, 'index'])->name('epayplus.providers');

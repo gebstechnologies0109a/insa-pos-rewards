@@ -5,7 +5,7 @@ namespace App\Services\MayaBiller;
 use App\Enums\MayaBillerState;
 use App\Models\EPayPlus\MayaBillerTransaction;
 use App\Models\EPayPlus\Transaction;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
 class MayaBillerTransactionService
@@ -14,145 +14,84 @@ class MayaBillerTransactionService
         private readonly MayaBillerCallbackClient $callbackClient
     ) {}
 
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    public function recordValidate(string $requestReferenceNo, array $payload): MayaBillerTransaction
-    {
-        $txn = MayaBillerTransaction::firstOrNew([
-            'request_reference_no' => $requestReferenceNo,
-        ]);
-
-        if ($txn->exists && $txn->state !== MayaBillerState::New) {
-            return $txn;
-        }
-
-        $txn->fill([
-            'state' => MayaBillerState::Processing,
-            'biller_code' => (string) ($payload['billerCode'] ?? $payload['biller_code'] ?? ''),
-            'account_number' => (string) ($payload['accountNumber'] ?? $payload['account_number'] ?? ''),
-            'amount' => (float) ($payload['amount'] ?? 0),
-            'fee' => (float) ($payload['fee'] ?? 0),
-            'currency' => (string) ($payload['currency'] ?? config('maya_biller.default_currency', 'PHP')),
-            'customer_name' => $payload['customerName'] ?? $payload['customer_name'] ?? null,
-            'customer_phone' => $payload['customerPhone'] ?? $payload['customer_phone'] ?? null,
-            'raw_validate_payload' => $payload,
-        ]);
-        $txn->save();
-
-        return $txn;
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    public function recordPost(string $requestReferenceNo, array $payload): MayaBillerTransaction
-    {
-        return DB::transaction(function () use ($requestReferenceNo, $payload) {
-            $txn = MayaBillerTransaction::where('request_reference_no', $requestReferenceNo)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $txn) {
-                $txn = new MayaBillerTransaction([
-                    'request_reference_no' => $requestReferenceNo,
-                    'state' => MayaBillerState::New,
-                    'biller_code' => (string) ($payload['billerCode'] ?? $payload['biller_code'] ?? ''),
-                    'account_number' => (string) ($payload['accountNumber'] ?? $payload['account_number'] ?? ''),
-                    'amount' => (float) ($payload['amount'] ?? 0),
-                    'currency' => (string) ($payload['currency'] ?? config('maya_biller.default_currency', 'PHP')),
-                ]);
-                $txn->save();
-            }
-
-            if ($txn->state === MayaBillerState::New) {
-                $this->transition($txn, MayaBillerState::Processing);
-            }
-
-            $this->transition($txn, MayaBillerState::Authorized);
-
-            $txn->maya_transaction_id = (string) (
-                $payload['transactionId']
-                ?? $payload['mayaTransactionId']
-                ?? $payload['maya_transaction_id']
-                ?? $txn->maya_transaction_id
-            );
-            $txn->raw_post_payload = $payload;
-            $txn->amount = (float) ($payload['amount'] ?? $txn->amount);
-            $txn->fee = (float) ($payload['fee'] ?? $txn->fee);
-            $txn->save();
-
-            $this->transition($txn, MayaBillerState::Posting);
-            $this->dispatchInternalBillPosting($txn);
-
-            return $txn->fresh();
-        });
-    }
-
     public function findByRequestReference(string $requestReferenceNo): ?MayaBillerTransaction
     {
         return MayaBillerTransaction::where('request_reference_no', $requestReferenceNo)->first();
     }
 
     /**
-     * Stub: link to epay_transactions / retailer bill payment when fully integrated.
+     * Background job: credit ledger, POSTING, then Step 3 callback.
      */
-    protected function dispatchInternalBillPosting(MayaBillerTransaction $txn): void
+    public function processPosting(MayaBillerTransaction $txn): void
     {
-        // TODO: resolve retailer/system account, call existing bills payment pipeline.
-        if ($txn->epay_transaction_id) {
+        if ($txn->state->isTerminal()) {
             return;
         }
-    }
 
-    public function linkEpayTransaction(MayaBillerTransaction $txn, Transaction $epayTransaction): void
-    {
-        $txn->update(['epay_transaction_id' => $epayTransaction->id]);
-    }
-
-    /**
-     * Send posting callback and update terminal state.
-     *
-     * @param  array<string, mixed>  $extra
-     */
-    public function sendPostingCallback(
-        MayaBillerTransaction $txn,
-        bool $fulfilled,
-        array $extra = []
-    ): MayaBillerTransaction {
-        $resultCode = $fulfilled ? '0000' : '9999';
-        $nextState = $fulfilled ? MayaBillerState::Fulfilled : MayaBillerState::PostingFailed;
-
-        $payload = array_merge([
-            'requestReferenceNo' => $txn->request_reference_no,
-            'transactionId' => $txn->maya_transaction_id,
-            'resultCode' => $resultCode,
-            'resultMessage' => $fulfilled ? 'FULFILLED' : 'POSTING_FAILED',
-        ], $extra);
-
-        if (! config('maya_biller.enabled')) {
-            $txn->update([
-                'callback_response' => ['skipped' => true, 'reason' => 'integration_disabled'],
-            ]);
-
-            return $txn;
+        if ($txn->state === MayaBillerState::Authorized) {
+            $this->transition($txn, MayaBillerState::Posting);
+            $txn = $txn->fresh();
         }
 
-        $response = $this->callbackClient->sendPostingCallback($payload);
+        if ($txn->state !== MayaBillerState::Posting) {
+            return;
+        }
+
+        try {
+            $this->completeInternalPosting($txn);
+            $callback = $this->callbackClient->sendPostingCallback($txn, fulfilled: true);
+            $this->applyCallbackResult($txn, $callback);
+        } catch (\Throwable $e) {
+            Log::error('Maya Biller internal posting failed', [
+                'maya_biller_transaction_id' => $txn->id,
+                'request_reference_no' => $txn->request_reference_no,
+                'error' => $e->getMessage(),
+            ]);
+
+            $txn = $txn->fresh();
+            if ($txn->state === MayaBillerState::Posting) {
+                $callback = $this->callbackClient->sendPostingCallback($txn, fulfilled: false);
+                $this->applyCallbackResult($txn, $callback);
+            }
+        }
+    }
+
+    public function completeInternalPosting(MayaBillerTransaction $txn): void
+    {
+        if ($txn->epayTransaction) {
+            $txn->epayTransaction->markSuccess($txn->maya_transaction_id);
+        }
+    }
+
+    public function applyCallbackResult(MayaBillerTransaction $txn, MayaCallbackResult $callback): MayaBillerTransaction
+    {
+        $nextState = $callback->fulfilled
+            ? MayaBillerState::Fulfilled
+            : MayaBillerState::PostingFailed;
 
         $txn->update([
             'callback_sent_at' => now(),
             'callback_response' => [
-                'status' => $response->status(),
-                'body' => $response->json() ?? $response->body(),
+                'url' => $callback->callbackUrl,
+                'resultCode' => $callback->resultCode,
+                'status' => $callback->httpStatus,
+                'body' => $callback->responseBody,
+                'httpSuccessful' => $callback->httpSuccessful,
             ],
         ]);
+
+        $txn = $txn->fresh();
 
         if ($txn->state === MayaBillerState::Posting) {
             $this->transition($txn, $nextState);
         }
 
         return $txn->fresh();
+    }
+
+    public function linkEpayTransaction(MayaBillerTransaction $txn, Transaction $epayTransaction): void
+    {
+        $txn->update(['epay_transaction_id' => $epayTransaction->id]);
     }
 
     public function transition(MayaBillerTransaction $txn, MayaBillerState $next): void

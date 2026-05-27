@@ -28,6 +28,11 @@ return [
     'validate_proof_ttl_minutes' => (int) env('MAYA_BILLER_VALIDATE_PROOF_TTL', 30),
 
     /*
+    | Require a prior successful Validate (RRN proof in cache) before Post.
+    */
+    'require_validate_proof' => (bool) env('MAYA_BILLER_REQUIRE_VALIDATE_PROOF', true),
+
+    /*
     | Retailer account_id used for Maya-originated bill payment ledger rows.
     */
     'system_retailer_account_id' => env('MAYA_BILLER_SYSTEM_RETAILER', 'EPDEMO001'),
@@ -78,6 +83,27 @@ return [
     'default_currency' => env('MAYA_BILLER_DEFAULT_CURRENCY', 'PHP'),
 
     'http_timeout' => (int) env('MAYA_BILLER_HTTP_TIMEOUT', 30),
+
+    /*
+    | Maya Business Manager — settlement reports (partner reconciles FULFILLED txns).
+    */
+    'settlement_portal_url' => env(
+        'MAYA_BILLER_SETTLEMENT_URL',
+        'https://business.maya.ph'
+    ),
+
+    'system_retailer_account_id' => env('MAYA_BILLER_SYSTEM_RETAILER_ACCOUNT_ID', 'EPDEMO001'),
+
+    'validate_proof_ttl_minutes' => (int) env('MAYA_BILLER_VALIDATE_PROOF_TTL_MINUTES', 30),
+
+    'require_validate_proof' => (bool) env('MAYA_BILLER_REQUIRE_VALIDATE_PROOF', true),
+
+    'post_accept_status' => (int) env('MAYA_BILLER_POST_ACCEPT_STATUS', 202),
+
+    'public_base_url' => env(
+        'MAYA_BILLER_PUBLIC_BASE_URL',
+        'https://epayplus.diybizrewards.com'
+    ),
 
     /*
     |--------------------------------------------------------------------------
