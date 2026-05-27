@@ -54,18 +54,41 @@ Then click **Deploy Now** (or push to `deploy/insa` if Quick Deploy is on).
 
 Verify deploy log shows a recent commit (after `48e75df` / auto-`APP_PRODUCT` fix), not an old SHA like `be335e4` unless that is intentionally deployed.
 
+## Forge worker SSH key
+
+Laravel Forge runs deployments over SSH as the `forge` user using a **deployment worker** key (`worker@forge.laravel.com`). If deploy fails with a modal asking you to add that public key to the server, append it to the `forge` user's `authorized_keys` on the server (one line, no line breaks).
+
+**DIYBizRewards server** (`188.166.230.4`, site `insa-pos-rewards-tasxesjq.on-forge.com`): add this exact line:
+
+```text
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDtzL+AiGxpGcMuZCGF+be5ZNzuVdbmzh7oEf29jSRu9eOIYfF8Hv1d6rxfz09MNNSq035WoS4piS4N9rNrswZKZHy5x0J57iba6sU+Ej5e4AHYj0mPzv7N5YbzU9mKmJ2VpkjB5IpCYMJJX15hu3Q1qTPV9kw3ps67HKS61wPL5ajYXxCwSCJd+hSEpPiYBBD0Z9cwQjfVF0e9/10j1Thlhb2yq+97ZP9qVO1Z9BAAsbr09rfxJ0cNUXaxQ+RLCbw8wlqval8Ukj2shJc3wmRKyhycf2lx3KusGI1lt4Tg/HT03rZ3+p8sC4o6ncnA6DLTUsTujylPWQPnNvAINuw2HDASGplvHPpQ+E+KHXnZHQ7TX7kNMzgix9On4x8/snrugtZ1ziSj01xpPMR7RTNCvJxNruKTekrsDiffJWx/utp41v8e2RLaIYBt1zM9ulndiAwGtX2xYNgN5wDiw/4ZhEiVorfWW4Lo1qW5Og0B59hYrWDu6+9ONL2uAdKwjcEVF+n9PJi3B7g3IjixCyH0G3eD8HOQiOV5KTVf+kd/C5QEVWePyzg4aV8UMEZBVcCKbSXjElCVw3f9rcu/aYK68RsaQjw5cKR1L2naRMNp8ABp49q7M4LqseBv25TrE1WkzoQnVF2XIEJDb+Z+rAdFFue0lvYf2CkVzwI6/g4uiw== worker@forge.laravel.com
+```
+
+Target file: `/home/forge/.ssh/authorized_keys`. Forge normally manages this for the `forge` user; if the key is missing (new server, manual rebuild, or permission reset), add it yourself.
+
+Laravel Forge docs focus on the site user (`forge`). You only need to add the worker key to **root** if Forge explicitly instructs you to (uncommon for standard PHP sites). Do not store or commit private keys — only this public key line belongs on the server.
+
+### Copy-paste (SSH as `forge@188.166.230.4`)
+
+Use Forge → Server → **DIYBizRewards** → **SSH**, or your own key if you already have shell access:
+
+```bash
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+grep -qF 'worker@forge.laravel.com' ~/.ssh/authorized_keys || echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDtzL+AiGxpGcMuZCGF+be5ZNzuVdbmzh7oEf29jSRu9eOIYfF8Hv1d6rxfz09MNNSq035WoS4piS4N9rNrswZKZHy5x0J57iba6sU+Ej5e4AHYj0mPzv7N5YbzU9mKmJ2VpkjB5IpCYMJJX15hu3Q1qTPV9kw3ps67HKS61wPL5ajYXxCwSCJd+hSEpPiYBBD0Z9cwQjfVF0e9/10j1Thlhb2yq+97ZP9qVO1Z9BAAsbr09rfxJ0cNUXaxQ+RLCbw8wlqval8Ukj2shJc3wmRKyhycf2lx3KusGI1lt4Tg/HT03rZ3+p8sC4o6ncnA6DLTUsTujylPWQPnNvAINuw2HDASGplvHPpQ+E+KHXnZHQ7TX7kNMzgix9On4x8/snrugtZ1ziSj01xpPMR7RTNCvJxNruKTekrsDiffJWx/utp41v8e2RLaIYBt1zM9ulndiAwGtX2xYNgN5wDiw/4ZhEiVorfWW4Lo1qW5Og0B59hYrWDu6+9ONL2uAdKwjcEVF+n9PJi3B7g3IjixCyH0G3eD8HOQiOV5KTVf+kd/C5QEVWePyzg4aV8UMEZBVcCKbSXjElCVw3f9rcu/aYK68RsaQjw5cKR1L2naRMNp8ABp49q7M4LqseBv25TrE1WkzoQnVF2XIEJDb+Z+rAdFFue0lvYf2CkVzwI6/g4uiw== worker@forge.laravel.com' >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+Then redeploy from Forge → Site → **Deploy Now**.
+
 ## SSH access
 
 Connect using one of:
 
-- **Forge dashboard:** Server → your server → **SSH** (opens a browser session as the `forge` user).
-- **Local terminal:** Use the SSH key registered on the server (e.g. `worker@forge.laravel.com` public key in Forge). Example:
+- **Forge dashboard:** Server → **DIYBizRewards** → **SSH** (browser session as `forge`).
+- **Local terminal:** `ssh forge@188.166.230.4` (requires your personal SSH key on the server, separate from the Forge worker key above).
 
-  ```bash
-  ssh forge@YOUR_SERVER_IP
-  ```
-
-Do not commit or share private keys. Only the public key belongs in Forge.
+Do not commit or share private keys. Only public keys belong in `authorized_keys`.
 
 ## Manual commands (if deploy fails)
 
