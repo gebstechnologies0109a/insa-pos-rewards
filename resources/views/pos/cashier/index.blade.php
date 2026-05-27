@@ -267,7 +267,19 @@
         </div>
 
         <div class="flex-1 overflow-y-auto">
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 3xl:grid-cols-6 gap-1.5 lg:gap-2">
+            <div x-show="productsLoading && filteredProducts.length === 0" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 3xl:grid-cols-6 gap-1.5 lg:gap-2">
+                <template x-for="i in 12" :key="'skel-' + i">
+                    <div class="bg-white rounded-lg border border-gray-200 p-2 lg:p-3 animate-pulse">
+                        <div class="h-3 lg:h-4 bg-gray-200 rounded w-3/4"></div>
+                        <div class="h-2 bg-gray-100 rounded w-1/2 mt-2"></div>
+                        <div class="flex justify-between mt-3 lg:mt-4">
+                            <div class="h-3 bg-gray-200 rounded w-12"></div>
+                            <div class="h-3 bg-gray-100 rounded w-10"></div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 3xl:grid-cols-6 gap-1.5 lg:gap-2" x-show="!productsLoading || filteredProducts.length > 0">
                 <template x-for="product in filteredProducts" :key="product.id">
                     <button @click="addToCart(product)"
                             class="product-tile bg-white rounded-lg shadow hover:shadow-md border border-gray-200 p-2 lg:p-3 text-left transition-all flex flex-col"
@@ -284,7 +296,7 @@
                     </button>
                 </template>
             </div>
-            <div x-show="filteredProducts.length === 0" class="text-center py-8 lg:py-12 text-gray-400 text-xs lg:text-sm">No products found.</div>
+            <div x-show="!productsLoading && filteredProducts.length === 0" class="text-center py-8 lg:py-12 text-gray-400 text-xs lg:text-sm">No products found.</div>
         </div>
     </div>
 
@@ -1026,6 +1038,7 @@ function posApp() {
         products: [],
         categories: [],
         filteredProducts: [],
+        productsLoading: true,
         searchQuery: '',
         selectedCategory: '',
         cart: [],
@@ -1204,8 +1217,12 @@ function posApp() {
 
         async initOffline() {
             const db = window.INSADB;
-            if (db) { await db.init(); this.pendingSyncCount = await db.transactions.pendingCount(); }
-            await this.loadProducts();
+            if (db) {
+                await db.init();
+                this.pendingSyncCount = await db.transactions.pendingCount();
+                await this.loadProductsFromCache();
+            }
+            this.loadProducts();
             if (window.SyncEngine) {
                 SyncEngine.on('syncStatus', (s) => { this.syncStatus = s; });
                 SyncEngine.on('connectivity', (o) => { if (!o) this.syncStatus = 'offline'; });
@@ -1215,7 +1232,7 @@ function posApp() {
                 SyncEngine.on('productsUpdated', (c) => { if (c > 0) this.refreshProductsFromDB(); });
                 SyncEngine.on('buddyRecovered', () => { this.showToast('Recovered offline data from INSABuddy', 'info'); });
                 SyncEngine.on('syncError', (d) => { this.showToast('Sync error: ' + (d.error || 'Unknown'), 'error'); });
-                SyncEngine.init({ branchId: this.config.branchId });
+                SyncEngine.init({ branchId: this.config.branchId, interval: 15000, deferInitialSync: true });
             }
         },
 
@@ -1259,7 +1276,7 @@ function posApp() {
         initBuddy() {
             if (typeof INSABuddy !== 'undefined') {
                 INSABuddy.detectV2();
-                INSABuddy.startPolling(5000, (c) => { this.buddyConnected = c; });
+                INSABuddy.startPolling(20000, (c) => { this.buddyConnected = c; });
             }
         },
 
@@ -1488,27 +1505,57 @@ function posApp() {
 
         async loadShift() { try { const res = await fetch('/api/pos/shift/current'); const data = await res.json(); this.activeShift = (data.success && data.shift) ? data.shift : null; } catch { this.activeShift = null; } },
 
+        async loadProductsFromCache() {
+            const db = window.INSADB;
+            if (!db) return false;
+            try {
+                const cachedCats = await db.categories.getAll();
+                if (cachedCats.length > 0) this.categories = cachedCats;
+                const cached = await db.products.getAll();
+                if (cached.length > 0) {
+                    this.products = cached;
+                    this.filterProducts();
+                    this.productsLoading = false;
+                    return true;
+                }
+            } catch (e) {
+                console.warn('[pos] cache read failed:', e);
+            }
+            return false;
+        },
+
         async loadProducts() {
             const db = window.INSADB;
+            const hadCache = this.products.length > 0;
+            if (!hadCache) this.productsLoading = true;
             try {
                 const res = await fetch('/api/pos/products/all?branch_id=' + (this.config.branchId || ''));
                 const data = await res.json();
                 const rawProducts = data.products || [];
                 const rawCategories = data.categories || [];
-                if (db && rawProducts.length > 0) await db.products.bulkPut(rawProducts);
-                if (db && rawCategories.length > 0) await db.categories.bulkPut(rawCategories);
+                if (db && rawProducts.length > 0) {
+                    db.products.bulkPut(rawProducts).catch(() => {});
+                }
+                if (db && rawCategories.length > 0) {
+                    db.categories.bulkPut(rawCategories).catch(() => {});
+                }
                 this.products = rawProducts;
                 this.categories = rawCategories;
                 this.filterProducts();
             } catch (e) {
                 console.warn('[pos] loadProducts fetch failed, using cache:', e);
-                if (db) {
+                if (!hadCache && db) {
                     const cached = await db.products.getAll();
-                    if (cached.length > 0) { this.products = cached; this.showToast('Using cached products (offline)', 'warning'); }
+                    if (cached.length > 0) {
+                        this.products = cached;
+                        this.showToast('Using cached products (offline)', 'warning');
+                    }
                     const cachedCats = await db.categories.getAll();
                     if (cachedCats.length > 0) this.categories = cachedCats;
                 }
                 this.filterProducts();
+            } finally {
+                this.productsLoading = false;
             }
         },
 

@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var posService: PosService? = null
     private var serviceBound = false
+    private var syncEngineStarted = false
     private var pageLoaded = false
     private var isOfflineShown = false
     private var usingHttp = false
@@ -90,12 +91,16 @@ class MainActivity : AppCompatActivity() {
             posService = service
             service.hidScannerDriver = hidScanner
             service.onCameraScanRequested = { launchCameraScanner() }
-            service.startSyncEngine(connectivity)
             serviceBound = true
-            Log.i(TAG, "PosService bound with sync engine")
+            Log.i(TAG, "PosService bound")
 
+            service.ensureLocalServerStarted()
             service.syncEngine?.onSyncStatusChanged = { status ->
                 runOnUiThread { updateSyncBadge() }
+            }
+
+            if (pageLoaded) {
+                onPageReadyForService(service)
             }
         }
 
@@ -141,9 +146,9 @@ class MainActivity : AppCompatActivity() {
         setupCookies()
         setupConnectivity()
         setupWebView()
-        startPosService()
-
+        warmDns()
         probeAndLoad()
+        startPosService()
     }
 
     override fun onResume() {
@@ -251,14 +256,7 @@ class MainActivity : AppCompatActivity() {
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
 
-            cacheMode = try {
-                if (connectivity.isConnected())
-                    android.webkit.WebSettings.LOAD_DEFAULT
-                else
-                    android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
-            } catch (_: Exception) {
-                android.webkit.WebSettings.LOAD_DEFAULT
-            }
+            cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
 
             val appUa = "INSAPOSv2/${BuildConfig.VERSION_NAME} Android/${Build.VERSION.RELEASE}"
             userAgentString = "$userAgentString $appUa"
@@ -285,6 +283,7 @@ class MainActivity : AppCompatActivity() {
 
                 view?.requestFocus()
                 injectBridgeReady()
+                posService?.let { onPageReadyForService(it) }
             }
 
             override fun onReceivedError(
@@ -378,12 +377,14 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        loadPosUrl()
+
         Thread {
             val httpsOk = try {
                 val url = java.net.URL("https://${session.serverDomain}/api/pos/ping")
                 val conn = url.openConnection() as javax.net.ssl.HttpsURLConnection
-                conn.connectTimeout = 5000
-                conn.readTimeout = 5000
+                conn.connectTimeout = 2500
+                conn.readTimeout = 2500
                 conn.requestMethod = "HEAD"
                 val code = conn.responseCode
                 conn.disconnect()
@@ -393,15 +394,37 @@ class MainActivity : AppCompatActivity() {
                 false
             }
 
-            runOnUiThread {
-                if (!httpsOk) {
-                    Log.i(TAG, "HTTPS unavailable, using HTTP")
-                    usingHttp = true
-                    session.useHttp = true
+            if (!httpsOk) {
+                runOnUiThread {
+                    if (!usingHttp) {
+                        Log.i(TAG, "HTTPS unavailable, switching to HTTP")
+                        usingHttp = true
+                        session.useHttp = true
+                        loadPosUrl()
+                    }
                 }
-                loadPosUrl()
             }
         }.start()
+    }
+
+    private fun warmDns() {
+        Thread {
+            try {
+                java.net.InetAddress.getByName(session.serverDomain)
+                Log.d(TAG, "DNS warmed for ${session.serverDomain}")
+            } catch (e: Exception) {
+                Log.w(TAG, "DNS warm-up failed: ${e.message}")
+            }
+        }.start()
+    }
+
+    private fun onPageReadyForService(service: PosService) {
+        if (!syncEngineStarted) {
+            service.startSyncEngine(connectivity)
+            syncEngineStarted = true
+            service.syncEngine?.onSyncStatusChanged = { runOnUiThread { updateSyncBadge() } }
+            updateSyncBadge()
+        }
     }
 
     private fun loadPosUrl() {
@@ -499,7 +522,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hideStatus() {
-        handler.postDelayed({ statusBar.visibility = View.GONE }, 800)
+        handler.postDelayed({ statusBar.visibility = View.GONE }, 300)
     }
 
     // --- JS Bridge ready notification ---
@@ -523,7 +546,7 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent()
 
         webView.evaluateJavascript(js, null)
-        handler.postDelayed({ updateSyncBadge() }, 2000)
+        updateSyncBadge()
     }
 
     // --- Camera barcode scanner ---

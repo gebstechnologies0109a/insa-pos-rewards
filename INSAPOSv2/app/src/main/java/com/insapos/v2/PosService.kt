@@ -51,14 +51,14 @@ class PosService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
 
-        try {
-            offlineDb = OfflineDatabase(this)
-            Log.i(TAG, "Offline database initialized")
-        } catch (e: Exception) {
-            Log.e(TAG, "Offline DB init failed", e)
-        }
-
         scope.launch {
+            try {
+                offlineDb = OfflineDatabase(this@PosService)
+                Log.i(TAG, "Offline database initialized")
+            } catch (e: Exception) {
+                Log.e(TAG, "Offline DB init failed", e)
+            }
+
             try {
                 printerManager = PrinterManager(this@PosService)
                 printerManager?.initialize()
@@ -67,20 +67,28 @@ class PosService : Service() {
                 Log.e(TAG, "PrinterManager init failed", e)
             }
         }
+    }
 
-        try {
-            localServer = PosLocalServer(
-                context = this,
-                getPrinterManager = { printerManager },
-                getHidScanner = { hidScannerDriver },
-                getDatabase = { offlineDb },
-                getSyncEngine = { syncEngine },
-                launchCameraScan = { onCameraScanRequested?.invoke() }
-            )
-            localServer?.start()
-            Log.i(TAG, "Local server started on port ${PosLocalServer.PORT}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start local server", e)
+    fun ensureLocalServerStarted() {
+        if (localServer != null) return
+        scope.launch {
+            synchronized(this@PosService) {
+                if (localServer != null) return@launch
+                try {
+                    localServer = PosLocalServer(
+                        context = this@PosService,
+                        getPrinterManager = { printerManager },
+                        getHidScanner = { hidScannerDriver },
+                        getDatabase = { offlineDb },
+                        getSyncEngine = { syncEngine },
+                        launchCameraScan = { onCameraScanRequested?.invoke() }
+                    )
+                    localServer?.start()
+                    Log.i(TAG, "Local server started on port ${PosLocalServer.PORT}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to start local server", e)
+                }
+            }
         }
     }
 

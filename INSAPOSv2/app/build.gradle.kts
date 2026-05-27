@@ -11,8 +11,8 @@ android {
         applicationId = "com.insapos.v2"
         minSdk = 23
         targetSdk = 35
-        versionCode = 17
-        versionName = "2.2q"
+        versionCode = 18
+        versionName = "2.2r"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
@@ -58,7 +58,6 @@ dependencies {
 
     // NanoHTTPD — embedded HTTP server for local hardware bridge
     implementation("org.nanohttpd:nanohttpd:2.3.1")
-    implementation("org.nanohttpd:nanohttpd-websocket:2.3.1")
 
     // ZXing barcode/QR scanning
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")

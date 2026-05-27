@@ -22,8 +22,9 @@ class SyncEngine(
 ) {
     companion object {
         private const val TAG = "SyncEngine"
-        private const val SYNC_INTERVAL_MS = 30_000L
+        private const val SYNC_INTERVAL_MS = 45_000L
         private const val PULL_INTERVAL_MS = 300_000L
+        private const val STARTUP_PULL_DELAY_MS = 90_000L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -70,7 +71,7 @@ class SyncEngine(
 
     private fun startPullLoop() {
         pullJob = scope.launch {
-            delay(5000)
+            delay(STARTUP_PULL_DELAY_MS)
             while (isActive) {
                 if (connectivity.isConnected()) {
                     pullData()

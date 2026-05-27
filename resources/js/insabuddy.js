@@ -182,7 +182,7 @@ const INSABuddy = {
      * Start polling INSABuddy status at the given interval (ms).
      * Calls `onChange(connected)` whenever status changes.
      */
-    startPolling(intervalMs = 5000, onChange = null) {
+    startPolling(intervalMs = 20000, onChange = null) {
         this.stopPolling();
         let wasConnected = this._connected;
 

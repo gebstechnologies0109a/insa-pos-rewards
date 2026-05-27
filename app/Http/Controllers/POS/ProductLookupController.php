@@ -26,16 +26,25 @@ class ProductLookupController extends Controller
 
         $products = $query
             ->leftJoinSub($stockSub, 'stock_agg', 'products.id', '=', 'stock_agg.product_id')
-            ->select('products.*', \DB::raw('COALESCE(stock_agg.total_stock, 0) as stock'))
+            ->select(
+                'products.id',
+                'products.name',
+                'products.sku',
+                'products.barcode',
+                'products.price',
+                'products.category_id',
+                'products.active',
+                \DB::raw('COALESCE(stock_agg.total_stock, 0) as stock')
+            )
             ->orderBy('products.name')
             ->get();
 
-        $categories = \App\Models\POS\Category::orderBy('name')->get();
+        $categories = \App\Models\POS\Category::select('id', 'name')->orderBy('name')->get();
 
         return response()->json([
             'products'   => $products,
             'categories' => $categories,
-        ]);
+        ])->header('Cache-Control', 'private, max-age=60');
     }
 
     public function search(Request $request): JsonResponse

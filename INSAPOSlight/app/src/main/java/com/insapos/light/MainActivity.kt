@@ -74,7 +74,7 @@ class MainActivity : AppCompatActivity() {
         requestCameraPermission()
         setupCookies()
         setupWebView()
-        registerConnectivity()
+        warmDns()
         probeAndLoad()
     }
 
@@ -173,8 +173,7 @@ class MainActivity : AppCompatActivity() {
             javaScriptCanOpenWindowsAutomatically = true
             mediaPlaybackRequiresUserGesture = false
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            cacheMode = if (isNetworkAvailable()) WebSettings.LOAD_DEFAULT
-                        else WebSettings.LOAD_CACHE_ELSE_NETWORK
+            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
 
             val appUa = "INSAPOSLite/${BuildConfig.VERSION_NAME} Android/${Build.VERSION.RELEASE}"
             userAgentString = "$userAgentString $appUa"
@@ -273,12 +272,15 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        loadPosUrl()
+        registerConnectivity()
+
         Thread {
             val httpsOk = try {
                 val url = java.net.URL("https://${session.serverDomain}/api/pos/ping")
                 val conn = url.openConnection() as javax.net.ssl.HttpsURLConnection
-                conn.connectTimeout = 5000
-                conn.readTimeout = 5000
+                conn.connectTimeout = 2500
+                conn.readTimeout = 2500
                 conn.requestMethod = "HEAD"
                 val code = conn.responseCode
                 conn.disconnect()
@@ -288,13 +290,26 @@ class MainActivity : AppCompatActivity() {
                 false
             }
 
-            runOnUiThread {
-                if (!httpsOk) {
-                    Log.i(TAG, "HTTPS unavailable, using HTTP")
-                    usingHttp = true
-                    session.useHttp = true
+            if (!httpsOk) {
+                runOnUiThread {
+                    if (!usingHttp) {
+                        Log.i(TAG, "HTTPS unavailable, switching to HTTP")
+                        usingHttp = true
+                        session.useHttp = true
+                        loadPosUrl()
+                    }
                 }
-                loadPosUrl()
+            }
+        }.start()
+    }
+
+    private fun warmDns() {
+        Thread {
+            try {
+                java.net.InetAddress.getByName(session.serverDomain)
+                Log.d(TAG, "DNS warmed for ${session.serverDomain}")
+            } catch (e: Exception) {
+                Log.w(TAG, "DNS warm-up failed: ${e.message}")
             }
         }.start()
     }

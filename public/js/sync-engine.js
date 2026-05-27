@@ -6,7 +6,7 @@
 (function () {
     'use strict';
 
-    const SYNC_INTERVAL_MS = 8000;
+    const SYNC_INTERVAL_MS = 15000;
     const PING_TIMEOUT_MS = 3000;
 
     let _intervalId = null;
@@ -271,8 +271,9 @@
             emit('syncStatus', 'offline');
         });
 
-        // Initial sync
-        syncNow();
+        // Initial sync — defer so POS UI paints first
+        const initialDelay = options.deferInitialSync ? 8000 : 0;
+        setTimeout(() => syncNow(), initialDelay);
 
         // Try recovering from INSABuddy on startup
         pullFromBuddy();
