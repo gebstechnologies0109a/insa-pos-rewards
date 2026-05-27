@@ -16,6 +16,11 @@
                     <a href="{{ route('stockman.inventory') }}" class="hover:text-blue-300 {{ request()->routeIs('stockman.inventory') ? 'text-blue-400' : '' }}">Inventory</a>
                     <a href="{{ route('stockman.audit') }}" class="hover:text-blue-300 {{ request()->routeIs('stockman.audit*') ? 'text-blue-400' : '' }}">Stock Audit</a>
                     <a href="{{ route('stockman.stock-in') }}" class="hover:text-blue-300 {{ request()->routeIs('stockman.stock-in*') ? 'text-blue-400' : '' }}">Stock In</a>
+                    @if(auth()->user()->isSuperAdmin())
+                    <span class="text-gray-500">|</span>
+                    <a href="{{ route('super-admin.dashboard') }}" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 font-medium">Super Admin Panel</a>
+                    <a href="{{ route('backoffice.dashboard') }}" class="hover:text-blue-300">Back Office</a>
+                    @endif
                 </div>
             </div>
             <div class="flex items-center gap-4 text-sm">

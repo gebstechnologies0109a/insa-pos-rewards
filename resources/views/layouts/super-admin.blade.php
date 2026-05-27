@@ -85,6 +85,10 @@
             <header class="bg-white shadow-sm px-6 py-4 flex items-center justify-between border-b">
                 <h2 class="text-lg font-semibold text-gray-800">@yield('page-title', 'Super Admin')</h2>
                 <div class="flex items-center gap-4 text-sm">
+                    <a href="{{ route('backoffice.dashboard') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 shadow-sm transition">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                        Back Office
+                    </a>
                     <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800">Super Admin</span>
                     <span class="text-gray-500">{{ auth()->user()->name }}</span>
                     <span class="text-gray-400">{{ now()->format('M d, Y — h:i A') }}</span>

@@ -57,6 +57,41 @@
     </div>
 </div>
 
+<!-- Quick Actions -->
+<div class="bg-white rounded-xl shadow-sm border p-6 mb-8">
+    <h3 class="font-semibold text-lg text-gray-900 mb-4">Quick Actions</h3>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <a href="{{ route('super-admin.licenses.index') }}" class="p-5 bg-indigo-50 rounded-xl hover:bg-indigo-100 text-center border border-indigo-100 transition">
+            <div class="w-10 h-10 mx-auto mb-2 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+            </div>
+            <div class="font-semibold text-indigo-900">Licenses</div>
+            <div class="text-xs text-indigo-600 mt-1">Slots &amp; status</div>
+        </a>
+        <a href="{{ route('super-admin.branches.index') }}" class="p-5 bg-indigo-50 rounded-xl hover:bg-indigo-100 text-center border border-indigo-100 transition">
+            <div class="w-10 h-10 mx-auto mb-2 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+            </div>
+            <div class="font-semibold text-indigo-900">Branches</div>
+            <div class="text-xs text-indigo-600 mt-1">Overview &amp; details</div>
+        </a>
+        <a href="{{ route('super-admin.sessions.index') }}" class="p-5 bg-indigo-50 rounded-xl hover:bg-indigo-100 text-center border border-indigo-100 transition">
+            <div class="w-10 h-10 mx-auto mb-2 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            </div>
+            <div class="font-semibold text-indigo-900">POS Sessions</div>
+            <div class="text-xs text-indigo-600 mt-1">Active terminals</div>
+        </a>
+        <a href="{{ route('backoffice.dashboard') }}" class="p-5 bg-blue-50 rounded-xl hover:bg-blue-100 text-center border border-blue-100 transition">
+            <div class="w-10 h-10 mx-auto mb-2 bg-blue-100 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+            </div>
+            <div class="font-semibold text-blue-900">Back Office</div>
+            <div class="text-xs text-blue-600 mt-1">Operations dashboard</div>
+        </a>
+    </div>
+</div>
+
 <!-- Branch Status Table -->
 <div class="bg-white rounded-xl shadow-sm border">
     <div class="px-6 py-4 border-b">
