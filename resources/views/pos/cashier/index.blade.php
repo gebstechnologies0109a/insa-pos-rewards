@@ -1564,18 +1564,15 @@ function posApp() {
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
             if (this.hasNativeBridge) {
                 try { this._nativeScanPort = window.INSAPOS.getServicePort() || 18182; } catch { this._nativeScanPort = 18182; }
-<<<<<<< Updated upstream
                 if (this.config.branchId && typeof window.INSAPOS.setBranchId === 'function') {
                     try { window.INSAPOS.setBranchId(this.config.branchId); } catch (e) {}
                 }
-                this.checkAndroidLocalHealth();
-=======
                 try {
                     if (window.INSA_IS_SUPER_ADMIN && window.INSAPOS.notifySuperAdminStatus) {
                         window.INSAPOS.notifySuperAdminStatus(true);
                     }
                 } catch (_) {}
->>>>>>> Stashed changes
+                this.checkAndroidLocalHealth();
             }
             if (!this.licenseActive) return;
             const seatOk = await this.registerTerminalSession();
