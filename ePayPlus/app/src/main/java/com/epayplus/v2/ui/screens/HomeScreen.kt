@@ -222,8 +222,8 @@ fun HomeScreen(
                 ServiceButton("Cash-in", CategoryEcash, iconRes = R.drawable.ic_quick_cashin) {
                     navController.navigate(NavRoutes.ECashProviders.route)
                 }
-                ServiceButton("Sales", EPayBlue, icon = Icons.Filled.BarChart) {
-                    navController.navigate(NavRoutes.Sales.route)
+                ServiceButton("RFID", CategoryRfid, iconRes = R.drawable.ic_quick_rfid) {
+                    navController.navigate(NavRoutes.Rfid.route)
                 }
             }
 
