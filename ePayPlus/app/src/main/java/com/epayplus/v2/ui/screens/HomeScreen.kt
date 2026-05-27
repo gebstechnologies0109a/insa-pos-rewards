@@ -213,17 +213,17 @@ fun HomeScreen(
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                ServiceButton(Icons.Filled.PhoneAndroid, "Load", CategoryEload, logoRes = R.drawable.ic_globe) {
+                ServiceButton("LOAD", CategoryEload, iconRes = R.drawable.ic_quick_eload) {
                     navController.navigate(NavRoutes.ELoadProviders.route)
                 }
-                ServiceButton(Icons.Filled.Receipt, "Bills", CategoryBills, logoRes = R.drawable.ic_meralco) {
+                ServiceButton("Bills Payment", CategoryBills, iconRes = R.drawable.ic_quick_bills) {
                     navController.navigate(NavRoutes.BillsCategories.route)
                 }
-                ServiceButton(Icons.Filled.AccountBalanceWallet, "Cash-In", CategoryEcash, logoRes = R.drawable.ic_gcash) {
+                ServiceButton("Cash-in", CategoryEcash, iconRes = R.drawable.ic_quick_cashin) {
                     navController.navigate(NavRoutes.ECashProviders.route)
                 }
-                ServiceButton(Icons.Filled.BarChart, "Sales", EPayBlue) {
-                    navController.navigate(NavRoutes.Sales.route)
+                ServiceButton("RFID", CategoryRfid, iconRes = R.drawable.ic_quick_rfid) {
+                    navController.navigate(NavRoutes.Rfid.route)
                 }
             }
 
@@ -358,10 +358,10 @@ fun HomeScreen(
 
 @Composable
 private fun ServiceButton(
-    icon: ImageVector,
     label: String,
     color: Color,
-    @DrawableRes logoRes: Int? = null,
+    icon: ImageVector? = null,
+    @DrawableRes iconRes: Int? = null,
     onClick: () -> Unit
 ) {
     Column(
@@ -373,19 +373,23 @@ private fun ServiceButton(
     ) {
         Surface(
             modifier = Modifier.size(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = color.copy(alpha = 0.12f)
+            shape = CircleShape,
+            color = color.copy(alpha = 0.12f),
+            tonalElevation = 1.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                if (logoRes != null) {
-                    androidx.compose.foundation.Image(
-                        painter = painterResource(logoRes),
-                        contentDescription = label,
-                        modifier = Modifier.size(36.dp),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
-                    )
-                } else {
-                    Icon(icon, label, tint = color, modifier = Modifier.size(28.dp))
+                when {
+                    iconRes != null -> {
+                        androidx.compose.foundation.Image(
+                            painter = painterResource(iconRes),
+                            contentDescription = label,
+                            modifier = Modifier.size(34.dp),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                        )
+                    }
+                    icon != null -> {
+                        Icon(icon, label, tint = color, modifier = Modifier.size(28.dp))
+                    }
                 }
             }
         }

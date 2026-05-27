@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -32,12 +33,10 @@ fun KioskHomeScreen(
     onServiceSelected: (String) -> Unit = {}
 ) {
     val services = listOf(
-        KioskServiceItem("Buy Load", Icons.Filled.PhoneAndroid, CategoryEload, "eload", R.drawable.ic_globe),
-        KioskServiceItem("Bills Payment", Icons.Filled.Receipt, CategoryBills, "bills", R.drawable.ic_meralco),
-        KioskServiceItem("Cash-In", Icons.Filled.AccountBalanceWallet, CategoryEcash, "ecash", R.drawable.ic_gcash),
-        KioskServiceItem("WiFi", Icons.Filled.Wifi, CategoryWifi, "wifi"),
-        KioskServiceItem("Balance Inquiry", Icons.Filled.AccountBalance, EPayBlue, "balance"),
-        KioskServiceItem("More", Icons.Filled.MoreHoriz, EPayOrange, "more"),
+        KioskServiceItem("LOAD", Icons.Filled.PhoneAndroid, CategoryEload, "eload", R.drawable.ic_quick_eload_large),
+        KioskServiceItem("Bills Payment", Icons.Filled.Receipt, CategoryBills, "bills", R.drawable.ic_quick_bills_large),
+        KioskServiceItem("Cash-in", Icons.Filled.AccountBalanceWallet, CategoryEcash, "ecash", R.drawable.ic_quick_cashin_large),
+        KioskServiceItem("RFID", Icons.Filled.Nfc, CategoryRfid, "rfid", R.drawable.ic_quick_rfid_large),
     )
 
     Column(
@@ -110,16 +109,17 @@ private fun KioskServiceCard(service: KioskServiceItem, onClick: () -> Unit = {}
             verticalArrangement = Arrangement.Center
         ) {
             Surface(
-                modifier = Modifier.size(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = service.color.copy(alpha = 0.15f)
+                modifier = Modifier.size(64.dp),
+                shape = CircleShape,
+                color = service.color.copy(alpha = 0.12f),
+                tonalElevation = 1.dp
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     if (service.logoRes != null) {
                         Image(
                             painter = painterResource(service.logoRes),
                             contentDescription = service.label,
-                            modifier = Modifier.size(40.dp),
+                            modifier = Modifier.size(44.dp),
                             contentScale = ContentScale.Fit
                         )
                     } else {
