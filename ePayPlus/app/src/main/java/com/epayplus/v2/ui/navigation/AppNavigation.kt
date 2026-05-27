@@ -193,6 +193,10 @@ fun AppNavigation(navController: NavHostController, isLoggedIn: Boolean) {
                     )
                 }
 
+                composable(NavRoutes.InsaPosEmbedded.route) {
+                    InsaPosEmbeddedScreen(navController = navController)
+                }
+
                 composable(NavRoutes.PosMode.route) {
                     PosModeScreen(navController = navController)
                 }

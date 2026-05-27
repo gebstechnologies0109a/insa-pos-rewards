@@ -58,9 +58,8 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ config('product.insa_pos_cashier_url') }}" target="_blank" rel="noopener noreferrer">
-                            <i class="bi bi-cart-check"></i> POS Mode
-                            <i class="bi bi-box-arrow-up-right ms-1 small opacity-75"></i>
+                        <a class="nav-link {{ request()->routeIs('epayplus.pos') ? 'active' : '' }}" href="{{ route('epayplus.pos') }}">
+                            <i class="bi bi-cart-check"></i> POS Mode (INSA)
                         </a>
                     </li>
                     <li><div class="nav-section">Integrations</div></li>

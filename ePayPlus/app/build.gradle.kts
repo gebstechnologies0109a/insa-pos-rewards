@@ -22,8 +22,14 @@ android {
         applicationId = "com.epayplus.v2"
         minSdk = 24
         targetSdk = 34
-        versionCode = 20
-        versionName = "3.3.1"
+        versionCode = 21
+        versionName = "3.3.2"
+
+        buildConfigField(
+            "String",
+            "INSA_POS_CASHIER_URL",
+            "\"https://insapos.diybizrewards.com/pos/cashier\""
+        )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

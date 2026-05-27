@@ -37,6 +37,9 @@ sealed class NavRoutes(val route: String) {
     object TransactionResult : NavRoutes("result/{transactionId}/{type}") {
         fun createRoute(transactionId: Long, type: String) = "result/$transactionId/$type"
     }
+    /** INSA retail cashier embedded in WebView (insapos host). */
+    object InsaPosEmbedded : NavRoutes("pos/insa")
+    /** @deprecated Native ePay service grid; use [InsaPosEmbedded] from Home POS Mode. */
     object PosMode : NavRoutes("pos/mode")
     object Settings : NavRoutes("settings")
     object ChangePin : NavRoutes("settings/change_pin")

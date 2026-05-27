@@ -7,8 +7,8 @@ import android.widget.Toast
 import com.epayplus.v2.R
 
 /**
- * Opens the INSA POS Android app when installed.
- * Web cashier URL is available via [openWebCashier] for explicit browser opens.
+ * Fallback helpers for INSA POS outside the in-app WebView embed.
+ * Primary POS entry is [com.epayplus.v2.ui.screens.InsaPosEmbeddedScreen].
  */
 object InsaPosLauncher {
 
@@ -46,7 +46,7 @@ object InsaPosLauncher {
         }
     }
 
-    /** Prefer INSA APK; otherwise toast and run [onFallback] (native ePay POS services). */
+    /** Prefer standalone INSA APK; otherwise toast and run [onFallback]. */
     fun launchOrToast(context: Context, onFallback: (() -> Unit)? = null): Boolean {
         if (launchInsaApp(context)) return true
         Toast.makeText(context, R.string.insa_pos_not_installed, Toast.LENGTH_LONG).show()

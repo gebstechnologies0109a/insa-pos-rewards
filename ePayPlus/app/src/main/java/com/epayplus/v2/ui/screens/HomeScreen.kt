@@ -40,7 +40,6 @@ import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.HomeUiState
 import com.epayplus.v2.ui.viewmodel.HomeViewModel
-import com.epayplus.v2.util.InsaPosLauncher
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -153,9 +152,7 @@ fun HomeScreen(
                     Color(0xFF1B5E20),
                     iconRes = R.drawable.ic_quick_pos
                 ) {
-                    InsaPosLauncher.launchOrToast(context) {
-                        navController.navigate(NavRoutes.PosMode.route)
-                    }
+                    navController.navigate(NavRoutes.InsaPosEmbedded.route)
                 }
                 ServiceButton(
                     "Kiosk Mode",

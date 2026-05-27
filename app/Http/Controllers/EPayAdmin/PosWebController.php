@@ -15,15 +15,19 @@ class PosWebController extends Controller
 
     public function index(Request $request)
     {
-        if (! $request->boolean('epay')) {
-            return redirect()->away((string) config('product.insa_pos_cashier_url'));
+        // Native ePay service POS (Load/Bills/etc.) — not INSA retail cashier.
+        if ($request->boolean('epay')) {
+            $retailerId = $this->resolveWebRetailerId($request);
+            $retailers = Retailer::where('is_active', true)->orderBy('business_name')->get(['id', 'business_name', 'account_id']);
+            $retailer = Retailer::find($retailerId);
+
+            return view('epayplus.pos.index', compact('retailers', 'retailerId', 'retailer'));
         }
 
-        $retailerId = $this->resolveWebRetailerId($request);
-        $retailers = Retailer::where('is_active', true)->orderBy('business_name')->get(['id', 'business_name', 'account_id']);
-        $retailer = Retailer::find($retailerId);
-
-        return view('epayplus.pos.index', compact('retailers', 'retailerId', 'retailer'));
+        // Default: embed INSA cashier on insapos host (never epayplus /pos/* — product middleware blocks it).
+        return view('epayplus.pos.insa-embed', [
+            'insaUrl' => (string) config('product.insa_pos_cashier_url'),
+        ]);
     }
 
     public function checkout(Request $request, TransactionController $transactions): JsonResponse
