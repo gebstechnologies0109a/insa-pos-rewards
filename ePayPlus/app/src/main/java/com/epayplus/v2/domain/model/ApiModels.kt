@@ -22,6 +22,8 @@ data class AccountInfo(
     @SerializedName("mobileNumber") val mobileNumber: String = "",
     val email: String = "",
     val balance: Double = 0.0,
+    @SerializedName("eloadBalance") val eloadBalance: Double? = null,
+    @SerializedName("billsBalance") val billsBalance: Double? = null,
     @SerializedName("isKioskEnabled") val isKioskEnabled: Boolean = false
 )
 

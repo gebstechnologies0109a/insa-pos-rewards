@@ -17,21 +17,22 @@ class WalletController extends Controller
     public function index(Request $request): JsonResponse
     {
         $retailer = $request->attributes->get('retailer');
+        $wallets = $retailer->walletBalances();
 
         return response()->json([
             'success' => true,
             'wallets' => [
                 'eload' => [
                     'label' => 'E-Load Wallet',
-                    'balance' => (float) ($retailer->eload_balance ?? $retailer->balance),
+                    'balance' => $wallets['eload'],
                     'currency' => 'PHP',
                 ],
                 'bills' => [
                     'label' => 'Bills & Cash-In Wallet',
-                    'balance' => (float) ($retailer->bills_balance ?? 0),
+                    'balance' => $wallets['bills'],
                     'currency' => 'PHP',
                 ],
-                'total' => (float) (($retailer->eload_balance ?? $retailer->balance) + ($retailer->bills_balance ?? 0)),
+                'total' => $wallets['combined'],
             ],
         ]);
     }

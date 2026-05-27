@@ -376,7 +376,7 @@ private fun WalletPrimarySection(
             }
         }
         Text(
-            "₱ ${String.format("%,.2f", uiState.eloadBalance.takeIf { it > 0 } ?: uiState.balance)}",
+            "₱ ${String.format("%,.2f", uiState.eloadBalance)}",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = EPayGreenDark

@@ -42,6 +42,8 @@ class AuthController extends Controller
             'last_login_at' => now(),
         ]);
 
+        $wallets = $retailer->walletBalances();
+
         return response()->json([
             'success' => true,
             'token' => $token,
@@ -51,7 +53,9 @@ class AuthController extends Controller
                 'ownerName' => $retailer->owner_name,
                 'mobileNumber' => $retailer->mobile_number,
                 'email' => $retailer->email,
-                'balance' => (float) $retailer->balance,
+                'balance' => $wallets['combined'],
+                'eloadBalance' => $wallets['eload'],
+                'billsBalance' => $wallets['bills'],
                 'isKioskEnabled' => $retailer->is_kiosk_enabled,
             ],
         ]);

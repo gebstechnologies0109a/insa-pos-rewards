@@ -46,13 +46,47 @@ class Retailer extends Model
         return $this->hasMany(Topup::class, 'retailer_id');
     }
 
+    /**
+     * Resolved dual-wallet balances (handles legacy single-balance retailers).
+     *
+     * @return array{eload: float, bills: float, combined: float}
+     */
+    public function walletBalances(): array
+    {
+        $eload = (float) $this->eload_balance;
+        $bills = (float) $this->bills_balance;
+        $legacy = (float) $this->balance;
+
+        if ($eload <= 0 && $bills <= 0 && $legacy > 0) {
+            $eload = $legacy;
+        }
+
+        return [
+            'eload' => $eload,
+            'bills' => $bills,
+            'combined' => $eload + $bills,
+        ];
+    }
+
+    public function syncCombinedBalance(): void
+    {
+        $wallets = $this->walletBalances();
+        if ((float) $this->balance !== $wallets['combined']) {
+            $this->forceFill(['balance' => $wallets['combined']])->saveQuietly();
+        }
+    }
+
     public function deductBalance(float $amount, string $wallet = 'eload'): bool
     {
-        $field = $wallet === 'bills' ? 'bills_balance' : 'eload_balance';
-        if (($this->{$field} ?? $this->balance) < $amount) {
+        if (!$this->hasSufficientBalance($amount, $wallet)) {
             return false;
         }
+
+        $field = $wallet === 'bills' ? 'bills_balance' : 'eload_balance';
         $this->decrement($field, $amount);
+        $this->refresh();
+        $this->syncCombinedBalance();
+
         return true;
     }
 
@@ -60,11 +94,16 @@ class Retailer extends Model
     {
         $field = $wallet === 'bills' ? 'bills_balance' : 'eload_balance';
         $this->increment($field, $amount);
+        $this->refresh();
+        $this->syncCombinedBalance();
     }
 
     public function hasSufficientBalance(float $amount, string $wallet = 'eload'): bool
     {
-        $field = $wallet === 'bills' ? 'bills_balance' : 'eload_balance';
-        return ($this->{$field} ?? $this->balance) >= $amount;
+        $wallets = $this->walletBalances();
+
+        return $wallet === 'bills'
+            ? $wallets['bills'] >= $amount
+            : $wallets['eload'] >= $amount;
     }
 }

@@ -570,6 +570,8 @@ class EPayPlusSeeder extends Seeder
                 'email' => 'demo@epayplus.ph',
                 'address' => 'Manila, Philippines',
                 'balance' => 10000.00,
+                'eload_balance' => 7000.00,
+                'bills_balance' => 3000.00,
                 'pin' => Hash::make('1234'),
                 'is_active' => true,
             ]

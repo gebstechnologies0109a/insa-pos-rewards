@@ -12,18 +12,20 @@ class AccountController extends Controller
     public function balance(Request $request): JsonResponse
     {
         $retailer = $request->attributes->get('retailer');
+        $wallets = $retailer->walletBalances();
 
         return response()->json([
             'success' => true,
-            'balance' => (float) $retailer->balance,
-            'eload_balance' => (float) ($retailer->eload_balance ?? $retailer->balance),
-            'bills_balance' => (float) ($retailer->bills_balance ?? 0),
+            'balance' => $wallets['combined'],
+            'eload_balance' => $wallets['eload'],
+            'bills_balance' => $wallets['bills'],
         ]);
     }
 
     public function profile(Request $request): JsonResponse
     {
         $retailer = $request->attributes->get('retailer');
+        $wallets = $retailer->walletBalances();
 
         return response()->json([
             'success' => true,
@@ -34,9 +36,9 @@ class AccountController extends Controller
                 'mobileNumber' => $retailer->mobile_number,
                 'email' => $retailer->email,
                 'address' => $retailer->address,
-                'balance' => (float) $retailer->balance,
-                'eloadBalance' => (float) ($retailer->eload_balance ?? $retailer->balance),
-                'billsBalance' => (float) ($retailer->bills_balance ?? 0),
+                'balance' => $wallets['combined'],
+                'eloadBalance' => $wallets['eload'],
+                'billsBalance' => $wallets['bills'],
                 'isKioskEnabled' => $retailer->is_kiosk_enabled,
                 'printerAddress' => $retailer->printer_address,
                 'printerType' => $retailer->printer_type,

@@ -28,16 +28,17 @@ class TransactionController extends Controller
         $cost = $product ? $product->retailer_price : $request->amount;
         $commission = $product ? $product->commission : 0;
 
-        if (!$retailer->hasSufficientBalance($cost)) {
+        if (!$retailer->hasSufficientBalance($cost, 'eload')) {
+            $wallets = $retailer->walletBalances();
             return response()->json([
                 'success' => false,
-                'message' => 'Insufficient balance. Current: ₱' . number_format($retailer->balance, 2),
+                'message' => 'Insufficient E-Load wallet balance. Current: ₱' . number_format($wallets['eload'], 2),
             ], 400);
         }
 
         return DB::transaction(function () use ($retailer, $product, $request, $cost, $commission) {
-            $balanceBefore = $retailer->balance;
-            $retailer->deductBalance($cost);
+            $balanceBefore = $retailer->walletBalances()['eload'];
+            $retailer->deductBalance($cost, 'eload');
 
             $transaction = Transaction::create([
                 'retailer_id' => $retailer->id,
@@ -55,7 +56,7 @@ class TransactionController extends Controller
                 'status' => 'SUCCESS',
                 'payment_method' => 'WALLET',
                 'balance_before' => $balanceBefore,
-                'balance_after' => $retailer->fresh()->balance,
+                'balance_after' => $retailer->fresh()->walletBalances()['eload'],
                 'device_id' => $request->header('X-Device-Id'),
                 'ip_address' => $request->ip(),
                 'completed_at' => now(),
@@ -66,7 +67,9 @@ class TransactionController extends Controller
                 'referenceNumber' => $transaction->reference_number,
                 'status' => 'SUCCESS',
                 'message' => 'E-Load sent successfully.',
-                'balance' => (float) $retailer->fresh()->balance,
+                'balance' => $retailer->fresh()->walletBalances()['combined'],
+                'eloadBalance' => $retailer->fresh()->walletBalances()['eload'],
+                'billsBalance' => $retailer->fresh()->walletBalances()['bills'],
             ]);
         });
     }
@@ -86,16 +89,17 @@ class TransactionController extends Controller
         $fee = $product?->fee ?? 0;
         $totalCost = $request->amount + $fee;
 
-        if (!$retailer->hasSufficientBalance($totalCost)) {
+        if (!$retailer->hasSufficientBalance($totalCost, 'bills')) {
+            $wallets = $retailer->walletBalances();
             return response()->json([
                 'success' => false,
-                'message' => 'Insufficient balance.',
+                'message' => 'Insufficient Bills/Cash-In wallet balance. Current: ₱' . number_format($wallets['bills'], 2),
             ], 400);
         }
 
         return DB::transaction(function () use ($retailer, $product, $request, $totalCost, $fee) {
-            $balanceBefore = $retailer->balance;
-            $retailer->deductBalance($totalCost);
+            $balanceBefore = $retailer->walletBalances()['bills'];
+            $retailer->deductBalance($totalCost, 'bills');
 
             $transaction = Transaction::create([
                 'retailer_id' => $retailer->id,
@@ -113,7 +117,7 @@ class TransactionController extends Controller
                 'status' => 'PROCESSING',
                 'payment_method' => 'WALLET',
                 'balance_before' => $balanceBefore,
-                'balance_after' => $retailer->fresh()->balance,
+                'balance_after' => $retailer->fresh()->walletBalances()['bills'],
                 'device_id' => $request->header('X-Device-Id'),
                 'ip_address' => $request->ip(),
             ]);
@@ -123,7 +127,9 @@ class TransactionController extends Controller
                 'referenceNumber' => $transaction->reference_number,
                 'status' => 'PROCESSING',
                 'message' => 'Bill payment is being processed.',
-                'balance' => (float) $retailer->fresh()->balance,
+                'balance' => $retailer->fresh()->walletBalances()['combined'],
+                'eloadBalance' => $retailer->fresh()->walletBalances()['eload'],
+                'billsBalance' => $retailer->fresh()->walletBalances()['bills'],
             ]);
         });
     }
@@ -141,16 +147,17 @@ class TransactionController extends Controller
         $fee = 0;
         $totalCost = $request->amount + $fee;
 
-        if (!$retailer->hasSufficientBalance($totalCost)) {
+        if (!$retailer->hasSufficientBalance($totalCost, 'bills')) {
+            $wallets = $retailer->walletBalances();
             return response()->json([
                 'success' => false,
-                'message' => 'Insufficient balance.',
+                'message' => 'Insufficient Bills/Cash-In wallet balance. Current: ₱' . number_format($wallets['bills'], 2),
             ], 400);
         }
 
         return DB::transaction(function () use ($retailer, $request, $totalCost, $fee) {
-            $balanceBefore = $retailer->balance;
-            $retailer->deductBalance($totalCost);
+            $balanceBefore = $retailer->walletBalances()['bills'];
+            $retailer->deductBalance($totalCost, 'bills');
 
             $transaction = Transaction::create([
                 'retailer_id' => $retailer->id,
@@ -165,7 +172,7 @@ class TransactionController extends Controller
                 'status' => 'PROCESSING',
                 'payment_method' => 'WALLET',
                 'balance_before' => $balanceBefore,
-                'balance_after' => $retailer->fresh()->balance,
+                'balance_after' => $retailer->fresh()->walletBalances()['bills'],
                 'device_id' => $request->header('X-Device-Id'),
                 'ip_address' => $request->ip(),
             ]);
@@ -175,7 +182,9 @@ class TransactionController extends Controller
                 'referenceNumber' => $transaction->reference_number,
                 'status' => 'PROCESSING',
                 'message' => 'Cash-in is being processed.',
-                'balance' => (float) $retailer->fresh()->balance,
+                'balance' => $retailer->fresh()->walletBalances()['combined'],
+                'eloadBalance' => $retailer->fresh()->walletBalances()['eload'],
+                'billsBalance' => $retailer->fresh()->walletBalances()['bills'],
             ]);
         });
     }
@@ -195,16 +204,17 @@ class TransactionController extends Controller
         $fee = $product?->fee ?? 0;
         $totalCost = $request->amount + $fee;
 
-        if (!$retailer->hasSufficientBalance($totalCost)) {
+        if (!$retailer->hasSufficientBalance($totalCost, 'eload')) {
+            $wallets = $retailer->walletBalances();
             return response()->json([
                 'success' => false,
-                'message' => 'Insufficient balance.',
+                'message' => 'Insufficient E-Load wallet balance. Current: ₱' . number_format($wallets['eload'], 2),
             ], 400);
         }
 
         return DB::transaction(function () use ($retailer, $request, $totalCost, $fee, $product) {
-            $balanceBefore = $retailer->balance;
-            $retailer->deductBalance($totalCost);
+            $balanceBefore = $retailer->walletBalances()['eload'];
+            $retailer->deductBalance($totalCost, 'eload');
 
             $transaction = Transaction::create([
                 'retailer_id' => $retailer->id,
@@ -221,7 +231,7 @@ class TransactionController extends Controller
                 'status' => 'PROCESSING',
                 'payment_method' => 'WALLET',
                 'balance_before' => $balanceBefore,
-                'balance_after' => $retailer->fresh()->balance,
+                'balance_after' => $retailer->fresh()->walletBalances()['eload'],
                 'device_id' => $request->header('X-Device-Id'),
                 'ip_address' => $request->ip(),
                 'remarks' => $request->tag_id,
@@ -232,7 +242,9 @@ class TransactionController extends Controller
                 'referenceNumber' => $transaction->reference_number,
                 'status' => 'PROCESSING',
                 'message' => 'RFID reload is being processed.',
-                'balance' => (float) $retailer->fresh()->balance,
+                'balance' => $retailer->fresh()->walletBalances()['combined'],
+                'eloadBalance' => $retailer->fresh()->walletBalances()['eload'],
+                'billsBalance' => $retailer->fresh()->walletBalances()['bills'],
             ]);
         });
     }

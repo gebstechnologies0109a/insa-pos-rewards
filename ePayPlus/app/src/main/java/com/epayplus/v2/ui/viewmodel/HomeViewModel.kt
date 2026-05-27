@@ -60,6 +60,12 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            accountRepository.refreshBalance()
+                .onSuccess { wallets ->
+                    applyWalletBalances(wallets.combined, wallets.eload, wallets.bills)
+                }
+        }
     }
 
     private fun observeTodaySales() {
@@ -83,28 +89,27 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    private fun applyWalletBalances(combined: Double, eload: Double, bills: Double) {
+        _uiState.update {
+            it.copy(
+                balance = combined,
+                eloadBalance = eload,
+                billsBalance = bills
+            )
+        }
+    }
+
     fun refreshAll() {
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
 
             accountRepository.refreshBalance()
-                .onSuccess { balance ->
-                    _uiState.update { it.copy(balance = balance) }
+                .onSuccess { wallets ->
+                    applyWalletBalances(wallets.combined, wallets.eload, wallets.bills)
                 }
-
-            try {
-                val walletResponse = apiService.getWallets()
-                if (walletResponse.isSuccessful && walletResponse.body()?.success == true) {
-                    val wallets = walletResponse.body()?.wallets
-                    _uiState.update {
-                        it.copy(
-                            eloadBalance = wallets?.eload?.balance ?: it.eloadBalance,
-                            billsBalance = wallets?.bills?.balance ?: it.billsBalance,
-                            balance = wallets?.total ?: it.balance
-                        )
-                    }
+                .onFailure {
+                    syncWalletsFromApi()
                 }
-            } catch (_: Exception) {}
 
             listOf("ELOAD", "BILLS", "ECASH").forEach { type ->
                 try { productRepository.refreshProducts(type) } catch (_: Exception) {}
@@ -126,12 +131,28 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
             accountRepository.refreshBalance()
-                .onSuccess { balance ->
-                    _uiState.update { it.copy(balance = balance, isRefreshing = false, error = null) }
+                .onSuccess { wallets ->
+                    applyWalletBalances(wallets.combined, wallets.eload, wallets.bills)
+                    _uiState.update { it.copy(isRefreshing = false, error = null) }
                 }
                 .onFailure { error ->
+                    syncWalletsFromApi()
                     _uiState.update { it.copy(isRefreshing = false, error = error.message) }
                 }
         }
+    }
+
+    private suspend fun syncWalletsFromApi() {
+        try {
+            val walletResponse = apiService.getWallets()
+            if (walletResponse.isSuccessful && walletResponse.body()?.success == true) {
+                val wallets = walletResponse.body()?.wallets
+                applyWalletBalances(
+                    combined = wallets?.total ?: _uiState.value.balance,
+                    eload = wallets?.eload?.balance ?: _uiState.value.eloadBalance,
+                    bills = wallets?.bills?.balance ?: _uiState.value.billsBalance
+                )
+            }
+        } catch (_: Exception) {}
     }
 }

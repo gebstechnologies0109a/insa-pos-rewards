@@ -34,13 +34,14 @@ class AccountRepository @Inject constructor(
                     ownerName = accountInfo.ownerName
                 )
 
+                val combined = accountInfo.balance
                 val entity = AccountEntity(
                     accountId = accountInfo.id,
                     businessName = accountInfo.businessName,
                     ownerName = accountInfo.ownerName,
                     mobileNumber = accountInfo.mobileNumber,
                     email = accountInfo.email,
-                    balance = accountInfo.balance,
+                    balance = combined,
                     pin = pin,
                     apiKey = token
                 )
@@ -57,21 +58,30 @@ class AccountRepository @Inject constructor(
         }
     }
 
-    suspend fun refreshBalance(): Result<Double> {
+    data class WalletBalances(
+        val combined: Double,
+        val eload: Double,
+        val bills: Double
+    )
+
+    suspend fun refreshBalance(): Result<WalletBalances> {
         return try {
             val response = apiService.getBalance()
             if (response.isSuccessful && response.body()?.success == true) {
-                val balance = response.body()!!.balance
+                val body = response.body()!!
+                val eload = body.eloadBalance ?: 0.0
+                val bills = body.billsBalance ?: 0.0
+                val combined = body.balance
                 val account = accountDao.getAccountSync()
-                account?.let { accountDao.updateBalance(it.id, balance) }
-                Result.success(balance)
+                account?.let { accountDao.updateBalance(it.id, combined) }
+                Result.success(WalletBalances(combined, eload, bills))
             } else {
                 Result.failure(Exception(response.body()?.message ?: "Failed to get balance"))
             }
         } catch (e: Exception) {
             val account = accountDao.getAccountSync()
             if (account != null) {
-                Result.success(account.balance)
+                Result.success(WalletBalances(account.balance, 0.0, 0.0))
             } else {
                 Result.failure(e)
             }

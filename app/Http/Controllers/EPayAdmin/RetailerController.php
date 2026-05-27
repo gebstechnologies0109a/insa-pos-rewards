@@ -118,20 +118,23 @@ class RetailerController extends Controller
         $request->validate([
             'amount' => 'required|numeric|min:0.01',
             'type'   => 'required|in:credit,debit',
+            'wallet' => 'required|in:eload,bills',
             'reason' => 'required|string|max:500',
         ]);
 
         $amount = (float) $request->amount;
-        $balanceBefore = $retailer->balance;
+        $wallet = $request->wallet === 'bills' ? 'bills' : 'eload';
+        $wallets = $retailer->walletBalances();
+        $balanceBefore = $wallet === 'bills' ? $wallets['bills'] : $wallets['eload'];
 
         if ($request->type === 'debit') {
-            if ($retailer->balance < $amount) {
-                return back()->with('error', 'Insufficient balance for debit.');
+            if (!$retailer->hasSufficientBalance($amount, $wallet)) {
+                return back()->with('error', 'Insufficient balance in the selected wallet for debit.');
             }
-            $retailer->decrement('balance', $amount);
+            $retailer->deductBalance($amount, $wallet);
             $balanceAfter = $balanceBefore - $amount;
         } else {
-            $retailer->increment('balance', $amount);
+            $retailer->addBalance($amount, $wallet);
             $balanceAfter = $balanceBefore + $amount;
         }
 

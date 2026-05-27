@@ -34,7 +34,10 @@
                     <tr><td class="text-muted">Mobile</td><td>{{ $retailer->mobile_number }}</td></tr>
                     <tr><td class="text-muted">Email</td><td>{{ $retailer->email ?? 'N/A' }}</td></tr>
                     <tr><td class="text-muted">Address</td><td>{{ $retailer->address ?? 'N/A' }}</td></tr>
-                    <tr><td class="text-muted">Balance</td><td class="fw-bold text-success fs-5">₱{{ number_format($retailer->balance, 2) }}</td></tr>
+                    @php $wallets = $retailer->walletBalances(); @endphp
+                    <tr><td class="text-muted">E-Load Wallet</td><td class="fw-bold text-success">₱{{ number_format($wallets['eload'], 2) }}</td></tr>
+                    <tr><td class="text-muted">Bills / Cash-In Wallet</td><td class="fw-bold text-primary">₱{{ number_format($wallets['bills'], 2) }}</td></tr>
+                    <tr><td class="text-muted">Combined Balance</td><td class="fw-bold text-dark fs-5">₱{{ number_format($wallets['combined'], 2) }}</td></tr>
                     <tr><td class="text-muted">Credit Limit</td><td>₱{{ number_format($retailer->credit_limit ?? 0, 2) }}</td></tr>
                     <tr><td class="text-muted">Transactions</td><td>{{ $retailer->transactions_count }}</td></tr>
                     <tr><td class="text-muted">Status</td><td><span class="badge {{ $retailer->is_active ? 'text-bg-success' : 'text-bg-danger' }}">{{ $retailer->is_active ? 'Active' : 'Inactive' }}</span></td></tr>
@@ -58,6 +61,14 @@
                             <label class="btn btn-outline-success" for="typeCredit">Credit (+)</label>
                             <input type="radio" class="btn-check" name="type" value="debit" id="typeDebit">
                             <label class="btn btn-outline-danger" for="typeDebit">Debit (-)</label>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <div class="btn-group btn-group-sm w-100" role="group">
+                            <input type="radio" class="btn-check" name="wallet" value="eload" id="walletEload" checked>
+                            <label class="btn btn-outline-success" for="walletEload">E-Load</label>
+                            <input type="radio" class="btn-check" name="wallet" value="bills" id="walletBills">
+                            <label class="btn btn-outline-primary" for="walletBills">Bills / Cash-In</label>
                         </div>
                     </div>
                     <div class="mb-2">
