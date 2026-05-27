@@ -29,7 +29,7 @@ interface ProductDao {
     @Query("SELECT DISTINCT providerCode, providerName FROM products WHERE type = :type AND isActive = 1 ORDER BY providerName")
     fun getProvidersByType(type: String): Flow<List<ProviderInfo>>
 
-    @Query("SELECT * FROM products WHERE category = :category AND isActive = 1 ORDER BY providerName")
+    @Query("SELECT * FROM products WHERE type = 'BILLS' AND category = :category AND isActive = 1 ORDER BY providerName")
     fun getProductsByCategory(category: String): Flow<List<ProductEntity>>
 
     @Query("SELECT DISTINCT category FROM products WHERE type = :type AND isActive = 1 AND category != '' ORDER BY category")

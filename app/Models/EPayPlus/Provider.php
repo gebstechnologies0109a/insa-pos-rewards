@@ -9,7 +9,7 @@ class Provider extends Model
     protected $table = 'epay_providers';
 
     protected $fillable = [
-        'type', 'code', 'name', 'category', 'logo_url',
+        'type', 'code', 'name', 'category', 'billing_type', 'logo_url',
         'sms_number', 'sms_format', 'is_active', 'sort_order', 'config',
     ];
 

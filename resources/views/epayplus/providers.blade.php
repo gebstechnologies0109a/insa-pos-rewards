@@ -38,7 +38,10 @@
                     </span>
                 </div>
                 <div class="mb-2">
-                    <span class="badge bg-{{ match($provider->type) { 'ELOAD'=>'success','BILLS'=>'primary','ECASH'=>'danger','WIFI'=>'info',default=>'secondary' } }}">{{ $provider->type }}</span>
+                    <span class="badge bg-{{ match($provider->type) { 'ELOAD'=>'success','BILLS'=>'primary','ECASH'=>'danger','RFID'=>'warning','WIFI'=>'info',default=>'secondary' } }}">{{ $provider->type }}</span>
+                    @if($provider->billing_type)
+                    <span class="badge bg-{{ $provider->billing_type === 'prepaid' ? 'info' : 'dark' }}">{{ ucfirst($provider->billing_type) }}</span>
+                    @endif
                     @if($provider->category)
                     <span class="badge bg-light text-dark">{{ $provider->category }}</span>
                     @endif

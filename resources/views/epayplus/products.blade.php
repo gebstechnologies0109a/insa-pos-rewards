@@ -33,7 +33,7 @@
             <div class="col-auto">
                 <select name="type" class="form-select form-select-sm">
                     <option value="">All Types</option>
-                    @foreach(['ELOAD','BILLS','ECASH','WIFI','OTHER'] as $t)
+                    @foreach(['ELOAD','BILLS','ECASH','RFID','WIFI','OTHER'] as $t)
                     <option value="{{ $t }}" {{ request('type')==$t?'selected':'' }}>{{ $t }}</option>
                     @endforeach
                 </select>
@@ -86,7 +86,12 @@
                             </div>
                             @endif
                         </td>
-                        <td><span class="badge bg-{{ match($product->type) { 'ELOAD'=>'success','BILLS'=>'primary','ECASH'=>'danger','WIFI'=>'info',default=>'secondary' } }}">{{ $product->type }}</span></td>
+                        <td>
+                            <span class="badge bg-{{ match($product->type) { 'ELOAD'=>'success','BILLS'=>'primary','ECASH'=>'danger','RFID'=>'warning','WIFI'=>'info',default=>'secondary' } }}">{{ $product->type }}</span>
+                            @if($product->billing_type)
+                            <span class="badge bg-light text-dark">{{ ucfirst($product->billing_type) }}</span>
+                            @endif
+                        </td>
                         <td class="text-end">₱{{ number_format($product->amount, 2) }}</td>
                         <td class="text-end">₱{{ number_format($product->retailer_price ?? 0, 2) }}</td>
                         <td class="text-end text-primary">₱{{ number_format($product->commission ?? 0, 2) }}</td>
@@ -139,7 +144,7 @@
                         <div class="col-md-3">
                             <label class="form-label">Type <span class="text-danger">*</span></label>
                             <select name="type" id="prType" class="form-select" required>
-                                @foreach(['ELOAD','BILLS','ECASH','WIFI','OTHER'] as $t)
+                                @foreach(['ELOAD','BILLS','ECASH','RFID','WIFI','OTHER'] as $t)
                                 <option value="{{ $t }}">{{ $t }}</option>
                                 @endforeach
                             </select>

@@ -27,7 +27,10 @@ if (! function_exists('provider_code_to_slug')) {
             'TAP_N_GO' => 'tapngo',
             'ECPAY_WALLET' => 'ecpay_wallet',
             'CCLEX_RFID' => 'cclex_rfid',
+            'DITO_BILL' => 'dito',
+            'INNOVE' => 'globe_bill',
             'ALING_PURING' => 'aling_puring_credits',
+            'CIGNAL_BILL' => 'cignal',
         ];
 
         $upper = strtoupper(str_replace([' ', '-', '.'], '_', trim($code)));
