@@ -104,10 +104,4 @@ interface EPayApiService {
 
     @GET("pos/catalog")
     suspend fun getPosCatalog(): Response<PosCatalogResponse>
-
-    @POST("pos/sales")
-    suspend fun recordPosSale(@Body request: PosSaleRequest): Response<PosSaleResponse>
-
-    @GET("retail-products")
-    suspend fun getRetailProducts(): Response<RetailProductListResponse>
 }

@@ -18,7 +18,6 @@ use App\Http\Controllers\EPayAdmin\MayaBillerIntegrationController;
 use App\Http\Controllers\EPayAdmin\MayaNegosyoIntegrationController;
 use App\Http\Controllers\EPayAdmin\PosWebController;
 use App\Http\Controllers\EPayAdmin\PricingController;
-use App\Http\Controllers\EPayAdmin\RetailProductWebController;
 use App\Http\Controllers\EPayAdmin\ProviderController;
 use App\Http\Controllers\EPayAdmin\ReportController;
 use App\Http\Controllers\EPayAdmin\RetailerController;
@@ -83,11 +82,6 @@ Route::middleware(['auth', 'role:owner,admin,super_admin'])->prefix('epayplus')-
 
     // ── POS Mode ──
     Route::get('/pos', [PosWebController::class, 'index'])->name('epayplus.pos');
-    Route::post('/pos/checkout', [PosWebController::class, 'checkout'])->name('epayplus.pos.checkout');
-    Route::get('/retail-products', [RetailProductWebController::class, 'index'])->name('epayplus.retail-products');
-    Route::post('/retail-products', [RetailProductWebController::class, 'store'])->name('epayplus.retail-products.store');
-    Route::put('/retail-products/{retailProduct}', [RetailProductWebController::class, 'update'])->name('epayplus.retail-products.update');
-    Route::delete('/retail-products/{retailProduct}', [RetailProductWebController::class, 'destroy'])->name('epayplus.retail-products.destroy');
 
     // ── Products ──
     Route::get('/products', [EPayProductController::class, 'index'])->name('epayplus.products');

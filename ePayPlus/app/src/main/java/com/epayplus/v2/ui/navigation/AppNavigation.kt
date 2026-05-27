@@ -197,13 +197,6 @@ fun AppNavigation(navController: NavHostController, isLoggedIn: Boolean) {
                     PosModeScreen(navController = navController)
                 }
 
-                composable(NavRoutes.PosCart.route) { backStackEntry ->
-                    val parentEntry = remember(backStackEntry) {
-                        navController.getBackStackEntry(NavRoutes.PosMode.route)
-                    }
-                    PosCartScreen(navController = navController, viewModel = hiltViewModel(parentEntry))
-                }
-
                 composable(NavRoutes.Settings.route) {
                     SettingsScreen(navController = navController)
                 }
