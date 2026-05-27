@@ -203,6 +203,10 @@ fun AppNavigation(navController: NavHostController, isLoggedIn: Boolean) {
                 composable(NavRoutes.About.route) {
                     AboutScreen(navController = navController)
                 }
+
+                composable(NavRoutes.MayaNegosyo.route) {
+                    MayaNegosyoHubScreen(navController = navController)
+                }
             }
         }
     }

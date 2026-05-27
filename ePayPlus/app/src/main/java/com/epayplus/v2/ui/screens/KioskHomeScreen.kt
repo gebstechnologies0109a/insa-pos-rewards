@@ -44,6 +44,7 @@ fun KioskHomeScreen(
         KioskServiceItem("Bills Payment", Icons.Filled.Receipt, CategoryBills, "bills", R.drawable.ic_quick_bills_large),
         KioskServiceItem("Cash-in", Icons.Filled.AccountBalanceWallet, CategoryEcash, "ecash", R.drawable.ic_quick_cashin_large),
         KioskServiceItem("RFID", Icons.Filled.Nfc, CategoryRfid, "rfid", R.drawable.ic_quick_rfid_large),
+        KioskServiceItem("Maya Negosyo", Icons.Filled.Store, Color(0xFF00B464), "maya-negosyo", R.drawable.ic_quick_maya_negosyo),
     )
 
     Column(
@@ -117,6 +118,7 @@ private fun navigateKioskService(navController: NavController, routeKey: String)
         "bills" -> NavRoutes.BillsCategories.route
         "ecash" -> NavRoutes.ECashProviders.route
         "rfid" -> NavRoutes.RfidProviders.route
+        "maya-negosyo" -> NavRoutes.MayaNegosyo.route
         else -> return
     }
     navController.navigate(destination)

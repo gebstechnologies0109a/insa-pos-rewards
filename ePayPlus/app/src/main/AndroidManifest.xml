@@ -61,6 +61,21 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
+    <!-- Maya Negosyo / Business — package visibility (Android 11+) -->
+    <queries>
+        <package android:name="com.paymaya.negosyo" />
+        <package android:name="ph.maya.business.android" />
+        <package android:name="com.paymaya" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="negosyo" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" android:host="www.maya.ph" />
+        </intent>
+    </queries>
+
     <application
         android:name=".EPayPlusApp"
         android:allowBackup="true"

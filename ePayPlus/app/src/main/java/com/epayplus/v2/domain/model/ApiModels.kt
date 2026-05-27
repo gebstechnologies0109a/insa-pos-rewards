@@ -229,6 +229,35 @@ data class GenericResponse(
     val message: String?
 )
 
+data class MayaIntegrationResponse(
+    val success: Boolean,
+    val data: MayaIntegrationData? = null
+)
+
+data class MayaIntegrationData(
+    @SerializedName("biller_enabled") val billerEnabled: Boolean = false,
+    @SerializedName("checkout_enabled") val checkoutEnabled: Boolean = false,
+    @SerializedName("checkout_demo_mode") val checkoutDemoMode: Boolean = true,
+    @SerializedName("negosyo_package") val negosyoPackage: String = "com.paymaya.negosyo",
+    @SerializedName("business_package") val businessPackage: String = "ph.maya.business.android",
+    @SerializedName("deep_link_uri") val deepLinkUri: String = "negosyo://",
+    @SerializedName("feature_flags") val featureFlags: Map<String, Boolean> = emptyMap()
+)
+
+data class MayaCheckoutSessionRequest(
+    val amount: Double,
+    val description: String? = null
+)
+
+data class MayaCheckoutSessionResponse(
+    val success: Boolean = false,
+    val demo: Boolean = true,
+    @SerializedName("checkout_id") val checkoutId: String? = null,
+    @SerializedName("redirect_url") val redirectUrl: String? = null,
+    val reference: String? = null,
+    val message: String? = null
+)
+
 data class DeviceConfigResponse(
     val success: Boolean,
     val config: Map<String, Any>? = null,

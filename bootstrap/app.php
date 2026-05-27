@@ -21,6 +21,11 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::prefix('api')
                 ->group(base_path('routes/maya-biller.php'));
 
+            Route::post('/api/maya-checkout/webhook', [
+                \App\Http\Controllers\Api\MayaCheckoutController::class,
+                'webhook',
+            ]);
+
             Route::middleware(['web'])
                 ->group(base_path('routes/epayplus-web.php'));
         },
@@ -40,6 +45,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/v2/*',
             'api/maya-biller',
             'api/maya-biller/*',
+            'api/maya-checkout/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

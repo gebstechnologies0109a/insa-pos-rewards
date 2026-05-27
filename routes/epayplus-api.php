@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\V2\DeviceFleetApiController;
 use App\Http\Controllers\Api\V2\ProductController;
 use App\Http\Controllers\Api\V2\TransactionController;
 use App\Http\Controllers\Api\V2\WalletController;
+use App\Http\Controllers\Api\V2\MayaIntegrationController;
+use App\Http\Controllers\Api\MayaCheckoutController;
 use App\Http\Middleware\EPayApiAuth;
 use Illuminate\Support\Facades\Route;
 
@@ -20,6 +22,9 @@ Route::prefix('v2')->group(function () {
 
     // Health check
     Route::get('/health', fn () => response()->json(['status' => 'ok', 'timestamp' => now()->toISOString()]));
+
+    // Maya ecosystem config (no secrets)
+    Route::get('/integrations/maya', [MayaIntegrationController::class, 'show']);
 
     // Public auth routes (no token required)
     Route::post('/auth/login', [AuthController::class, 'login']);
@@ -39,6 +44,8 @@ Route::prefix('v2')->group(function () {
         Route::put('/account/profile', [AccountController::class, 'updateProfile']);
         Route::post('/account/topup', [AccountController::class, 'requestTopup']);
         Route::get('/account/topup-history', [AccountController::class, 'topupHistory']);
+
+        Route::post('/maya-checkout/sessions', [MayaCheckoutController::class, 'createSession']);
 
         // Products
         Route::get('/products/eload', [ProductController::class, 'eloadProducts']);

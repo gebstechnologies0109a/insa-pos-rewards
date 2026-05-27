@@ -130,6 +130,10 @@ fun KioskNavigation(
             )
         }
 
+        composable(NavRoutes.MayaNegosyo.route) {
+            MayaNegosyoHubScreen(navController = navController)
+        }
+
         composable(
             route = NavRoutes.TransactionResult.route,
             arguments = listOf(

@@ -95,4 +95,10 @@ interface EPayApiService {
 
     @GET("sync/config")
     suspend fun getSystemConfig(): Response<GenericResponse>
+
+    @GET("integrations/maya")
+    suspend fun getMayaIntegration(): Response<MayaIntegrationResponse>
+
+    @POST("maya-checkout/sessions")
+    suspend fun createMayaCheckout(@Body request: MayaCheckoutSessionRequest): Response<MayaCheckoutSessionResponse>
 }

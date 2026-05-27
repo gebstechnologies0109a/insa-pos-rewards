@@ -136,6 +136,19 @@ fun HomeScreen(
                     navController.navigate(NavRoutes.RfidProviders.route)
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                ServiceButton(
+                    "Maya Negosyo",
+                    Color(0xFF00B464),
+                    iconRes = R.drawable.ic_quick_maya_negosyo
+                ) {
+                    navController.navigate(NavRoutes.MayaNegosyo.route)
+                }
+            }
 
             Spacer(modifier = Modifier.height(if (landscape) 14.dp else 20.dp))
 

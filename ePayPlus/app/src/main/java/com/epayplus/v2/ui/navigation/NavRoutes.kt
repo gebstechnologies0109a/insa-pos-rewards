@@ -40,4 +40,5 @@ sealed class NavRoutes(val route: String) {
     object Settings : NavRoutes("settings")
     object ChangePin : NavRoutes("settings/change_pin")
     object About : NavRoutes("about")
+    object MayaNegosyo : NavRoutes("maya-negosyo")
 }

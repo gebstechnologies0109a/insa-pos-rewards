@@ -15,6 +15,7 @@ use App\Http\Controllers\EPayAdmin\EPayProductController;
 use App\Http\Controllers\EPayAdmin\KioskController;
 use App\Http\Controllers\EPayAdmin\LicenseController;
 use App\Http\Controllers\EPayAdmin\MayaBillerIntegrationController;
+use App\Http\Controllers\EPayAdmin\MayaNegosyoIntegrationController;
 use App\Http\Controllers\EPayAdmin\PricingController;
 use App\Http\Controllers\EPayAdmin\ProviderController;
 use App\Http\Controllers\EPayAdmin\ReportController;
@@ -67,6 +68,10 @@ Route::middleware(['auth', 'role:owner,admin,super_admin'])->prefix('epayplus')-
         ->name('epayplus.integrations.maya');
     Route::get('/integrations/maya/testing', [MayaBillerIntegrationController::class, 'testingGuide'])
         ->name('epayplus.integrations.maya.testing');
+    Route::get('/integrations/maya-negosyo', [MayaNegosyoIntegrationController::class, 'index'])
+        ->name('epayplus.integrations.maya-negosyo');
+    Route::post('/integrations/maya-negosyo/checkout', [MayaNegosyoIntegrationController::class, 'createCheckout'])
+        ->name('epayplus.integrations.maya-negosyo.checkout');
 
     // ── Providers ──
     Route::get('/providers', [ProviderController::class, 'index'])->name('epayplus.providers');
