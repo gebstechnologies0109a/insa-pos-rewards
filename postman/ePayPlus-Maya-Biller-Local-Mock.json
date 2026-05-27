@@ -1,0 +1,96 @@
+{
+  "info": {
+    "name": "ePayPlus — Maya Biller Local Mock",
+    "description": "Partner Biller inbound APIs for local/sandbox mock testing.\n\nDocs: docs/MAYA_BILLER_INTEGRATION_GUIDE.md\nRun Validate before Post (same requestReferenceNo).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://epayplus.test" },
+    { "key": "secretKey", "value": "local-dev-secret" },
+    { "key": "requestReferenceNo", "value": "mock-rrn-001" },
+    { "key": "callbackUrl", "value": "https://pg-sandbox.paymaya.com/partners/v1/billers/transactions/callback" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const secret = pm.collectionVariables.get('secretKey') || '';",
+          "const body = pm.request.body && pm.request.body.mode === 'raw' ? pm.request.body.raw : '';",
+          "if (secret && body) {",
+          "  const hash = CryptoJS.SHA256(body + secret);",
+          "  const sig = CryptoJS.enc.Base64.stringify(hash);",
+          "  pm.request.headers.upsert({ key: 'paymaya-signature', value: sig });",
+          "}",
+          "const rrn = pm.collectionVariables.get('requestReferenceNo');",
+          "if (rrn) {",
+          "  pm.request.headers.upsert({ key: 'Request-Reference-No', value: rrn });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Validate Bills Payment",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"billerCode\": \"MERALCO\",\n  \"accountNumber\": \"1234567890\",\n  \"amount\": 1500,\n  \"currency\": \"PHP\",\n  \"mobileNo\": \"09171234567\"\n}"
+        },
+        "url": "{{baseUrl}}/api/maya-biller/v1/validate"
+      }
+    },
+    {
+      "name": "2. Post Bills Payment",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"MAYA-TXN-MOCK-001\",\n  \"billerCode\": \"MERALCO\",\n  \"accountNumber\": \"1234567890\",\n  \"amount\": 1500,\n  \"fee\": 15,\n  \"currency\": \"PHP\",\n  \"callbackUrl\": \"{{callbackUrl}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/maya-biller/v1/post"
+      }
+    },
+    {
+      "name": "3. Inquire Transaction",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestReferenceNo\": \"{{requestReferenceNo}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/maya-biller/v1/inquire"
+      }
+    },
+    {
+      "name": "4. Get Fee (optional)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"billerCode\": \"MERALCO\",\n  \"amount\": 1500\n}"
+        },
+        "url": "{{baseUrl}}/api/maya-biller/v1/fee"
+      }
+    },
+    {
+      "name": "Validate — invalid account (2559)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"billerCode\": \"MERALCO\",\n  \"accountNumber\": \"12\",\n  \"amount\": 1500\n}"
+        },
+        "url": "{{baseUrl}}/api/maya-biller/v1/validate"
+      }
+    }
+  ]
+}

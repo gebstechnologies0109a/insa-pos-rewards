@@ -99,12 +99,42 @@ paymaya-signature: <computed>
 
 ---
 
-## Step 2: Post Bills Payment
+## Step 2: Post Bills Payment (ExecutePost)
 
 **Maya spec path:** `POST /v1/post`  
 **ePayPlus URL:** `POST /api/maya-biller/v1/post`
 
 Maya debits the customer wallet, then calls partner Post with `callbackUrl` for Step 3.
+
+### Sequence (Bills Pay Direct ExecutePost)
+
+```mermaid
+sequenceDiagram
+    participant User as Maya App User
+    participant Maya as Maya Biller API
+    participant Partner as ePayPlus Partner
+    participant Job as ProcessMayaBillerPostingJob
+    participant Biller as Internal ledger
+
+    User->>Maya: Pay (after Step 1 validate + fees)
+    Maya->>Maya: Create txn, charge customer
+    Maya->>Partner: POST /v1/post (signed, Request-Reference-No)
+    Partner->>Partner: Verify signature, revalidate, persist AUTHORIZED (DB only)
+    Partner-->>Maya: HTTP 202 Accepted (queued)
+    Maya->>User: Receipt — Authorized
+    Partner->>Job: dispatch (never dispatchSync)
+    Job->>Biller: completeInternalPosting
+    Job->>Maya: Step 3 posting callback
+```
+
+> **⚠️ CRITICAL — respond before posting completes**  
+> Return **HTTP 2xx within milliseconds** (SLA **&lt; 3 seconds**, target sub-second). Do **not** run internal biller posting or Maya’s posting callback inside the Post HTTP request. Slow handlers cause Maya timeouts (`503`, `504`, `598`, `599`) and retries. Posting and Step 3 run in **`ProcessMayaBillerPostingJob`** on the queue.
+
+| HTTP status | Maya meaning |
+|-------------|----------------|
+| **2xx** (default **202**) | Received and **queued** |
+| **503 / 504 / 598 / 599** | Partner timeout — Maya retries |
+| **Other 4xx / 5xx** | **POSTING FAILED** at Maya |
 
 ### Sample request
 
@@ -124,11 +154,18 @@ Maya debits the customer wallet, then calls partner Post with `callbackUrl` for 
 
 ```json
 {
-  "result": { "code": "0000" }
+  "resultCode": "0000",
+  "resultMessage": "ACCEPTED",
+  "requestReferenceNo": "RRN-20260527-000002",
+  "transactionId": "MAYA-TXN-12345",
+  "status": "AUTHORIZED",
+  "queued": true
 }
 ```
 
-Partner persists txn as **PROCESSING → AUTHORIZED**, creates ledger row, and dispatches `ProcessMayaBillerPostingJob`.
+Duplicate `Request-Reference-No` returns **202** with `resultMessage`: `ALREADY_ACCEPTED` and `queued`: false (no second job).
+
+Partner persists txn as **PROCESSING → AUTHORIZED**, creates ledger row (DB only), and dispatches `App\Jobs\MayaBiller\ProcessMayaBillerPostingJob`.
 
 ---
 
