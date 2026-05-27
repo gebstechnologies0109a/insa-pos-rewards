@@ -5,37 +5,53 @@ Production sites use **parted deploy branches** — see [DEPLOYMENT_SEPARATION.m
 | Site | Branch | Script |
 |------|--------|--------|
 | insapos.diybizrewards.com | `deploy/insa` | `scripts/forge-deploy-insa.sh` |
-| insa-pos-rewards (Forge site) | `deploy/insa` | `scripts/forge-deploy-insa.sh` |
+| insa-pos-rewards (Forge site, e.g. `insa-pos-rewards-tasxesjq.on-forge.com`) | `deploy/insa` | `scripts/forge-deploy-insa.sh` |
 | epayplus.diybizrewards.com | `deploy/epayplus` | `scripts/forge-deploy-epayplus.sh` |
 
-The repo root `deploy.sh` is a legacy generic template. New Forge sites should use the product scripts above.
+The repo root `deploy.sh` is a legacy entry point that **delegates** to the product scripts when the Forge site path/name looks like INSA or ePay Plus. New Forge sites should still paste `scripts/forge-deploy-insa.sh` directly in the dashboard.
 
-Forge injects `FORGE_SITE_PATH`, `FORGE_SITE_BRANCH`, and `FORGE_COMPOSER` when the script runs on the server.
+Forge injects `FORGE_SITE_PATH`, `FORGE_SITE_BRANCH`, `FORGE_SITE_NAME`, and `FORGE_COMPOSER` when the script runs on the server.
 
-## Required: APP_PRODUCT in Forge Environment
+## Critical: deploy script runs before `git pull`
 
-Each Forge site must declare which product it runs. Without this, `scripts/forge-deploy-insa.sh` aborts with:
+Forge runs whatever is pasted under **Site → Deployment → Deploy Script** on **every** deploy. That script executes **before** `git pull` updates the repo on disk.
 
-```text
-ERROR: APP_PRODUCT must be 'insa' on this site (found: '<unset>')
-```
+If the dashboard still contains an old copy of `forge-deploy-insa.sh` (for example from commit `be335e4`), deploy will fail on `APP_PRODUCT` even when branch `deploy/insa` already has the fix. You must **update the deploy script in Forge once** (paste the latest `scripts/forge-deploy-insa.sh` from this repo) **or** set `APP_PRODUCT=insa` in Forge Environment so the guard passes on the first line.
 
-**One-time setup for INSA sites** (insapos, insa-pos-rewards, etc.):
+After the dashboard script is updated, future deploys pick up repo changes via `git pull` inside the script.
+
+## APP_PRODUCT (INSA sites)
+
+Recommended one-time setup:
 
 1. Forge → **Server** → **Site** → **Environment**
-2. Add or confirm this line in the site's `.env`:
+2. Add or confirm:
 
    ```env
    APP_PRODUCT=insa
    ```
 
-3. Save. Redeploy.
+3. Under **Site → Deployment**, enable **Make .env variables available to deployment script**.
+4. Save. Redeploy.
+
+`scripts/forge-deploy-insa.sh` also auto-sets `APP_PRODUCT=insa` when the value is missing or `auto` and the Forge site path/name looks like an INSA host (`insapos`, `insa-pos-rewards`, `insa-pos`, etc.). It **only fails** when `APP_PRODUCT` is set to a **wrong** product (e.g. `epayplus` on an INSA site).
 
 For ePay Plus sites, use `APP_PRODUCT=epayplus` instead (see [DEPLOYMENT_PRODUCTS.md](./DEPLOYMENT_PRODUCTS.md)).
 
-Optional: under **Site → Deployment**, enable **Make .env variables available to deployment script** so `APP_PRODUCT` is also visible as a shell variable during deploy.
+## Forge dashboard checklist (INSA POS rewards site)
 
-The INSA deploy script can auto-write `APP_PRODUCT=insa` on first deploy when the Forge site path looks like an INSA host (`insapos`, `insa-pos-rewards`, etc.) and the value is missing or `auto`. Setting it explicitly in Forge Environment is still recommended so config is correct before the deploy hook runs.
+Use this for `insa-pos-rewards-tasxesjq.on-forge.com` and similar INSA Forge sites:
+
+| Setting | Value |
+|---------|--------|
+| **Deploy branch** | `deploy/insa` (not `main`) |
+| **Deploy script** | Full contents of `scripts/forge-deploy-insa.sh` from latest `deploy/insa` (not root `deploy.sh` unless you accept delegation) |
+| **Environment** | `APP_PRODUCT=insa` |
+| **Deployment option** | Enable **Make .env variables available to deployment script** |
+
+Then click **Deploy Now** (or push to `deploy/insa` if Quick Deploy is on).
+
+Verify deploy log shows a recent commit (after `48e75df` / auto-`APP_PRODUCT` fix), not an old SHA like `be335e4` unless that is intentionally deployed.
 
 ## SSH access
 
@@ -50,22 +66,13 @@ Connect using one of:
 
 Do not commit or share private keys. Only the public key belongs in Forge.
 
-## Forge deploy script
-
-In **Forge → Site → Deployment**:
-
-1. Set **Deploy branch** to `deploy/insa` (not `main`). Enable **Quick Deploy** on that branch if desired.
-2. Paste the contents of `scripts/forge-deploy-insa.sh` as the deploy script (not the root `deploy.sh`).
-
-Forge sets `FORGE_SITE_PATH` automatically; the script falls back to `/home/forge/insapos.diybizrewards.com` if needed.
-
 ## Manual commands (if deploy fails)
 
 SSH to the server, then:
 
 ```bash
-cd $FORGE_SITE_PATH   # or cd /home/forge/insapos.diybizrewards.com
-grep APP_PRODUCT .env  # must show APP_PRODUCT=insa
+cd $FORGE_SITE_PATH   # e.g. /home/forge/insa-pos-rewards-tasxesjq.on-forge.com
+grep APP_PRODUCT .env  # should show APP_PRODUCT=insa (script may add it)
 git pull origin deploy/insa
 composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 php artisan migrate --force
