@@ -15,6 +15,10 @@ class PosWebController extends Controller
 
     public function index(Request $request)
     {
+        if (! $request->boolean('epay')) {
+            return redirect()->away((string) config('product.insa_pos_cashier_url'));
+        }
+
         $retailerId = $this->resolveWebRetailerId($request);
         $retailers = Retailer::where('is_active', true)->orderBy('business_name')->get(['id', 'business_name', 'account_id']);
         $retailer = Retailer::find($retailerId);

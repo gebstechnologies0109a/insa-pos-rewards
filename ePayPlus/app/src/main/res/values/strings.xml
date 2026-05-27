@@ -4,4 +4,5 @@
     <string name="app_name_short">ePayPlus</string>
     <!-- Admin/docs only: Maya Partner Biller is server-side (Laravel), not in-app -->
     <string name="maya_biller_integration_coming_soon">Maya bill pay via Maya app is handled on the server. Retailer bills flow unchanged.</string>
+    <string name="insa_pos_not_installed">INSA POS app not found. Install INSA POS v2 or use ePay services below.</string>
 </resources>

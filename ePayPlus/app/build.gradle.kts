@@ -22,8 +22,8 @@ android {
         applicationId = "com.epayplus.v2"
         minSdk = 24
         targetSdk = 34
-        versionCode = 19
-        versionName = "3.3.0"
+        versionCode = 20
+        versionName = "3.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

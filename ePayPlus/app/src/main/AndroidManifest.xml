@@ -61,6 +61,17 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
+    <!-- Package visibility (Android 11+) for launching INSA POS from POS Mode -->
+    <queries>
+        <package android:name="com.insapos.v2" />
+        <package android:name="com.insapos.light" />
+        <package android:name="com.insapos.posapp" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <application
         android:name=".EPayPlusApp"
         android:allowBackup="true"
