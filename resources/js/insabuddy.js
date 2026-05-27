@@ -179,6 +179,45 @@ const INSABuddy = {
     },
 
     /**
+     * Send a test print to the currently selected printer.
+     */
+    async testPrint() {
+        return this._post('/printer/test', {});
+    },
+
+    /**
+     * Normalize printer list response from INSABuddy or INSAPOSv2.
+     */
+    parsePrinterList(data) {
+        if (!data) return [];
+        const raw = data.printers || [];
+        if (!Array.isArray(raw)) return [];
+        return raw.map(p => ({
+            type: p.type || 'unknown',
+            name: p.name || '',
+            connected: !!p.connected,
+        })).filter(p => p.name);
+    },
+
+    /**
+     * Normalize printer status response from either bridge.
+     */
+    parsePrinterStatus(data) {
+        if (!data) return { connected: false, name: null, type: null };
+        const connected = !!(data.connected || data.ok && data.name);
+        return {
+            connected,
+            name: data.name && data.name !== 'No printer' ? data.name : null,
+            type: data.type && data.type !== 'none' ? data.type : null,
+        };
+    },
+
+    isSuccessResponse(data) {
+        if (!data) return false;
+        return data.ok === true || data.success === true;
+    },
+
+    /**
      * Start polling INSABuddy status at the given interval (ms).
      * Calls `onChange(connected)` whenever status changes.
      */

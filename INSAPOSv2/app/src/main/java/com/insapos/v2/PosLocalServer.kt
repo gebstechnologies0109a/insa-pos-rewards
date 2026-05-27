@@ -48,6 +48,7 @@ class PosLocalServer(
                 uri == "/printer/status" -> handlePrinterStatus()
                 uri == "/printer/list" -> handlePrinterList()
                 uri == "/printer/select" && method == Method.POST -> handlePrinterSelect(session)
+                uri == "/printer/test" && method == Method.POST -> handlePrinterTest()
                 uri == "/scan" -> handleCameraScan()
                 uri == "/scan/hid" -> handleHidScan()
                 // Offline data endpoints
@@ -145,8 +146,24 @@ class PosLocalServer(
         if (name.isBlank()) return jsonError("Printer name required")
 
         val pm = getPrinterManager() ?: return jsonError("Service not ready")
-        val ok = pm.selectByName(name)
+        val type = json.optString("type", "")
+        val ok = if (type.isNotBlank()) pm.selectByTypeAndName(type, name) else pm.selectByName(name)
         return jsonOk(JSONObject().put("ok", ok).put("selected", name))
+    }
+
+    private fun handlePrinterTest(): Response {
+        val pm = getPrinterManager() ?: return jsonError("Service not ready")
+        val printer = pm.getActivePrinter() ?: return jsonError("No printer connected")
+        val text = "================================\n" +
+            "      INSAPOS v${BuildConfig.VERSION_NAME}      \n" +
+            "         Test Print               \n" +
+            "================================\n" +
+            "Printer is working correctly!\n" +
+            "Date: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\n" +
+            "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n" +
+            "================================\n"
+        val ok = pm.printText(text)
+        return jsonOk(JSONObject().put("ok", ok).put("printed", ok))
     }
 
     private fun handleCameraScan(): Response {

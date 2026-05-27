@@ -69,6 +69,14 @@ class PrinterManager(private val context: Context) {
         return selectPrinter(match)
     }
 
+    fun selectByTypeAndName(type: String, name: String): Boolean {
+        val all = scanAll()
+        val match = all.find { it.type == type && it.name == name }
+            ?: all.find { it.name == name }
+            ?: return false
+        return selectPrinter(match)
+    }
+
     @SuppressLint("MissingPermission")
     fun scanAllBluetoothDevices(): List<BluetoothPrinter> {
         val printers = mutableListOf<BluetoothPrinter>()

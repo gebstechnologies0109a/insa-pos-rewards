@@ -62,14 +62,36 @@
     </style>
     <script src="https://unpkg.com/dexie@4/dist/dexie.min.js"></script>
     <script src="{{ asset('js/db.js') }}"></script>
+    <script src="{{ asset('js/terminal-session.js') }}"></script>
     <script src="{{ asset('js/insabuddy.js') }}"></script>
     <script src="{{ asset('js/sync-engine.js') }}"></script>
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
 
+<!-- LICENSE / SEAT LIMIT -->
+<div x-show="licenseBlocked" class="fixed inset-0 bg-slate-900/95 z-[250] flex items-center justify-center p-6" x-cloak>
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
+        <div class="text-red-600 text-4xl mb-4">⚠</div>
+        <h2 class="text-xl font-bold text-gray-900 mb-2">License limit reached</h2>
+        <p class="text-gray-600 text-sm mb-6" x-text="licenseBlockMessage"></p>
+        <a href="{{ route('backoffice.dashboard') }}" class="inline-block px-4 py-2 bg-gray-200 rounded-lg text-sm font-medium hover:bg-gray-300">Leave cashier</a>
+        <button @click="retryTerminalSession()" class="ml-2 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Retry</button>
+    </div>
+</div>
+
+<!-- INACTIVE LICENSE -->
+<div x-show="!licenseActive && !licenseBlocked" class="fixed inset-0 bg-slate-900/95 z-[240] flex items-center justify-center p-6" x-cloak>
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
+        <h2 class="text-xl font-bold text-gray-900 mb-2">Branch license inactive</h2>
+        <p class="text-gray-600 text-sm mb-6">POS is unavailable until your administrator reactivates this branch license.</p>
+        <a href="{{ route('logout') }}" onclick="event.preventDefault(); document.getElementById('logout-form-license').submit();" class="inline-block px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-medium">Logout</a>
+        <form id="logout-form-license" method="POST" action="{{ route('logout') }}" class="hidden">@csrf</form>
+    </div>
+</div>
+
 <!-- MODE SELECTION OVERLAY -->
-<div x-show="showModeSelect" class="fixed inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 z-[200] flex items-center justify-center" x-cloak>
+<div x-show="showModeSelect && !licenseBlocked && licenseActive" class="fixed inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 z-[200] flex items-center justify-center" x-cloak>
     <div class="text-center max-w-2xl mx-auto px-6">
         <div class="mb-2">
             <span class="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">{{ $brandName }}</span>
@@ -170,6 +192,12 @@
             <span class="text-[10px] lg:text-xs font-medium" :class="buddyConnected ? 'text-green-700' : 'text-gray-400'"
                   x-text="buddyConnected ? 'INSABuddy' : 'No Buddy'"></span>
         </div>
+        <div x-show="hasNativeBridge" class="flex items-center gap-1 px-1.5 py-0.5 lg:px-2 lg:py-1 rounded-full border cursor-help"
+             :class="androidLocalUp ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'"
+             :title="androidLocalUp ? 'Android local service OK' : 'Android local service unreachable — scanner/printer may use cloud only'">
+            <span class="text-[10px] lg:text-xs font-medium" :class="androidLocalUp ? 'text-green-700' : 'text-amber-700'"
+                  x-text="androidLocalUp ? 'Local OK' : 'Local down'"></span>
+        </div>
         <!-- Product QR/Barcode scan -->
         <button @click="scanProduct()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100 text-blue-600" title="Scan Product QR/Barcode"
                 :disabled="_scanning">
@@ -187,6 +215,13 @@
             <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
             <span x-show="selectedCustomer" class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full"></span>
         </button>
+
+        <!-- Printer Settings — INSABuddy or native bridge -->
+        <template x-if="buddyConnected || hasNativeBridge">
+            <button @click="openPrinterSettings()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Printer Settings">
+                <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+            </button>
+        </template>
 
         <button @click="showHistoryModal = true; loadRecentSales()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Recent Transactions">
             <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -965,6 +1000,108 @@
     </div>
 </div>
 
+<!-- PRINTER SETTINGS MODAL -->
+<div x-show="showPrinterModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[360px] lg:max-w-md p-4 lg:p-6" @click.away="showPrinterModal = false">
+        <div class="flex items-center justify-between mb-3 lg:mb-4">
+            <h2 class="text-base lg:text-xl font-bold text-gray-800 flex items-center gap-2">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                Printer Settings
+            </h2>
+            <button @click="showPrinterModal = false" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Step indicators -->
+        <div class="flex items-center gap-1 mb-4 lg:mb-5">
+            <template x-for="(label, idx) in ['Scan', 'Test', 'Save']" :key="idx">
+                <div class="flex items-center flex-1">
+                    <div class="flex items-center gap-1.5 flex-1">
+                        <span class="w-6 h-6 lg:w-7 lg:h-7 rounded-full flex items-center justify-center text-[10px] lg:text-xs font-bold shrink-0"
+                              :class="printerStep > idx + 1 ? 'bg-green-500 text-white' : (printerStep === idx + 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500')"
+                              x-text="idx + 1"></span>
+                        <span class="text-[10px] lg:text-xs font-medium truncate"
+                              :class="printerStep === idx + 1 ? 'text-blue-700' : 'text-gray-400'"
+                              x-text="label"></span>
+                    </div>
+                    <div x-show="idx < 2" class="w-3 lg:w-4 h-0.5 mx-0.5 shrink-0"
+                         :class="printerStep > idx + 1 ? 'bg-green-400' : 'bg-gray-200'"></div>
+                </div>
+            </template>
+        </div>
+
+        <p class="text-[10px] lg:text-xs text-gray-500 mb-3 lg:mb-4" x-text="printerStatusMessage"></p>
+
+        <!-- Step 1: Scan -->
+        <div x-show="printerStep === 1" class="space-y-3">
+            <p class="text-[11px] lg:text-sm text-gray-600">Search for Bluetooth, USB, or built-in thermal printers on this device.</p>
+            <button @click="scanPrinters()" :disabled="printerScanning"
+                    class="w-full py-2.5 lg:py-3 bg-blue-600 text-white rounded-lg text-xs lg:text-base font-medium hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait flex items-center justify-center gap-2">
+                <svg x-show="printerScanning" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                <span x-text="printerScanning ? 'Scanning...' : 'Scan for Printers'"></span>
+            </button>
+            <div x-show="printerList.length > 0">
+                <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-1">Found printers</label>
+                <select x-model="printerSelectedIndex" class="w-full p-2 lg:p-3 border rounded-lg text-xs lg:text-sm focus:border-blue-500 focus:outline-none">
+                    <option value="-1" disabled selected>Select a printer...</option>
+                    <template x-for="(p, i) in printerList" :key="p.type + '-' + p.name">
+                        <option :value="i" x-text="'[' + p.type + '] ' + p.name"></option>
+                    </template>
+                </select>
+                <button @click="printerStep = 2" :disabled="printerSelectedIndex < 0"
+                        class="w-full mt-2 py-2 lg:py-2.5 bg-gray-800 text-white rounded-lg text-xs lg:text-sm font-medium hover:bg-gray-900 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                    Continue to Test Print
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 2: Select & Test -->
+        <div x-show="printerStep === 2" class="space-y-3">
+            <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-1">Selected printer</label>
+            <select x-model="printerSelectedIndex" class="w-full p-2 lg:p-3 border rounded-lg text-xs lg:text-sm focus:border-blue-500 focus:outline-none">
+                <option value="-1" disabled>Select a printer...</option>
+                <template x-for="(p, i) in printerList" :key="p.type + '-' + p.name">
+                    <option :value="i" x-text="'[' + p.type + '] ' + p.name"></option>
+                </template>
+            </select>
+            <button @click="testSelectedPrinter()" :disabled="printerSelectedIndex < 0 || printerTesting"
+                    class="w-full py-2.5 lg:py-3 bg-green-600 text-white rounded-lg text-xs lg:text-base font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                <svg x-show="printerTesting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                <span x-text="printerTesting ? 'Printing...' : 'Test Print'"></span>
+            </button>
+            <button @click="printerStep = 1" class="w-full py-2 text-[11px] lg:text-sm text-gray-500 hover:text-gray-700">← Back to Scan</button>
+        </div>
+
+        <!-- Step 3: Save default -->
+        <div x-show="printerStep === 3" class="space-y-3">
+            <div class="bg-gray-50 border rounded-lg p-3 lg:p-4">
+                <div class="text-[9px] lg:text-xs font-bold text-gray-500 uppercase mb-2">Current Default Printer</div>
+                <template x-if="printerDefault.connected && printerDefault.name">
+                    <div>
+                        <div class="font-bold text-sm lg:text-base text-green-700" x-text="printerDefault.name"></div>
+                        <div class="text-[10px] lg:text-xs text-gray-500 capitalize" x-text="printerDefault.type + ' · Connected'"></div>
+                    </div>
+                </template>
+                <template x-if="!printerDefault.connected || !printerDefault.name">
+                    <div class="text-[11px] lg:text-sm text-gray-400">No default printer saved</div>
+                </template>
+            </div>
+            <p class="text-[11px] lg:text-sm text-gray-600">Save the tested printer as your default for receipts and drawer commands.</p>
+            <button @click="saveDefaultPrinter()" :disabled="printerSelectedIndex < 0 || printerSaving"
+                    class="w-full py-2.5 lg:py-3 bg-blue-600 text-white rounded-lg text-xs lg:text-base font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                <svg x-show="printerSaving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                <span x-text="printerSaving ? 'Saving...' : 'Set as Default & Save'"></span>
+            </button>
+            <button @click="printerStep = 2" class="w-full py-2 text-[11px] lg:text-sm text-gray-500 hover:text-gray-700">← Back to Test Print</button>
+        </div>
+
+        <div class="mt-4 pt-3 border-t">
+            <button @click="showPrinterModal = false" class="w-full py-2 lg:py-2.5 bg-gray-200 text-gray-700 rounded-lg text-xs lg:text-base font-medium hover:bg-gray-300">Close</button>
+        </div>
+    </div>
+</div>
+
 <!-- CUSTOMER REWARDS / DIY BIZ REWARDS SCAN MODAL -->
 <div x-show="showRewardsModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[340px] lg:max-w-sm p-4 lg:p-6" @click.away="showRewardsModal = false">
@@ -1076,13 +1213,30 @@ function posApp() {
         showHistoryModal: false,
         recentSales: [],
 
+        showPrinterModal: false,
+        printerStep: 1,
+        printerList: [],
+        printerSelectedIndex: -1,
+        printerScanning: false,
+        printerTesting: false,
+        printerSaving: false,
+        printerStatusMessage: '',
+        printerDefault: { connected: false, name: null, type: null },
+        printerTestPassed: false,
+
         showRewardsModal: false,
         rewardsCardInput: '',
         rewardsResults: [],
         rewardsNoMatch: false,
         hasNativeBridge: false,
+        androidLocalUp: true,
         _nativeScanPort: 18182,
         _scanning: false,
+
+        licenseActive: @json($licenseActive ?? true),
+        licenseBlocked: false,
+        licenseBlockMessage: '',
+        terminalSessionReady: false,
 
         syncStatus: 'offline',
         pendingSyncCount: 0,
@@ -1208,11 +1362,52 @@ function posApp() {
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
             if (this.hasNativeBridge) {
                 try { this._nativeScanPort = window.INSAPOS.getServicePort() || 18182; } catch { this._nativeScanPort = 18182; }
+                this.checkAndroidLocalHealth();
             }
+            if (!this.licenseActive) return;
+            const seatOk = await this.registerTerminalSession();
+            if (!seatOk) return;
             await this.initOffline();
             this.loadShift();
             this.initBuddy();
             window.onINSAPOSBarcode = (barcode) => { this._lastNativeScanTime = Date.now(); this._lastNativeScan = barcode; this.handleBarcodeScan(barcode); };
+        },
+
+        async registerTerminalSession() {
+            if (typeof PosTerminalSession === 'undefined') {
+                this.terminalSessionReady = true;
+                return true;
+            }
+            const result = await PosTerminalSession.register(this.config.branchId);
+            if (result.ok) {
+                this.licenseBlocked = false;
+                this.terminalSessionReady = true;
+                return true;
+            }
+            this.licenseBlocked = true;
+            this.licenseBlockMessage = result.message || 'License limit reached.';
+            return false;
+        },
+
+        async retryTerminalSession() {
+            this.licenseBlocked = false;
+            await this.registerTerminalSession();
+            if (!this.licenseBlocked) {
+                await this.initOffline();
+                this.loadShift();
+            }
+        },
+
+        async checkAndroidLocalHealth() {
+            if (!this.hasNativeBridge) return;
+            try {
+                const controller = new AbortController();
+                setTimeout(() => controller.abort(), 2000);
+                const res = await fetch(`http://127.0.0.1:${this._nativeScanPort}/ping`, { signal: controller.signal });
+                this.androidLocalUp = res.ok;
+            } catch {
+                this.androidLocalUp = false;
+            }
         },
 
         async initOffline() {
@@ -1277,6 +1472,124 @@ function posApp() {
             if (typeof INSABuddy !== 'undefined') {
                 INSABuddy.detectV2();
                 INSABuddy.startPolling(20000, (c) => { this.buddyConnected = c; });
+            }
+        },
+
+        async openPrinterSettings() {
+            if (!this.buddyConnected && !this.hasNativeBridge) {
+                this.showToast('Printer settings require INSABuddy or the Android app', 'warning');
+                return;
+            }
+            if (typeof INSABuddy !== 'undefined') INSABuddy.detectV2();
+            this.printerStep = 1;
+            this.printerList = [];
+            this.printerSelectedIndex = -1;
+            this.printerScanning = false;
+            this.printerTesting = false;
+            this.printerSaving = false;
+            this.printerTestPassed = false;
+            this.printerStatusMessage = 'Scan for available printers on this device.';
+            this.showPrinterModal = true;
+            await this.loadPrinterDefaultStatus();
+        },
+
+        async loadPrinterDefaultStatus() {
+            if (typeof INSABuddy === 'undefined') return;
+            const data = await INSABuddy.getPrinterStatus();
+            this.printerDefault = INSABuddy.parsePrinterStatus(data);
+        },
+
+        getSelectedPrinter() {
+            const idx = parseInt(this.printerSelectedIndex, 10);
+            if (idx < 0 || idx >= this.printerList.length) return null;
+            return this.printerList[idx];
+        },
+
+        async scanPrinters() {
+            if (typeof INSABuddy === 'undefined') return;
+            this.printerScanning = true;
+            this.printerStatusMessage = 'Scanning for printers...';
+            this.printerList = [];
+            this.printerSelectedIndex = -1;
+            try {
+                const data = await INSABuddy.listPrinters();
+                this.printerList = INSABuddy.parsePrinterList(data);
+                if (this.printerList.length === 0) {
+                    this.printerStatusMessage = 'No printers found. Ensure Bluetooth is on and devices are paired.';
+                    this.showToast('No printers found', 'warning');
+                } else {
+                    this.printerStatusMessage = `Found ${this.printerList.length} printer(s) — select one to continue.`;
+                    this.showToast(`Found ${this.printerList.length} printer(s)`, 'success', 2000);
+                }
+            } catch {
+                this.printerStatusMessage = 'Scan failed — check that the local service is running.';
+                this.showToast('Printer scan failed', 'error');
+            } finally {
+                this.printerScanning = false;
+            }
+        },
+
+        async testSelectedPrinter() {
+            const printer = this.getSelectedPrinter();
+            if (!printer || typeof INSABuddy === 'undefined') {
+                this.showToast('Select a printer first', 'warning');
+                return;
+            }
+            this.printerTesting = true;
+            this.printerStatusMessage = `Connecting to ${printer.name}...`;
+            try {
+                const selectResult = await INSABuddy.selectPrinter(printer.type, printer.name);
+                const selected = INSABuddy.isSuccessResponse(selectResult) || selectResult?.ok || selectResult?.success;
+                if (!selected) {
+                    this.printerStatusMessage = 'Could not connect to printer — try another device.';
+                    this.showToast('Printer connection failed', 'error');
+                    return;
+                }
+                this.printerStatusMessage = 'Sending test print...';
+                const testResult = await INSABuddy.testPrint();
+                const printed = INSABuddy.isSuccessResponse(testResult) || testResult?.printed;
+                if (printed) {
+                    this.printerTestPassed = true;
+                    this.printerStatusMessage = 'Test print sent! Save as default in the next step.';
+                    this.showToast('Test print sent', 'success');
+                    this.printerStep = 3;
+                    await this.loadPrinterDefaultStatus();
+                } else {
+                    this.printerStatusMessage = 'Test print failed — check paper and connection.';
+                    this.showToast('Test print failed', 'error');
+                }
+            } catch {
+                this.printerStatusMessage = 'Test print error — local service may be unavailable.';
+                this.showToast('Test print error', 'error');
+            } finally {
+                this.printerTesting = false;
+            }
+        },
+
+        async saveDefaultPrinter() {
+            const printer = this.getSelectedPrinter();
+            if (!printer || typeof INSABuddy === 'undefined') {
+                this.showToast('Select a printer first', 'warning');
+                return;
+            }
+            this.printerSaving = true;
+            this.printerStatusMessage = `Saving ${printer.name} as default...`;
+            try {
+                const result = await INSABuddy.selectPrinter(printer.type, printer.name);
+                const saved = INSABuddy.isSuccessResponse(result) || result?.ok || result?.success;
+                if (saved) {
+                    await this.loadPrinterDefaultStatus();
+                    this.printerStatusMessage = `Default printer saved: ${printer.name}`;
+                    this.showToast('Default printer saved', 'success');
+                } else {
+                    this.printerStatusMessage = 'Could not save default printer.';
+                    this.showToast('Save failed', 'error');
+                }
+            } catch {
+                this.printerStatusMessage = 'Save error — local service may be unavailable.';
+                this.showToast('Save error', 'error');
+            } finally {
+                this.printerSaving = false;
             }
         },
 
@@ -1511,7 +1824,10 @@ function posApp() {
             try {
                 const cachedCats = await db.categories.getAll();
                 if (cachedCats.length > 0) this.categories = cachedCats;
-                const cached = await db.products.getAll();
+                let cached = await db.products.getAll();
+                if (db.productStock && this.config.branchId) {
+                    cached = await db.productStock.mergeIntoProducts(cached, this.config.branchId);
+                }
                 if (cached.length > 0) {
                     this.products = cached;
                     this.filterProducts();
@@ -1535,6 +1851,9 @@ function posApp() {
                 const rawCategories = data.categories || [];
                 if (db && rawProducts.length > 0) {
                     db.products.bulkPut(rawProducts).catch(() => {});
+                    if (db.productStock && this.config.branchId) {
+                        db.productStock.bulkPut(rawProducts, this.config.branchId).catch(() => {});
+                    }
                 }
                 if (db && rawCategories.length > 0) {
                     db.categories.bulkPut(rawCategories).catch(() => {});
@@ -1559,7 +1878,15 @@ function posApp() {
             }
         },
 
-        async refreshProductsFromDB() { const db = window.INSADB; if (!db) return; const cached = await db.products.getAll(); if (cached.length > 0) { this.products = cached; this.filterProducts(); } },
+        async refreshProductsFromDB() {
+            const db = window.INSADB;
+            if (!db) return;
+            let cached = await db.products.getAll();
+            if (db.productStock && this.config.branchId) {
+                cached = await db.productStock.mergeIntoProducts(cached, this.config.branchId);
+            }
+            if (cached.length > 0) { this.products = cached; this.filterProducts(); }
+        },
 
         filterProducts() {
             if (this.posMode === 'retail') { this.filteredProducts = []; return; }

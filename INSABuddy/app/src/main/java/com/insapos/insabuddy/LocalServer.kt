@@ -45,6 +45,7 @@ class LocalServer(
             uri == "/printer/status" && method == Method.GET -> handlePrinterStatus()
             uri == "/printer/list" && method == Method.GET -> handlePrinterList()
             uri == "/printer/select" && method == Method.POST -> handlePrinterSelect(session)
+            uri == "/printer/test" && method == Method.POST -> handlePrinterTest()
             uri == "/receipt/save" && method == Method.POST -> handleReceiptSave(session)
             uri == "/transaction/save" && method == Method.POST -> handleTransactionSave(session)
             uri == "/sync/push" && method == Method.POST -> handleSyncPush(session)
@@ -208,6 +209,29 @@ class LocalServer(
             }
         } catch (e: Exception) {
             jsonError(Response.Status.INTERNAL_ERROR, "Select error: ${e.message}")
+        }
+    }
+
+    private fun handlePrinterTest(): Response {
+        return try {
+            if (printerManager.currentPrinter?.isConnected() != true) {
+                return jsonError(Response.Status.BAD_REQUEST, "No printer connected")
+            }
+            val text = "================================\n" +
+                "    INSABuddy v${BuildConfig.VERSION_NAME}    \n" +
+                "       Test Print               \n" +
+                "================================\n" +
+                "Printer is working correctly!\n" +
+                "Date: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\n" +
+                "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n" +
+                "================================\n"
+            val ok = printerManager.printText(text)
+            jsonResponse(JSONObject().apply {
+                put("success", ok)
+                put("printed", ok)
+            })
+        } catch (e: Exception) {
+            jsonError(Response.Status.INTERNAL_ERROR, "Test print error: ${e.message}")
         }
     }
 
