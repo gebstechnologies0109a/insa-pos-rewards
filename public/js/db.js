@@ -7,7 +7,7 @@
     'use strict';
 
     const DB_NAME = 'insapos';
-    const DB_VERSION = 2;
+    const DB_VERSION = 3;
 
     let _db = null;
 
@@ -25,6 +25,9 @@
         });
         _db.version(2).stores({
             categories:        'id, name',
+        });
+        _db.version(3).stores({
+            product_stock:     '[product_id+branch_id], branch_id, near_expiry, low_stock, updated_at',
         });
         return _db;
     }
@@ -379,6 +382,60 @@
         },
     };
 
+    // ── Product stock cache (branch-scoped inventory v3) ─────
+
+    const productStock = {
+        async bulkPut(rows, branchId) {
+            try {
+                const stamped = rows.map(r => ({
+                    product_id: r.product_id ?? r.id,
+                    branch_id: branchId,
+                    stock: parseFloat(r.stock ?? 0),
+                    earliest_expiry: r.earliest_expiry ?? null,
+                    near_expiry: !!r.near_expiry,
+                    low_stock: !!r.low_stock,
+                    updated_at: r.updated_at || new Date().toISOString(),
+                }));
+                await getDb().product_stock.bulkPut(stamped);
+                return true;
+            } catch (e) {
+                console.error('[db] productStock.bulkPut failed:', e);
+                return false;
+            }
+        },
+
+        async getForProduct(productId, branchId) {
+            try {
+                return await getDb().product_stock.get([productId, branchId]) || null;
+            } catch (e) {
+                return null;
+            }
+        },
+
+        async mergeIntoProducts(products, branchId) {
+            if (!products || !products.length) return products;
+            try {
+                const ids = products.map(p => p.id);
+                const rows = await getDb().product_stock.where('product_id').anyOf(ids).toArray();
+                const map = {};
+                rows.filter(r => r.branch_id === branchId).forEach(r => { map[r.product_id] = r; });
+                return products.map(p => {
+                    const s = map[p.id];
+                    if (!s) return p;
+                    return {
+                        ...p,
+                        stock: s.stock ?? p.stock,
+                        earliest_expiry: s.earliest_expiry ?? p.earliest_expiry,
+                        near_expiry: s.near_expiry ?? p.near_expiry,
+                        low_stock: s.low_stock ?? p.low_stock,
+                    };
+                });
+            } catch {
+                return products;
+            }
+        },
+    };
+
     // ── Settings ──────────────────────────────────────────────
 
     const settings = {
@@ -421,6 +478,7 @@
         transactions,
         syncQueue,
         receipts,
+        productStock,
         settings,
         generateUUID,
 

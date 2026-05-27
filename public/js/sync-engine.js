@@ -204,10 +204,40 @@
         }
     }
 
+    // ── Pull inventory deltas (batch stock + expiry flags) ───
+
+    async function pullInventory() {
+        const db = window.INSADB;
+        if (!db || !_branchId) return;
+
+        try {
+            emit('syncStatus', 'pulling-inventory');
+            const lastSync = await db.settings.get('inventory_last_sync', null);
+            let url = '/api/pos/sync/pull?branch_id=' + encodeURIComponent(_branchId);
+            if (lastSync) url += '&since=' + encodeURIComponent(lastSync);
+
+            const res = await fetch(url, { headers: headers() });
+            const data = await res.json();
+
+            if (data.products && data.products.length > 0) {
+                await db.products.bulkPut(data.products);
+                if (db.productStock) {
+                    await db.productStock.bulkPut(data.products, _branchId);
+                }
+                emit('productsUpdated', data.products.length);
+            }
+
+            await db.settings.set('inventory_last_sync', data.pulled_at || new Date().toISOString());
+        } catch (e) {
+            console.error('[sync] pullInventory failed:', e);
+        }
+    }
+
     // ── Update Local Cache ────────────────────────────────────
 
     async function updateLocalCache() {
         await pullProducts();
+        await pullInventory();
         await pullCustomers();
     }
 
@@ -296,6 +326,7 @@
         syncNow,
         pushTransactions,
         pullProducts,
+        pullInventory,
         pullCustomers,
         updateLocalCache,
         pullFromBuddy,

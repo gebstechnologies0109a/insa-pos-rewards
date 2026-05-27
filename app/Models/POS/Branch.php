@@ -21,6 +21,16 @@ class Branch extends Model
         return $this->hasOne(PosLicense::class);
     }
 
+    public function terminalSessions(): HasMany
+    {
+        return $this->hasMany(PosTerminalSession::class);
+    }
+
+    public function activeTerminalSessions(): HasMany
+    {
+        return $this->hasMany(PosTerminalSession::class)->where('is_active', true);
+    }
+
     public function shifts(): HasMany
     {
         return $this->hasMany(PosShift::class);

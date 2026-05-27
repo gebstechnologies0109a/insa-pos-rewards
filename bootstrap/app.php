@@ -43,10 +43,13 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->validateCsrfTokens(except: [
+            'api/pos',
+            'api/pos/*',
             'api/pos/device-log',
             'api/pos/device-log/*',
             'api/pos/ping',
             'api/pos/sync/*',
+            'api/pos/terminal/*',
             'api/v2/*',
             'api/maya-biller',
             'api/maya-biller/*',

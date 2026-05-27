@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\POS\CustomerLookupController;
+use App\Http\Controllers\POS\PosTerminalSessionController;
 use App\Http\Controllers\POS\InventoryApiController;
 use App\Http\Controllers\POS\PosSaleController;
 use App\Http\Controllers\POS\PosSettingsController;
@@ -27,6 +28,12 @@ Route::post('/device-log/clear', [\App\Http\Controllers\DeviceLogController::cla
 
 // ── Sync / Offline ────────────────────────────────────
 Route::get('/ping', [SyncController::class, 'ping'])->name('pos.ping')->withoutMiddleware('auth');
+
+Route::prefix('terminal')->group(function () {
+    Route::post('/register', [PosTerminalSessionController::class, 'register'])->name('pos.terminal.register');
+    Route::post('/end', [PosTerminalSessionController::class, 'end'])->name('pos.terminal.end');
+    Route::get('/status', [PosTerminalSessionController::class, 'status'])->name('pos.terminal.status');
+});
 
 Route::prefix('sync')->group(function () {
     Route::post('/push', [SyncController::class, 'push'])->name('pos.sync.push');

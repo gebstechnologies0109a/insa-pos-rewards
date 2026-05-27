@@ -16,6 +16,9 @@
                     <a href="{{ route('admin.products.index') }}" class="hover:text-blue-300 {{ request()->routeIs('admin.products.*') ? 'text-blue-400' : '' }}">Products</a>
                     <a href="{{ route('admin.categories.index') }}" class="hover:text-blue-300 {{ request()->routeIs('admin.categories.*') ? 'text-blue-400' : '' }}">Categories</a>
                     <a href="{{ route('admin.branches.index') }}" class="hover:text-blue-300 {{ request()->routeIs('admin.branches.*') ? 'text-blue-400' : '' }}">Branches</a>
+                    @if(auth()->user()->hasPermission('license.sessions.view'))
+                    <a href="{{ route('admin.pos-sessions.index') }}" class="hover:text-blue-300 {{ request()->routeIs('admin.pos-sessions.*') ? 'text-blue-400' : '' }}">POS Sessions</a>
+                    @endif
                     <a href="{{ route('admin.inventory.dashboard') }}" class="hover:text-blue-300 {{ request()->routeIs('admin.inventory.*') ? 'text-blue-400' : '' }}">Inventory</a>
                     <a href="{{ route('pos.settings') }}" class="hover:text-blue-300 {{ request()->routeIs('pos.settings') ? 'text-blue-400' : '' }}">Settings</a>
                     <span class="text-gray-600">|</span>

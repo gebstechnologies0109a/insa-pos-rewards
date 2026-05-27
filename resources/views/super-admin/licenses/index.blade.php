@@ -42,7 +42,7 @@
                 <tr>
                     <th class="text-left px-6 py-3 font-medium text-gray-600">Branch</th>
                     <th class="text-center px-6 py-3 font-medium text-gray-600">POS Slots</th>
-                    <th class="text-center px-6 py-3 font-medium text-gray-600">Active Shifts</th>
+                    <th class="text-center px-6 py-3 font-medium text-gray-600">Active Sessions</th>
                     <th class="text-center px-6 py-3 font-medium text-gray-600">Status</th>
                     <th class="text-center px-6 py-3 font-medium text-gray-600">Actions</th>
                 </tr>
@@ -60,8 +60,8 @@
                         <span class="font-semibold">{{ $slots }}</span>
                     </td>
                     <td class="px-6 py-3 text-center">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $branch->open_shifts_count > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600' }}">
-                            {{ $branch->open_shifts_count }} / {{ $slots }}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $branch->active_terminal_sessions_count >= $slots ? 'bg-red-100 text-red-800' : ($branch->active_terminal_sessions_count > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600') }}">
+                            {{ $branch->active_terminal_sessions_count }} / {{ $slots }}
                         </span>
                     </td>
                     <td class="px-6 py-3 text-center">

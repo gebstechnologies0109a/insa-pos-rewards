@@ -12,7 +12,7 @@ class LicenseController extends Controller
     public function index()
     {
         $branches = Branch::with('license')
-            ->withCount(['openShifts'])
+            ->withCount(['openShifts', 'activeTerminalSessions'])
             ->get();
 
         return view('super-admin.licenses.index', compact('branches'));

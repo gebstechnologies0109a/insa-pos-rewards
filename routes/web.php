@@ -19,8 +19,10 @@ use App\Http\Controllers\Backoffice\ShiftDashboardController;
 use App\Http\Controllers\Backoffice\ShiftExportController;
 use App\Http\Controllers\Backoffice\ShiftManagementController;
 use App\Http\Controllers\Backoffice\ShiftVarianceController;
+use App\Http\Controllers\POS\CashierController;
 use App\Http\Controllers\POS\PosSettingsController;
 use App\Http\Controllers\POS\ReadingController;
+use App\Http\Controllers\Admin\PosSessionController;
 use App\Http\Controllers\Stockman\StockmanController;
 use App\Http\Controllers\SuperAdmin\BranchOverviewController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
@@ -41,9 +43,7 @@ Route::middleware('insa.product')->group(function () {
 
 // ── POS Cashier (cashier, manager, admin, owner) ─
 Route::middleware(['auth', 'role:cashier,manager,admin,owner'])->group(function () {
-    Route::get('/pos/cashier', function () {
-        return view('pos.cashier.index');
-    })->name('pos.cashier');
+    Route::get('/pos/cashier', [CashierController::class, 'index'])->name('pos.cashier');
 });
 
 // ── Stockman (stockman, manager, admin, owner) ───
@@ -156,6 +156,11 @@ Route::middleware(['auth', 'role:owner,admin'])->prefix('admin')->group(function
     Route::post('branches/assign', [BranchController::class, 'assign'])
         ->name('admin.branches.assign');
 
+    Route::get('pos-sessions', [PosSessionController::class, 'index'])
+        ->name('admin.pos-sessions.index');
+    Route::post('pos-sessions/{session}/end', [PosSessionController::class, 'end'])
+        ->name('admin.pos-sessions.end');
+
     Route::resource('users', UserManagementController::class)
         ->names('admin.users')
         ->except(['show']);
@@ -183,6 +188,11 @@ Route::middleware(['auth', 'role:super_admin'])->prefix('super-admin')->group(fu
         ->name('super-admin.licenses.store');
     Route::put('/licenses/{branch}', [LicenseController::class, 'update'])
         ->name('super-admin.licenses.update');
+
+    Route::get('/sessions', [\App\Http\Controllers\SuperAdmin\PosSessionController::class, 'index'])
+        ->name('super-admin.sessions.index');
+    Route::post('/sessions/{session}/end', [\App\Http\Controllers\SuperAdmin\PosSessionController::class, 'end'])
+        ->name('super-admin.sessions.end');
 
     Route::get('/branches', [BranchOverviewController::class, 'index'])
         ->name('super-admin.branches.index');

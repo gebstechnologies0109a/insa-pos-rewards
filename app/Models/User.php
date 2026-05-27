@@ -113,4 +113,20 @@ class User extends Authenticatable
     {
         return $this->hasRole(self::ROLE_CASHIER, self::ROLE_STOCKMAN);
     }
+
+    public function hasPermission(string $ability): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        $map = config('permissions', []);
+        $roleCaps = $map[$this->role] ?? [];
+
+        if (in_array('*', $roleCaps, true)) {
+            return true;
+        }
+
+        return in_array($ability, $roleCaps, true);
+    }
 }
