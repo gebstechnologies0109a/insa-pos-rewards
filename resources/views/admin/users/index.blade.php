@@ -54,7 +54,7 @@
                 </td>
                 <td class="p-3 text-gray-600">{{ $user->branch?->name ?? '—' }}</td>
                 <td class="p-3 text-right">
-                    @php $canEdit = !$user->isOwner() || auth()->user()->isOwner(); @endphp
+                    @php $canEdit = !$user->isOwner() || auth()->user()->canModifyOwnerUsers(); @endphp
                     @if($canEdit)
                     <a href="{{ route('admin.users.edit', $user) }}" class="text-blue-600 hover:underline text-xs mr-2">Edit</a>
                     @endif

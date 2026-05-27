@@ -196,6 +196,30 @@ class RbacTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_super_admin_can_modify_owner(): void
+    {
+        $superAdmin = User::create([
+            'name' => 'Super Admin', 'email' => 'super@test.com',
+            'password' => bcrypt('password'), 'role' => 'super_admin',
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->get(route('admin.users.edit', $this->owner))
+            ->assertOk();
+    }
+
+    public function test_super_admin_cannot_delete_owner(): void
+    {
+        $superAdmin = User::create([
+            'name' => 'Super Admin', 'email' => 'super@test.com',
+            'password' => bcrypt('password'), 'role' => 'super_admin',
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->delete(route('admin.users.destroy', $this->owner))
+            ->assertForbidden();
+    }
+
     public function test_admin_cannot_delete_owner(): void
     {
         $this->actingAs($this->admin)

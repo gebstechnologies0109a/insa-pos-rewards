@@ -118,11 +118,11 @@ class UserManagementController extends Controller
 
     protected function authorizeUserEdit(User $user): void
     {
-        if ($user->isOwner() && ! auth()->user()->isOwner()) {
-            abort(403, 'Only owner can modify owner accounts.');
+        if ($user->isOwner() && ! auth()->user()->canModifyOwnerUsers()) {
+            abort(403, 'Only owner or super admin can modify owner accounts.');
         }
 
-        if ($user->isAdmin() && ! auth()->user()->hasRole('owner', 'admin')) {
+        if ($user->role === User::ROLE_ADMIN && ! auth()->user()->hasRole(User::ROLE_OWNER, User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN)) {
             abort(403, 'Unauthorized.');
         }
     }
@@ -131,7 +131,7 @@ class UserManagementController extends Controller
     {
         $currentUser = auth()->user();
 
-        if ($currentUser->isOwner()) {
+        if ($currentUser->canModifyOwnerUsers()) {
             return User::ROLES;
         }
 

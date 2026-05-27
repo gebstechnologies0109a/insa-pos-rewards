@@ -71,6 +71,11 @@ class User extends Authenticatable
         return $this->role === self::ROLE_OWNER;
     }
 
+    public function canModifyOwnerUsers(): bool
+    {
+        return $this->hasRole(self::ROLE_OWNER, self::ROLE_SUPER_ADMIN);
+    }
+
     public function isAdmin(): bool
     {
         return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_OWNER, self::ROLE_SUPER_ADMIN]);
