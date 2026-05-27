@@ -60,6 +60,8 @@ Route::prefix('inventory')
         Route::get('/batches', [InventoryApiController::class, 'batches'])->name('pos.inventory.batches');
         Route::get('/expiry', [InventoryApiController::class, 'expiry'])->name('pos.inventory.expiry');
         Route::post('/adjustments', [InventoryApiController::class, 'adjustments'])->name('pos.inventory.adjustments');
+        Route::post('/adjust', [InventoryApiController::class, 'adjustments'])->name('pos.inventory.adjust');
+        Route::post('/audit', [InventoryApiController::class, 'audit'])->name('pos.inventory.audit');
     });
 
 Route::get('/products/search', [ProductLookupController::class, 'search'])

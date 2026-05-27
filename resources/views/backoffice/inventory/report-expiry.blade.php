@@ -9,7 +9,7 @@
 <div class="mb-4 p-3 bg-green-100 text-green-800 rounded">{{ session('success') }}</div>
 @endif
 
-<div class="grid grid-cols-3 gap-4 mb-6">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
     <div class="bg-white rounded-lg shadow p-4">
         <div class="text-sm text-gray-500">30-day warnings</div>
         <div class="text-2xl font-bold text-yellow-600">{{ $counts['thirty_day'] }}</div>
@@ -22,6 +22,10 @@
         <div class="text-sm text-gray-500">Expired</div>
         <div class="text-2xl font-bold text-red-600">{{ $counts['expired'] }}</div>
     </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-500">Slow moving (60d)</div>
+        <div class="text-2xl font-bold text-blue-600">{{ $counts['slow_moving'] }}</div>
+    </div>
 </div>
 
 <div class="bg-white rounded-lg shadow p-4 mb-6">
@@ -33,8 +37,10 @@
                 <option value="active" {{ $filter === 'active' ? 'selected' : '' }}>Active</option>
                 <option value="snoozed" {{ $filter === 'snoozed' ? 'selected' : '' }}>Snoozed</option>
                 <option value="handled" {{ $filter === 'handled' ? 'selected' : '' }}>Handled</option>
+                <option value="slow_moving" {{ $filter === 'slow_moving' ? 'selected' : '' }}>Slow moving</option>
             </select>
         </div>
+        @if($filter !== 'slow_moving')
         <div>
             <label class="block text-xs text-gray-500 mb-1">Alert type</label>
             <select name="alert_type" class="p-2 border rounded">
@@ -44,10 +50,35 @@
                 <option value="expired" {{ request('alert_type') === 'expired' ? 'selected' : '' }}>Expired</option>
             </select>
         </div>
+        @endif
         <button type="submit" class="px-4 py-2 bg-gray-700 text-white rounded">Filter</button>
     </form>
 </div>
 
+@if($filter === 'slow_moving')
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="text-left p-3">Product</th>
+                <th class="text-right p-3">Stock on hand</th>
+                <th class="text-left p-3">Last sale</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($slowMoving as $row)
+            <tr class="border-t">
+                <td class="p-3">{{ $row['product']->name ?? '—' }}</td>
+                <td class="p-3 text-right font-mono">{{ $row['stock'] }}</td>
+                <td class="p-3">{{ $row['last_sale_at'] ?? 'Never' }}</td>
+            </tr>
+            @empty
+            <tr><td colspan="3" class="p-6 text-center text-gray-400">No slow-moving products with stock.</td></tr>
+            @endforelse
+        </tbody>
+    </table>
+</div>
+@else
 <div class="bg-white rounded-lg shadow overflow-hidden">
     <table class="w-full text-sm">
         <thead class="bg-gray-50">
@@ -89,4 +120,5 @@
     </table>
 </div>
 <div class="mt-4">{{ $alerts->links() }}</div>
+@endif
 @endsection

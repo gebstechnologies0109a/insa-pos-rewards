@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ResolvesInventoryBranch;
 use App\Http\Controllers\Controller;
 use App\Models\POS\Branch;
 use App\Models\POS\Product;
+use App\Services\Inventory\InventoryForecastService;
 use App\Services\Inventory\InventoryService;
 use Illuminate\Http\Request;
 
@@ -15,6 +16,7 @@ class InventoryReportController extends Controller
 
     public function __construct(
         protected InventoryService $inventory,
+        protected InventoryForecastService $forecast,
     ) {}
 
     public function inventory(Request $request)
@@ -49,7 +51,7 @@ class InventoryReportController extends Controller
         $lookback = min(max((int) $request->input('lookback', 30), 7), 90);
         $cover = min(max((int) $request->input('cover', 14), 7), 60);
 
-        $rows = $this->inventory->forecastReport($branchId, $lookback, $cover);
+        $rows = $this->forecast->forecastReport($branchId, $lookback, $cover);
         $branches = auth()->user()->isBranchScoped()
             ? collect()
             : Branch::orderBy('name')->get();

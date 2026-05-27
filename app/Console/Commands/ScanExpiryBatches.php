@@ -53,12 +53,22 @@ class ScanExpiryBatches extends Command
 
                 if ($alert->wasRecentlyCreated) {
                     $created++;
-                } else {
-                    $alert->update([
-                        'quantity'    => $batch->quantity,
-                        'expiry_date' => $batch->expiry_date,
-                    ]);
+
+                    continue;
                 }
+
+                if ($alert->handled_at !== null) {
+                    continue;
+                }
+
+                if ($alert->snoozed_until !== null && $alert->snoozed_until->isFuture()) {
+                    continue;
+                }
+
+                $alert->update([
+                    'quantity'    => $batch->quantity,
+                    'expiry_date' => $batch->expiry_date,
+                ]);
             }
         }
 

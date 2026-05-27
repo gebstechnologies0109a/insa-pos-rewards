@@ -47,7 +47,7 @@ Route::middleware(['auth', 'role:cashier,manager,admin,owner'])->group(function 
 });
 
 // ── Stockman (stockman, manager, admin, owner) ───
-Route::middleware(['auth', 'role:stockman,manager,admin,owner'])->prefix('stockman')->group(function () {
+Route::middleware(['auth', 'role:stockman,manager,admin,owner,super_admin'])->prefix('stockman')->group(function () {
     Route::get('/inventory', [StockmanController::class, 'inventory'])->name('stockman.inventory');
     Route::get('/audit', [StockmanController::class, 'audit'])->name('stockman.audit');
     Route::post('/audit', [StockmanController::class, 'auditUpdate'])->name('stockman.audit.update');

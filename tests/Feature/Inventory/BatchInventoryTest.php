@@ -140,6 +140,18 @@ class BatchInventoryTest extends TestCase
         ]);
     }
 
+    public function test_pos_inventory_batches_api_is_branch_scoped(): void
+    {
+        app(InventoryService::class)->stockIn($this->branch->id, [
+            ['product_id' => $this->product->id, 'qty' => 6, 'expiry_date' => now()->addDays(10)->toDateString()],
+        ]);
+
+        $this->getJson('/api/pos/inventory/batches?branch_id=1&product_id=' . $this->product->id)
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(1, 'batches');
+    }
+
     public function test_legacy_movement_stock_when_no_batches(): void
     {
         StockMovement::create([

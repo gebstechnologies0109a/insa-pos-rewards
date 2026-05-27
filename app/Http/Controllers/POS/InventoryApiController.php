@@ -107,4 +107,34 @@ class InventoryApiController extends Controller
 
         return response()->json(['success' => true, 'movements' => $movements]);
     }
+
+    public function audit(Request $request): JsonResponse
+    {
+        $branchId = $this->resolveInventoryBranchId($request);
+        $this->authorizeInventoryBranch($branchId);
+
+        $data = $request->validate([
+            'batch_id' => 'required|exists:inventory_batches,id',
+            'quantity' => 'required|numeric|min:0',
+            'reason'   => 'required|string|max:500',
+        ]);
+
+        $batch = InventoryBatch::findOrFail($data['batch_id']);
+
+        if ((int) $batch->branch_id !== $branchId) {
+            return response()->json(['success' => false, 'message' => 'Batch does not belong to this branch.'], 403);
+        }
+
+        $batch = $this->inventory->adjustBatch(
+            $batch->id,
+            (float) $data['quantity'],
+            'POS audit: ' . $data['reason'],
+            (int) auth()->id(),
+        );
+
+        return response()->json([
+            'success' => true,
+            'batch'   => $batch->load('product:id,name,sku'),
+        ]);
+    }
 }

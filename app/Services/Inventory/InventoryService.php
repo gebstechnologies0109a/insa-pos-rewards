@@ -389,37 +389,7 @@ class InventoryService
      */
     public function forecastReport(int $branchId, int $lookbackDays = 30, int $reorderCoverDays = 14): array
     {
-        $since = now()->subDays($lookbackDays)->startOfDay();
-
-        $consumption = StockMovement::where('branch_id', $branchId)
-            ->where('type', 'sale')
-            ->where('created_at', '>=', $since)
-            ->selectRaw('product_id, SUM(ABS(qty)) as sold')
-            ->groupBy('product_id')
-            ->pluck('sold', 'product_id');
-
-        $products = Product::where('active', true)->orderBy('name')->get();
-        $stockMap = $this->stockTotalsForProducts($branchId, $products->pluck('id')->all());
-
-        return $products->map(function (Product $product) use ($consumption, $stockMap, $lookbackDays, $reorderCoverDays) {
-            $sold = (float) ($consumption[$product->id] ?? 0);
-            $daily = $lookbackDays > 0 ? $sold / $lookbackDays : 0.0;
-            $stock = (float) ($stockMap[$product->id] ?? 0);
-            $daysToZero = $daily > 0 ? round($stock / $daily, 1) : null;
-            $target = $daily * $reorderCoverDays;
-            $suggested = max(0, round($target - $stock, 3));
-
-            return [
-                'product_id'       => $product->id,
-                'name'             => $product->name,
-                'sku'              => $product->sku,
-                'current_stock'    => $stock,
-                'sold_period'      => $sold,
-                'daily_consumption'=> round($daily, 3),
-                'days_to_zero'     => $daysToZero,
-                'suggested_reorder'=> $suggested,
-            ];
-        })->filter(fn ($row) => $row['sold_period'] > 0 || $row['current_stock'] > 0)->values()->all();
+        return app(InventoryForecastService::class)->forecastReport($branchId, $lookbackDays, $reorderCoverDays);
     }
 
     protected function recordMovement(
