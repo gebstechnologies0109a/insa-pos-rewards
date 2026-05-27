@@ -285,6 +285,19 @@ class TransactionController extends Controller
 
     public function sync(Request $request): JsonResponse
     {
+        $items = $request->json()->all();
+        if (! is_array($items)) {
+            $items = [];
+        }
+
+        if ($items === []) {
+            return response()->json([
+                'success' => true,
+                'syncedCount' => 0,
+                'message' => 'No transactions to sync.',
+            ]);
+        }
+
         $request->validate([
             '*.localId' => 'required|integer',
             '*.type' => 'required|string',
@@ -297,7 +310,7 @@ class TransactionController extends Controller
         $retailer = $request->attributes->get('retailer');
         $synced = 0;
 
-        foreach ($request->all() as $item) {
+        foreach ($items as $item) {
             $exists = Transaction::where('reference_number', $item['referenceNumber'])->exists();
             if (!$exists) {
                 Transaction::create([

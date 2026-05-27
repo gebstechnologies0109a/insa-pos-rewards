@@ -18,6 +18,8 @@ class DashboardController extends Controller
 {
     public function index()
     {
+        $demoRetailer = Retailer::where('account_id', 'EPDEMO001')->first();
+
         $stats = [
             'totalRetailers'     => Retailer::count(),
             'activeRetailers'    => Retailer::where('is_active', true)->count(),
@@ -44,6 +46,18 @@ class DashboardController extends Controller
             'failedToday'        => Transaction::today()->where('status', 'FAILED')->count(),
             'processingCount'    => Transaction::openStatuses()->count(),
             'pendingCount'       => Transaction::where('status', 'PENDING')->count(),
+            'demoRetailerId'     => $demoRetailer?->id,
+            'demoLast24hTxns'    => $demoRetailer
+                ? Transaction::where('retailer_id', $demoRetailer->id)
+                    ->where('created_at', '>=', now()->subDay())
+                    ->count()
+                : 0,
+            'demoLast24hSales'   => $demoRetailer
+                ? Transaction::where('retailer_id', $demoRetailer->id)
+                    ->where('created_at', '>=', now()->subDay())
+                    ->successful()
+                    ->sum('amount')
+                : 0,
         ];
 
         $recentTransactions = Transaction::with('retailer')
