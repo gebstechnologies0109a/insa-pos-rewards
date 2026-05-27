@@ -30,7 +30,9 @@ class StockInPageTest extends TestCase
             ->get(route('stockman.stock-in'))
             ->assertOk()
             ->assertSee('Stock In')
-            ->assertSee('Branch');
+            ->assertSee('Branch')
+            ->assertSee('Scan / search product', false)
+            ->assertDontSee('Select product', false);
     }
 
     public function test_stock_in_page_loads_when_inventory_batches_table_missing(): void
