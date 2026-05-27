@@ -1,5 +1,6 @@
 package com.epayplus.v2.ui.screens
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,9 +22,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.annotation.DrawableRes
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import com.epayplus.v2.R
+import com.epayplus.v2.ui.KioskActivity
 import com.epayplus.v2.ui.components.ProviderIcon
 import com.epayplus.v2.ui.components.ProviderIcons
 import com.epayplus.v2.ui.layout.isLandscape
@@ -48,6 +51,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val landscape = isLandscape
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -138,8 +142,10 @@ fun HomeScreen(
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 ServiceButton(
                     "Maya Negosyo",
@@ -147,6 +153,13 @@ fun HomeScreen(
                     iconRes = R.drawable.ic_quick_maya_negosyo
                 ) {
                     navController.navigate(NavRoutes.MayaNegosyo.route)
+                }
+                ServiceButton(
+                    "Kiosk Mode",
+                    Color(0xFF6A1B9A),
+                    iconRes = R.drawable.ic_quick_kiosk
+                ) {
+                    context.startActivity(Intent(context, KioskActivity::class.java))
                 }
             }
 
