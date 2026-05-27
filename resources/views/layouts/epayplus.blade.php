@@ -57,6 +57,16 @@
                             <i class="bi bi-box-seam"></i> Products
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.retail-products*') ? 'active' : '' }}" href="{{ route('epayplus.retail-products') }}">
+                            <i class="bi bi-shop"></i> Shop Inventory
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.pos*') ? 'active' : '' }}" href="{{ route('epayplus.pos') }}">
+                            <i class="bi bi-cart-check"></i> POS Mode
+                        </a>
+                    </li>
                     <li><div class="nav-section">Integrations</div></li>
                     <li class="nav-item">
                         <a class="nav-link {{ request()->routeIs('epayplus.integrations.maya-negosyo*') ? 'active' : '' }}" href="{{ route('epayplus.integrations.maya-negosyo') }}">

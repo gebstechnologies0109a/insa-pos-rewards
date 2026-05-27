@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\V2\AccountController;
 use App\Http\Controllers\Api\V2\DeviceFleetApiController;
 use App\Http\Controllers\Api\V2\ProductController;
 use App\Http\Controllers\Api\V2\TransactionController;
+use App\Http\Controllers\Api\V2\PosController;
+use App\Http\Controllers\Api\V2\RetailProductController;
 use App\Http\Controllers\Api\V2\WalletController;
 use App\Http\Controllers\Api\V2\MayaIntegrationController;
 use App\Http\Controllers\Api\MayaCheckoutController;
@@ -62,6 +64,14 @@ Route::prefix('v2')->group(function () {
         Route::post('/transactions/rfid', [TransactionController::class, 'processRfid']);
         Route::get('/transactions/history', [TransactionController::class, 'history']);
         Route::post('/transactions/sync', [TransactionController::class, 'sync']);
+
+        // POS Mode
+        Route::get('/pos/catalog', [PosController::class, 'catalog']);
+        Route::post('/pos/sales', [PosController::class, 'recordSale']);
+        Route::get('/retail-products', [RetailProductController::class, 'index']);
+        Route::post('/retail-products', [RetailProductController::class, 'store']);
+        Route::put('/retail-products/{retailProduct}', [RetailProductController::class, 'update']);
+        Route::delete('/retail-products/{retailProduct}', [RetailProductController::class, 'destroy']);
     });
 
     // Device Management (license activation + heartbeat polling)

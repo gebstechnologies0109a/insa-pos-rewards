@@ -148,6 +148,13 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 ServiceButton(
+                    "POS Mode",
+                    Color(0xFF1B5E20),
+                    iconRes = R.drawable.ic_quick_pos
+                ) {
+                    navController.navigate(NavRoutes.PosMode.route)
+                }
+                ServiceButton(
                     "Kiosk Mode",
                     Color(0xFF6A1B9A),
                     iconRes = R.drawable.ic_quick_kiosk

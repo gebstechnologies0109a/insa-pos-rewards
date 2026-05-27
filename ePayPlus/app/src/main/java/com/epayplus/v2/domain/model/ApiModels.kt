@@ -283,3 +283,64 @@ data class DeviceCommandInfo(
     val params: Map<String, Any>? = null,
     @SerializedName("created_at") val createdAt: String = ""
 )
+
+data class PosCatalogResponse(
+    val success: Boolean,
+    val services: List<PosServiceItem> = emptyList(),
+    @SerializedName("retailProducts") val retailProducts: List<RetailProductDto> = emptyList(),
+    val message: String? = null
+)
+
+data class PosServiceItem(
+    val key: String = "",
+    val label: String = "",
+    val route: String = ""
+)
+
+data class RetailProductDto(
+    val id: Long = 0,
+    val name: String = "",
+    val description: String? = null,
+    val sku: String? = null,
+    val price: Double = 0.0,
+    val stock: Int = 0,
+    val category: String? = null,
+    @SerializedName("imageUrl") val imageUrl: String? = null,
+    @SerializedName("isActive") val isActive: Boolean = true,
+    @SerializedName("sortOrder") val sortOrder: Int = 0
+)
+
+data class PosSaleRequest(
+    @SerializedName("payment_method") val paymentMethod: String = "cash",
+    val source: String = "android",
+    val lines: List<PosSaleLineRequest>
+)
+
+data class PosSaleLineRequest(
+    @SerializedName("product_type") val productType: String,
+    @SerializedName("product_id") val productId: Long? = null,
+    @SerializedName("product_name") val productName: String,
+    val sku: String? = null,
+    val quantity: Int,
+    @SerializedName("unit_price") val unitPrice: Double
+)
+
+data class PosSaleResponse(
+    val success: Boolean,
+    val sale: PosSaleDto? = null,
+    val message: String? = null
+)
+
+data class PosSaleDto(
+    val id: Long = 0,
+    val reference: String = "",
+    val subtotal: Double = 0.0,
+    val total: Double = 0.0,
+    @SerializedName("paymentMethod") val paymentMethod: String = "cash"
+)
+
+data class RetailProductListResponse(
+    val success: Boolean,
+    val products: List<RetailProductDto> = emptyList(),
+    val message: String? = null
+)

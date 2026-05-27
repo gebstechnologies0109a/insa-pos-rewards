@@ -9,6 +9,7 @@ import com.epayplus.v2.data.local.dao.ProductDao
 import com.epayplus.v2.data.local.dao.AccountDao
 import com.epayplus.v2.data.remote.AuthInterceptor
 import com.epayplus.v2.data.remote.EPayApiService
+import com.epayplus.v2.data.repository.RetailProductRepository
 import com.epayplus.v2.data.repository.TransactionRepository
 import com.epayplus.v2.data.repository.ProductRepository
 import com.epayplus.v2.data.repository.AccountRepository
@@ -114,4 +115,9 @@ object AppModule {
         apiService: EPayApiService,
         tokenManager: TokenManager
     ): AccountRepository = AccountRepository(accountDao, apiService, tokenManager)
+
+    @Provides
+    @Singleton
+    fun provideRetailProductRepository(apiService: EPayApiService): RetailProductRepository =
+        RetailProductRepository(apiService)
 }

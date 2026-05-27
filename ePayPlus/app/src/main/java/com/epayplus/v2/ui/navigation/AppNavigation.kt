@@ -15,6 +15,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.epayplus.v2.ui.layout.isLandscape
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.epayplus.v2.ui.screens.*
 import com.epayplus.v2.ui.theme.EPayGreen
 
@@ -190,6 +191,17 @@ fun AppNavigation(navController: NavHostController, isLoggedIn: Boolean) {
                         transactionId = transactionId,
                         transactionType = type
                     )
+                }
+
+                composable(NavRoutes.PosMode.route) {
+                    PosModeScreen(navController = navController)
+                }
+
+                composable(NavRoutes.PosCart.route) { backStackEntry ->
+                    val parentEntry = remember(backStackEntry) {
+                        navController.getBackStackEntry(NavRoutes.PosMode.route)
+                    }
+                    PosCartScreen(navController = navController, viewModel = hiltViewModel(parentEntry))
                 }
 
                 composable(NavRoutes.Settings.route) {

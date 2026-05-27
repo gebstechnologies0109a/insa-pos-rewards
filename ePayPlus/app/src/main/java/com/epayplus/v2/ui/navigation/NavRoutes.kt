@@ -37,6 +37,8 @@ sealed class NavRoutes(val route: String) {
     object TransactionResult : NavRoutes("result/{transactionId}/{type}") {
         fun createRoute(transactionId: Long, type: String) = "result/$transactionId/$type"
     }
+    object PosMode : NavRoutes("pos/mode")
+    object PosCart : NavRoutes("pos/cart")
     object Settings : NavRoutes("settings")
     object ChangePin : NavRoutes("settings/change_pin")
     object About : NavRoutes("about")

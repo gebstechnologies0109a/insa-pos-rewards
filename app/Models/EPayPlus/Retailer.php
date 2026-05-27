@@ -39,6 +39,16 @@ class Retailer extends Model
         ];
     }
 
+    public function retailProducts()
+    {
+        return $this->hasMany(RetailProduct::class, 'retailer_id');
+    }
+
+    public function posSales()
+    {
+        return $this->hasMany(PosSale::class, 'retailer_id');
+    }
+
     public function transactions()
     {
         return $this->hasMany(Transaction::class, 'retailer_id');
