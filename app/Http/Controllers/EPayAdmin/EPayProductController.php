@@ -36,7 +36,18 @@ class EPayProductController extends Controller
         $products  = $query->orderBy('provider_id')->orderBy('sort_order')->orderBy('name')->paginate(50)->withQueryString();
         $providers = Provider::orderBy('name')->get();
 
-        return view('epayplus.products', compact('products', 'providers'));
+        $productStats = [
+            'ELOAD' => [
+                'total' => Product::where('type', 'ELOAD')->where('is_active', true)->count(),
+                'regular' => Product::where('type', 'ELOAD')->where('is_active', true)->where('product_kind', 'regular')->count(),
+                'promo' => Product::where('type', 'ELOAD')->where('is_active', true)->where('product_kind', 'promo')->count(),
+            ],
+            'BILLS' => Product::where('type', 'BILLS')->where('is_active', true)->count(),
+            'ECASH' => Product::where('type', 'ECASH')->where('is_active', true)->count(),
+            'RFID' => Product::where('type', 'RFID')->where('is_active', true)->count(),
+        ];
+
+        return view('epayplus.products', compact('products', 'providers', 'productStats'));
     }
 
     public function store(Request $request)

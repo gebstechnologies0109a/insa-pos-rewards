@@ -111,7 +111,9 @@ data class ProductInfo(
     val fee: Double = 0.0,
     val description: String = "",
     val keyword: String = "",
-    val category: String = ""
+    val category: String = "",
+    @SerializedName("productKind") val productKind: String = "regular",
+    @SerializedName("validityDays") val validityDays: Int? = null
 )
 
 data class ProvidersResponse(

@@ -43,6 +43,12 @@ class ProductRepository @Inject constructor(
 
             if (response.isSuccessful && response.body()?.success == true) {
                 val products = response.body()!!.products.mapIndexed { index, product ->
+                    val category = when {
+                        product.category.isNotBlank() -> product.category
+                        product.productKind == "promo" -> "Promo"
+                        type == "ELOAD" -> "Prepaid Load"
+                        else -> product.category
+                    }
                     ProductEntity(
                         type = type,
                         providerCode = product.providerCode,
@@ -53,7 +59,7 @@ class ProductRepository @Inject constructor(
                         fee = product.fee,
                         description = product.description,
                         keyword = product.keyword,
-                        category = product.category,
+                        category = category,
                         sortOrder = index
                     )
                 }
@@ -71,72 +77,67 @@ class ProductRepository @Inject constructor(
     }
 
     suspend fun ensureProductsExist() {
-        val total = productDao.getProductCountByType("ELOAD") +
-                productDao.getProductCountByType("BILLS") +
-                productDao.getProductCountByType("ECASH") +
-                productDao.getProductCountByType("RFID")
-        if (total == 0) {
-            insertDefaultProducts()
+        val types = listOf("ELOAD", "BILLS", "ECASH", "RFID")
+        val missing = types.filter { productDao.getProductCountByType(it) == 0 }
+        if (missing.isNotEmpty()) {
+            insertDefaultProducts(missing)
         }
     }
 
-    suspend fun insertDefaultProducts() {
-        val eloadProviders = listOf(
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE5", "Globe 5", 5.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE10", "Globe 10", 10.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE15", "Globe 15", 15.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE20", "Globe 20", 20.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE30", "Globe 30", 30.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE50", "Globe 50", 50.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE100", "Globe 100", 100.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE150", "Globe 150", 150.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE200", "Globe 200", 200.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE300", "Globe 300", 300.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE500", "Globe 500", 500.0, "Globe prepaid load"),
-            createProduct("ELOAD", "GLOBE", "Globe", "GLOBE1000", "Globe 1000", 1000.0, "Globe prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART5", "Smart 5", 5.0, "Smart prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART10", "Smart 10", 10.0, "Smart prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART15", "Smart 15", 15.0, "Smart prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART20", "Smart 20", 20.0, "Smart prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART30", "Smart 30", 30.0, "Smart prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART50", "Smart 50", 50.0, "Smart prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART100", "Smart 100", 100.0, "Smart prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART200", "Smart 200", 200.0, "Smart prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART300", "Smart 300", 300.0, "Smart prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART500", "Smart 500", 500.0, "Smart prepaid load"),
-            createProduct("ELOAD", "SMART", "Smart", "SMART1000", "Smart 1000", 1000.0, "Smart prepaid load"),
-            createProduct("ELOAD", "TNT", "Talk N Text", "TNT5", "TNT 5", 5.0, "TNT prepaid load"),
-            createProduct("ELOAD", "TNT", "Talk N Text", "TNT10", "TNT 10", 10.0, "TNT prepaid load"),
-            createProduct("ELOAD", "TNT", "Talk N Text", "TNT15", "TNT 15", 15.0, "TNT prepaid load"),
-            createProduct("ELOAD", "TNT", "Talk N Text", "TNT20", "TNT 20", 20.0, "TNT prepaid load"),
-            createProduct("ELOAD", "TNT", "Talk N Text", "TNT30", "TNT 30", 30.0, "TNT prepaid load"),
-            createProduct("ELOAD", "TNT", "Talk N Text", "TNT50", "TNT 50", 50.0, "TNT prepaid load"),
-            createProduct("ELOAD", "TNT", "Talk N Text", "TNT100", "TNT 100", 100.0, "TNT prepaid load"),
-            createProduct("ELOAD", "TNT", "Talk N Text", "TNT300", "TNT 300", 300.0, "TNT prepaid load"),
-            createProduct("ELOAD", "TNT", "Talk N Text", "TNT500", "TNT 500", 500.0, "TNT prepaid load"),
-            createProduct("ELOAD", "DITO", "DITO", "DITO5", "DITO 5", 5.0, "DITO prepaid load"),
-            createProduct("ELOAD", "DITO", "DITO", "DITO10", "DITO 10", 10.0, "DITO prepaid load"),
-            createProduct("ELOAD", "DITO", "DITO", "DITO20", "DITO 20", 20.0, "DITO prepaid load"),
-            createProduct("ELOAD", "DITO", "DITO", "DITO50", "DITO 50", 50.0, "DITO prepaid load"),
-            createProduct("ELOAD", "DITO", "DITO", "DITO100", "DITO 100", 100.0, "DITO prepaid load"),
-            createProduct("ELOAD", "DITO", "DITO", "DITO300", "DITO 300", 300.0, "DITO prepaid load"),
-            createProduct("ELOAD", "DITO", "DITO", "DITO500", "DITO 500", 500.0, "DITO prepaid load"),
-            createProduct("ELOAD", "SUN", "Sun Cellular", "SUN5", "Sun 5", 5.0, "Sun prepaid load"),
-            createProduct("ELOAD", "SUN", "Sun Cellular", "SUN10", "Sun 10", 10.0, "Sun prepaid load"),
-            createProduct("ELOAD", "SUN", "Sun Cellular", "SUN20", "Sun 20", 20.0, "Sun prepaid load"),
-            createProduct("ELOAD", "SUN", "Sun Cellular", "SUN50", "Sun 50", 50.0, "Sun prepaid load"),
-            createProduct("ELOAD", "SUN", "Sun Cellular", "SUN100", "Sun 100", 100.0, "Sun prepaid load"),
-            createProduct("ELOAD", "SUN", "Sun Cellular", "SUN300", "Sun 300", 300.0, "Sun prepaid load"),
-            createProduct("ELOAD", "TM", "TM", "TM5", "TM 5", 5.0, "TM prepaid load"),
-            createProduct("ELOAD", "TM", "TM", "TM10", "TM 10", 10.0, "TM prepaid load"),
-            createProduct("ELOAD", "TM", "TM", "TM20", "TM 20", 20.0, "TM prepaid load"),
-            createProduct("ELOAD", "TM", "TM", "TM50", "TM 50", 50.0, "TM prepaid load"),
-            createProduct("ELOAD", "TM", "TM", "TM100", "TM 100", 100.0, "TM prepaid load"),
-            createProduct("ELOAD", "TM", "TM", "TM300", "TM 300", 300.0, "TM prepaid load"),
-            createProduct("ELOAD", "TM", "TM", "TM500", "TM 500", 500.0, "TM prepaid load"),
-        )
+    suspend fun insertDefaultProducts(onlyTypes: List<String>? = null) {
+        val types = onlyTypes ?: listOf("ELOAD", "BILLS", "ECASH", "RFID")
+        val toInsert = mutableListOf<ProductEntity>()
+        if ("ELOAD" in types) {
+            toInsert += buildDefaultEloadProducts()
+        }
+        if ("BILLS" in types) {
+            toInsert += buildDefaultBillsProducts()
+        }
+        if ("ECASH" in types) {
+            toInsert += buildDefaultEcashProducts()
+        }
+        if ("RFID" in types) {
+            toInsert += buildDefaultRfidProducts()
+        }
+        if (toInsert.isNotEmpty()) {
+            productDao.insertAll(toInsert)
+        }
+    }
 
-        val billsProviders = listOf(
+    private fun buildDefaultEloadProducts(): List<ProductEntity> {
+        val networks = listOf(
+            "GLOBE" to "Globe",
+            "SMART" to "Smart",
+            "TNT" to "Talk N Text",
+            "SUN" to "Sun Cellular",
+            "TM" to "TM",
+            "DITO" to "DITO",
+            "GOMO" to "GOMO",
+            "CIGNAL" to "Cignal Prepaid",
+            "GSAT" to "GSAT",
+            "SMARTBRO" to "Smart Bro",
+            "CHERRYPREPAID" to "Cherry Prepaid",
+            "GAMEPIN" to "Game Pin",
+            "KURYENTELOAD" to "Kuryente Load",
+        )
+        val amounts = listOf(10, 20, 30, 50, 100, 150, 200, 300, 500, 1000)
+        val products = mutableListOf<ProductEntity>()
+        for ((code, name) in networks) {
+            for (amount in amounts) {
+                products += createProduct(
+                    "ELOAD", code, name, "${code}_$amount", "$name $amount", amount.toDouble(),
+                    "$name prepaid load", category = "Prepaid Load"
+                )
+            }
+            products += createProduct(
+                "ELOAD", code, name, "${code}_PROMO_GO50", "$name GO50", 50.0,
+                "$name promo", category = "Promo"
+            )
+        }
+        return products
+    }
+
+    private fun buildDefaultBillsProducts(): List<ProductEntity> = listOf(
             createProduct("BILLS", "MERALCO", "Meralco", "MERALCO_PAY", "Meralco Payment", 0.0, "Electric bill payment", category = "Electricity"),
             createProduct("BILLS", "VECO", "VECO", "VECO_PAY", "VECO Payment", 0.0, "Visayan Electric", category = "Electricity"),
             createProduct("BILLS", "MORE_POWER", "MORE Power", "MORE_POWER_PAY", "MORE Power Payment", 0.0, "MORE Electric Power", category = "Electricity"),
@@ -172,7 +173,7 @@ class ProductRepository @Inject constructor(
             createProduct("BILLS", "LUMINA", "Lumina Homes", "LUMINA_PAY", "Lumina Payment", 0.0, "Lumina Homes", category = "Real Estate"),
         )
 
-        val ecashProviders = listOf(
+    private fun buildDefaultEcashProducts(): List<ProductEntity> = listOf(
             createProduct("ECASH", "GCASH", "GCash", "GCASH_CASHIN", "GCash Cash-In", 0.0, "GCash wallet top-up"),
             createProduct("ECASH", "MAYA", "Maya", "MAYA_CASHIN", "Maya Cash-In", 0.0, "Maya (PayMaya) wallet top-up"),
             createProduct("ECASH", "SHOPEEPAY", "ShopeePay", "SHOPEE_CASHIN", "ShopeePay Cash-In", 0.0, "ShopeePay wallet top-up"),
@@ -182,7 +183,7 @@ class ProductRepository @Inject constructor(
             createProduct("ECASH", "LAZADA", "Lazada Wallet", "LAZADA_CASHIN", "Lazada Wallet Cash-In", 0.0, "Lazada Wallet top-up"),
         )
 
-        val rfidProviders = listOf(
+    private fun buildDefaultRfidProducts(): List<ProductEntity> = listOf(
             createProduct("RFID", "EASYTRIP", "EasyTrip", "EASYTRIP_RELOAD", "EasyTrip Reload", 0.0, "EasyTrip RFID reload", category = "RFID Services"),
             createProduct("RFID", "AUTOSWEEP", "Autosweep", "AUTOSWEEP_RELOAD", "Autosweep Reload", 0.0, "Autosweep RFID reload", category = "RFID Services"),
             createProduct("RFID", "TAPNGO", "Tap&Go", "TAPNGO_RELOAD", "Tap&Go Reload", 0.0, "Tap&Go RFID reload", category = "RFID Services"),
@@ -192,9 +193,6 @@ class ProductRepository @Inject constructor(
             createProduct("RFID", "RFID_ECARD", "RFID eCard", "RFID_ECARD_RELOAD", "RFID eCard Reload", 0.0, "RFID eCard reload", category = "RFID Services"),
             createProduct("RFID", "OTHER", "Other Toll RFID", "OTHER_RELOAD", "Other RFID Reload", 0.0, "Other toll RFID reload", category = "RFID Services"),
         )
-
-        productDao.insertAll(eloadProviders + billsProviders + ecashProviders + rfidProviders)
-    }
 
     private fun createProduct(
         type: String,

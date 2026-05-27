@@ -39,6 +39,12 @@ fun ELoadProductsScreen(
     viewModel: ELoadViewModel = hiltViewModel()
 ) {
     val products by viewModel.getProductsByProvider(providerCode).collectAsState(initial = emptyList())
+    val regularProducts = remember(products) {
+        products.filter { it.category != "Promo" }
+    }
+    val promoProducts = remember(products) {
+        products.filter { it.category == "Promo" }
+    }
     var phoneNumber by remember { mutableStateOf("") }
     var selectedProduct by remember { mutableStateOf<ProductEntity?>(null) }
     var showConfirmDialog by remember { mutableStateOf(false) }
@@ -87,24 +93,17 @@ fun ELoadProductsScreen(
                     }
                 }
                 Column(modifier = Modifier.weight(0.65f)) {
-                    Text("Regular Load", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = EPayMediumGray)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyVerticalGrid(
-                        columns = productGridColumns(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ELoadProductSections(
+                        regularProducts = regularProducts,
+                        promoProducts = promoProducts,
+                        selectedProduct = selectedProduct,
+                        phoneNumber = phoneNumber,
+                        onProductSelected = { product ->
+                            selectedProduct = product
+                            if (phoneNumber.length >= 10) showConfirmDialog = true
+                        },
                         modifier = Modifier.fillMaxSize()
-                    ) {
-                        productGridItems(
-                            products = products,
-                            selectedProduct = selectedProduct,
-                            phoneNumber = phoneNumber,
-                            onProductSelected = { product ->
-                                selectedProduct = product
-                                if (phoneNumber.length >= 10) showConfirmDialog = true
-                            }
-                        )
-                    }
+                    )
                 }
             }
         } else {
@@ -115,23 +114,16 @@ fun ELoadProductsScreen(
                     onClear = { phoneNumber = "" }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Regular Load", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = EPayMediumGray)
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyVerticalGrid(
-                    columns = productGridColumns(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    productGridItems(
-                        products = products,
-                        selectedProduct = selectedProduct,
-                        phoneNumber = phoneNumber,
-                        onProductSelected = { product ->
-                            selectedProduct = product
-                            if (phoneNumber.length >= 10) showConfirmDialog = true
-                        }
-                    )
-                }
+                ELoadProductSections(
+                    regularProducts = regularProducts,
+                    promoProducts = promoProducts,
+                    selectedProduct = selectedProduct,
+                    phoneNumber = phoneNumber,
+                    onProductSelected = { product ->
+                        selectedProduct = product
+                        if (phoneNumber.length >= 10) showConfirmDialog = true
+                    }
+                )
                 if (phoneNumber.length < 10 && selectedProduct != null) {
                     Spacer(modifier = Modifier.height(12.dp))
                     PhoneWarningCard()
@@ -221,11 +213,56 @@ private fun PhoneWarningCard() {
     }
 }
 
+@Composable
+private fun ELoadProductSections(
+    regularProducts: List<ProductEntity>,
+    promoProducts: List<ProductEntity>,
+    selectedProduct: ProductEntity?,
+    phoneNumber: String,
+    onProductSelected: (ProductEntity) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (regularProducts.isEmpty() && promoProducts.isEmpty()) {
+        Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Text("No load products available. Pull to refresh from home.", color = EPayMediumGray, fontSize = 14.sp)
+        }
+        return
+    }
+
+    Column(modifier = modifier) {
+        if (regularProducts.isNotEmpty()) {
+            Text("Regular Load", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = EPayMediumGray)
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyVerticalGrid(
+                columns = productGridColumns(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.heightIn(max = if (promoProducts.isEmpty()) 600.dp else 280.dp)
+            ) {
+                productGridItems(regularProducts, selectedProduct, phoneNumber, onProductSelected)
+            }
+        }
+        if (promoProducts.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Promos", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = EPayMediumGray)
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyVerticalGrid(
+                columns = productGridColumns(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                productGridItems(promoProducts, selectedProduct, phoneNumber, onProductSelected, showPromoLabel = true)
+            }
+        }
+    }
+}
+
 private fun LazyGridScope.productGridItems(
     products: List<ProductEntity>,
     selectedProduct: ProductEntity?,
     phoneNumber: String,
-    onProductSelected: (ProductEntity) -> Unit
+    onProductSelected: (ProductEntity) -> Unit,
+    showPromoLabel: Boolean = false
 ) {
     items(products) { product ->
         val isSelected = selectedProduct == product
@@ -254,6 +291,15 @@ private fun LazyGridScope.productGridItems(
                     color = if (isSelected) Color.White else EPayGreenDark,
                     textAlign = TextAlign.Center
                 )
+                if (showPromoLabel) {
+                    Text(
+                        product.productName,
+                        fontSize = 10.sp,
+                        color = if (isSelected) Color.White.copy(alpha = 0.9f) else EPayMediumGray,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2
+                    )
+                }
             }
         }
     }

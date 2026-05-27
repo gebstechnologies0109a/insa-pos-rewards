@@ -119,7 +119,9 @@ class ProductController extends Controller
                 'description' => $p->description ?? '',
                 'keyword' => $p->keyword ?? '',
                 'category' => $this->productCategory($p),
+                'productKind' => $p->product_kind ?? 'regular',
                 'billingType' => $p->billing_type ?? $p->provider?->billing_type,
+                'validityDays' => $p->validity_days,
             ]);
 
         return response()->json(['success' => true, 'products' => $products]);
@@ -127,12 +129,14 @@ class ProductController extends Controller
 
     private function productCategory(Product $product): string
     {
-        $category = $product->provider?->category ?? '';
+        if (($product->product_kind ?? 'regular') === 'promo') {
+            return 'Promo';
+        }
 
         if ($product->type === 'ELOAD') {
             return 'Prepaid Load';
         }
 
-        return $category;
+        return $product->provider?->category ?? '';
     }
 }

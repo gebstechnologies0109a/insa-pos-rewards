@@ -6,7 +6,15 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="fw-bold mb-0">Products</h4>
-        <small class="text-muted">{{ $products->total() }} products</small>
+        <small class="text-muted">{{ $products->total() }} products (filtered)</small>
+        @isset($productStats)
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            <span class="badge bg-success">E-Load: {{ $productStats['ELOAD']['total'] ?? 0 }} ({{ $productStats['ELOAD']['regular'] ?? 0 }} regular, {{ $productStats['ELOAD']['promo'] ?? 0 }} promos)</span>
+            <span class="badge bg-primary">Bills: {{ $productStats['BILLS'] ?? 0 }}</span>
+            <span class="badge bg-info text-dark">E-Cash: {{ $productStats['ECASH'] ?? 0 }}</span>
+            <span class="badge bg-secondary">RFID: {{ $productStats['RFID'] ?? 0 }}</span>
+        </div>
+        @endisset
     </div>
     <div class="d-flex gap-2">
         <a href="{{ route('epayplus.products.export') }}" class="btn btn-outline-success btn-sm"><i class="bi bi-download"></i> Export CSV</a>

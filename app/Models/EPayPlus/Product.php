@@ -9,7 +9,7 @@ class Product extends Model
     protected $table = 'epay_products';
 
     protected $fillable = [
-        'provider_id', 'type', 'billing_type', 'code', 'name', 'amount',
+        'provider_id', 'type', 'billing_type', 'product_kind', 'code', 'name', 'amount',
         'retailer_price', 'fee', 'commission', 'description',
         'keyword', 'sms_format', 'is_active', 'sort_order', 'validity_days',
     ];

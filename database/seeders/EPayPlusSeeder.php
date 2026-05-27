@@ -362,26 +362,20 @@ class EPayPlusSeeder extends Seeder
         ], $items);
     }
 
-    private function localProviderLogoPath(string $code): ?string
+    private function seedEloadProducts(): void
     {
-        $slug = provider_code_to_slug($code);
-        foreach (['webp', 'png'] as $ext) {
-            $relative = "images/providers/ic_provider_{$slug}.{$ext}";
-            if (file_exists(public_path($relative))) {
-                return '/' . $relative;
-            }
-        }
-
-        return null;
-    }
-
-    private function seedProducts(): void
-    {
-        $eloadAmounts = [10, 15, 20, 25, 30, 50, 100, 150, 200, 300, 500, 1000];
+        $eloadAmounts = [10, 20, 30, 50, 100, 150, 200, 300, 500, 1000];
         $eloadCodes = [
             'GLOBE', 'SMART', 'TNT', 'SUN', 'TM', 'DITO', 'GOMO',
             'CIGNAL', 'GSAT', 'SMARTBRO', 'CHERRYPREPAID', 'GAMEPIN', 'KURYENTELOAD',
         ];
+
+        $obsoleteDenomCodes = [];
+        foreach ($eloadCodes as $network) {
+            foreach ([5, 15, 25] as $legacyAmount) {
+                $obsoleteDenomCodes[] = "{$network}_{$legacyAmount}";
+            }
+        }
 
         foreach ($eloadCodes as $network) {
             $provider = Provider::where('code', $network)->first();
@@ -397,6 +391,7 @@ class EPayPlusSeeder extends Seeder
                         'provider_id' => $provider->id,
                         'type' => 'ELOAD',
                         'billing_type' => 'prepaid',
+                        'product_kind' => 'regular',
                         'name' => "{$provider->name} {$amount}",
                         'amount' => $amount,
                         'retailer_price' => $amount - $discount,
@@ -404,10 +399,70 @@ class EPayPlusSeeder extends Seeder
                         'fee' => 0,
                         'description' => "{$provider->name} prepaid load ₱{$amount}",
                         'sort_order' => $i,
+                        'is_active' => true,
                     ]
                 );
             }
         }
+
+        /** @var array<string, list<array{0: string, 1: string, 2: float, 3?: int, 4?: string}>> $promoCatalog */
+        $promoCatalog = require database_path('data/eload_promos.php');
+        $promoSortBase = 100;
+
+        foreach ($promoCatalog as $network => $promos) {
+            $provider = Provider::where('code', $network)->first();
+            if (!$provider) {
+                continue;
+            }
+
+            foreach ($promos as $i => $promo) {
+                [$slug, $name, $amount] = $promo;
+                $validityDays = $promo[3] ?? null;
+                $description = $promo[4] ?? "{$name} promo";
+                $discount = $amount >= 100 ? $amount * 0.03 : $amount * 0.02;
+
+                Product::updateOrCreate(
+                    ['code' => "{$network}_PROMO_{$slug}"],
+                    [
+                        'provider_id' => $provider->id,
+                        'type' => 'ELOAD',
+                        'billing_type' => 'prepaid',
+                        'product_kind' => 'promo',
+                        'name' => $name,
+                        'amount' => $amount,
+                        'retailer_price' => $amount - $discount,
+                        'commission' => $discount,
+                        'fee' => 0,
+                        'description' => $description,
+                        'validity_days' => $validityDays,
+                        'sort_order' => $promoSortBase + $i,
+                        'is_active' => true,
+                    ]
+                );
+            }
+        }
+
+        Product::where('type', 'ELOAD')
+            ->whereIn('code', $obsoleteDenomCodes)
+            ->update(['is_active' => false]);
+    }
+
+    private function localProviderLogoPath(string $code): ?string
+    {
+        $slug = provider_code_to_slug($code);
+        foreach (['webp', 'png'] as $ext) {
+            $relative = "images/providers/ic_provider_{$slug}.{$ext}";
+            if (file_exists(public_path($relative))) {
+                return '/' . $relative;
+            }
+        }
+
+        return null;
+    }
+
+    private function seedProducts(): void
+    {
+        $this->seedEloadProducts();
 
         $billers = Provider::where('type', 'BILLS')->get();
         foreach ($billers as $biller) {
