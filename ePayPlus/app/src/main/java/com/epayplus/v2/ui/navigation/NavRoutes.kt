@@ -25,6 +25,7 @@ sealed class NavRoutes(val route: String) {
             "ecash/process/$providerCode/$providerName"
     }
     object Sales : NavRoutes("sales")
+    object Rfid : NavRoutes("rfid")
     object TransactionHistory : NavRoutes("transactions")
     object TransactionResult : NavRoutes("result/{transactionId}/{type}") {
         fun createRoute(transactionId: Long, type: String) = "result/$transactionId/$type"

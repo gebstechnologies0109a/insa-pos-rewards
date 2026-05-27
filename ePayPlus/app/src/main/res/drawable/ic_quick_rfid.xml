@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="#E0F2F1"
+      android:pathData="M12,2c5.52,0 10,4.48 10,10s-4.48,10 -10,10S2,17.52 2,12 6.48,2 12,2z"/>
+  <path
+      android:fillColor="#00838F"
+      android:pathData="M12,3.75c4.56,0 8.25,3.69 8.25,8.25S16.56,20.25 12,20.25 3.75,16.56 3.75,12 7.44,3.75 12,3.75zM12,5.5c-3.59,0 -6.5,2.91 -6.5,6.5s2.91,6.5 6.5,6.5 6.5,-2.91 6.5,-6.5 -2.91,-6.5 -6.5,-6.5z"
+      android:fillType="evenOdd"/>
+  <!-- RFID card body -->
+  <path
+      android:fillColor="#00838F"
+      android:pathData="M5.75,8.25h8.75c0.55,0 1,0.45 1,1v5.5c0,0.55 -0.45,1 -1,1H5.75c-0.55,0 -1,-0.45 -1,-1v-5.5c0,-0.55 0.45,-1 1,-1z"/>
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M6.25,9.75h7.75v3.75H6.25z"/>
+  <!-- Chip -->
+  <path
+      android:fillColor="#FFA000"
+      android:pathData="M6.75,10.25h2.25v1.75H6.75z"/>
+  <path
+      android:fillColor="#FFB74D"
+      android:pathData="M7.1,10.6h1.55v1.05H7.1z"/>
+  <!-- Card lines -->
+  <path
+      android:fillColor="#B2DFDB"
+      android:pathData="M10.25,11.25h3.25v0.55h-3.25zM10.25,12.35h2.5v0.55h-2.5z"/>
+  <!-- NFC wave arcs -->
+  <path
+      android:fillColor="#00000000"
+      android:pathData="M16.75,10.25c0.85,0.85 0.85,2.15 0,3"
+      android:strokeWidth="1.1"
+      android:strokeColor="#00838F"
+      android:strokeLineCap="round"/>
+  <path
+      android:fillColor="#00000000"
+      android:pathData="M17.85,9.15c1.55,1.55 1.55,4.15 0,5.7"
+      android:strokeWidth="1.1"
+      android:strokeColor="#00838F"
+      android:strokeLineCap="round"/>
+  <path
+      android:fillColor="#00000000"
+      android:pathData="M18.95,8.05c2.25,2.25 2.25,5.65 0,7.9"
+      android:strokeWidth="1.1"
+      android:strokeColor="#26A69A"
+      android:strokeLineCap="round"/>
+</vector>

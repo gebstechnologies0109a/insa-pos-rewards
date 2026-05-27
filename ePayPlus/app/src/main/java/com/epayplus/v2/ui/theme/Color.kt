@@ -33,6 +33,7 @@ val CategoryEload = Color(0xFF2E7D32)
 val CategoryBills = Color(0xFF5C6BC0)
 val CategoryEcash = Color(0xFFF57C00)
 val CategoryWifi = Color(0xFF00897B)
+val CategoryRfid = Color(0xFF00838F)
 
 val DarkSurface = Color(0xFF1E1E1E)
 val DarkBackground = Color(0xFF121212)

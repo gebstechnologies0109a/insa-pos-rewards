@@ -47,6 +47,9 @@
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.REORDER_TASKS" />
 
+    <!-- NFC / RFID -->
+    <uses-permission android:name="android.permission.NFC" />
+
     <!-- USB -->
     <uses-permission android:name="android.permission.USB_PERMISSION" />
 
@@ -56,6 +59,7 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
     <application
         android:name=".EPayPlusApp"

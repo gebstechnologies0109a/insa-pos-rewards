@@ -177,6 +177,10 @@ fun AppNavigation(navController: NavHostController, isLoggedIn: Boolean) {
                 SalesScreen(navController = navController)
             }
 
+            composable(NavRoutes.Rfid.route) {
+                RfidScreen(navController = navController)
+            }
+
             composable(NavRoutes.TransactionHistory.route) {
                 TransactionHistoryScreen(navController = navController)
             }
