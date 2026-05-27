@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.epayplus.v2.ui.components.ProviderIcon
 import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.BillsViewModel
@@ -85,15 +86,15 @@ fun BillsBillersScreen(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(
-                                modifier = Modifier.size(44.dp),
-                                shape = CircleShape,
-                                color = CategoryBills.copy(alpha = 0.12f)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Filled.Receipt, biller.providerName, tint = CategoryBills, modifier = Modifier.size(22.dp))
-                                }
-                            }
+                            ProviderIcon(
+                                providerCode = biller.providerCode,
+                                providerName = biller.providerName,
+                                size = 44.dp,
+                                fallbackIcon = Icons.Filled.Receipt,
+                                fallbackTint = CategoryBills,
+                                backgroundColor = CategoryBills.copy(alpha = 0.08f),
+                                contentPadding = 4.dp
+                            )
                             Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(biller.providerName, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)

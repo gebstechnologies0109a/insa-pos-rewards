@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.epayplus.v2.ui.components.ProviderIcon
 import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.BillsViewModel
@@ -82,11 +83,15 @@ fun BillsProcessScreen(
                 colors = CardDefaults.cardColors(containerColor = CategoryBills.copy(alpha = 0.08f))
             ) {
                 Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(modifier = Modifier.size(44.dp), shape = CircleShape, color = CategoryBills.copy(alpha = 0.15f)) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Receipt, "Biller", tint = CategoryBills, modifier = Modifier.size(24.dp))
-                        }
-                    }
+                    ProviderIcon(
+                        providerCode = billerCode,
+                        providerName = decodedName,
+                        size = 44.dp,
+                        fallbackIcon = Icons.Filled.Receipt,
+                        fallbackTint = CategoryBills,
+                        backgroundColor = CategoryBills.copy(alpha = 0.12f),
+                        contentPadding = 4.dp
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(decodedName, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)

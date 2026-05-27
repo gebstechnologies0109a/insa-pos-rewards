@@ -1,5 +1,7 @@
 package com.epayplus.v2.ui.screens
 
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,10 +18,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.epayplus.v2.R
 import com.epayplus.v2.ui.theme.*
 
 @Composable
@@ -27,9 +32,9 @@ fun KioskHomeScreen(
     onServiceSelected: (String) -> Unit = {}
 ) {
     val services = listOf(
-        KioskServiceItem("Buy Load", Icons.Filled.PhoneAndroid, CategoryEload, "eload"),
-        KioskServiceItem("Bills Payment", Icons.Filled.Receipt, CategoryBills, "bills"),
-        KioskServiceItem("Cash-In", Icons.Filled.AccountBalanceWallet, CategoryEcash, "ecash"),
+        KioskServiceItem("Buy Load", Icons.Filled.PhoneAndroid, CategoryEload, "eload", R.drawable.ic_globe),
+        KioskServiceItem("Bills Payment", Icons.Filled.Receipt, CategoryBills, "bills", R.drawable.ic_meralco),
+        KioskServiceItem("Cash-In", Icons.Filled.AccountBalanceWallet, CategoryEcash, "ecash", R.drawable.ic_gcash),
         KioskServiceItem("WiFi", Icons.Filled.Wifi, CategoryWifi, "wifi"),
         KioskServiceItem("Balance Inquiry", Icons.Filled.AccountBalance, EPayBlue, "balance"),
         KioskServiceItem("More", Icons.Filled.MoreHoriz, EPayOrange, "more"),
@@ -110,12 +115,21 @@ private fun KioskServiceCard(service: KioskServiceItem, onClick: () -> Unit = {}
                 color = service.color.copy(alpha = 0.15f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        service.icon,
-                        service.label,
-                        tint = service.color,
-                        modifier = Modifier.size(32.dp)
-                    )
+                    if (service.logoRes != null) {
+                        Image(
+                            painter = painterResource(service.logoRes),
+                            contentDescription = service.label,
+                            modifier = Modifier.size(40.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        Icon(
+                            service.icon,
+                            service.label,
+                            tint = service.color,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -133,5 +147,6 @@ private data class KioskServiceItem(
     val label: String,
     val icon: ImageVector,
     val color: Color,
-    val route: String = ""
+    val route: String = "",
+    @DrawableRes val logoRes: Int? = null
 )

@@ -124,6 +124,7 @@ data class ProviderDetail(
     val code: String = "",
     val name: String = "",
     val type: String = "",
+    @SerializedName("logoUrl") val logoUrl: String = "",
     val logo: String = "",
     val category: String = ""
 )

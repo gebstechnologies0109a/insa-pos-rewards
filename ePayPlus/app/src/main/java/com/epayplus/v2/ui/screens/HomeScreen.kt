@@ -19,8 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.annotation.DrawableRes
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import com.epayplus.v2.R
+import com.epayplus.v2.ui.components.ProviderIcon
+import com.epayplus.v2.ui.components.ProviderIcons
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -208,13 +213,13 @@ fun HomeScreen(
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                ServiceButton(Icons.Filled.PhoneAndroid, "Load", CategoryEload) {
+                ServiceButton(Icons.Filled.PhoneAndroid, "Load", CategoryEload, logoRes = R.drawable.ic_globe) {
                     navController.navigate(NavRoutes.ELoadProviders.route)
                 }
-                ServiceButton(Icons.Filled.Receipt, "Bills", CategoryBills) {
+                ServiceButton(Icons.Filled.Receipt, "Bills", CategoryBills, logoRes = R.drawable.ic_meralco) {
                     navController.navigate(NavRoutes.BillsCategories.route)
                 }
-                ServiceButton(Icons.Filled.AccountBalanceWallet, "Cash-In", CategoryEcash) {
+                ServiceButton(Icons.Filled.AccountBalanceWallet, "Cash-In", CategoryEcash, logoRes = R.drawable.ic_gcash) {
                     navController.navigate(NavRoutes.ECashProviders.route)
                 }
                 ServiceButton(Icons.Filled.BarChart, "Sales", EPayBlue) {
@@ -356,6 +361,7 @@ private fun ServiceButton(
     icon: ImageVector,
     label: String,
     color: Color,
+    @DrawableRes logoRes: Int? = null,
     onClick: () -> Unit
 ) {
     Column(
@@ -371,7 +377,16 @@ private fun ServiceButton(
             color = color.copy(alpha = 0.12f)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, label, tint = color, modifier = Modifier.size(28.dp))
+                if (logoRes != null) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(logoRes),
+                        contentDescription = label,
+                        modifier = Modifier.size(36.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                } else {
+                    Icon(icon, label, tint = color, modifier = Modifier.size(28.dp))
+                }
             }
         }
         Spacer(modifier = Modifier.height(6.dp))
@@ -411,13 +426,27 @@ private fun RecentTransactionRow(transaction: TransactionEntity) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Surface(
-            modifier = Modifier.size(40.dp),
-            shape = CircleShape,
-            color = typeColor.copy(alpha = 0.12f)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(typeIcon, transaction.type, tint = typeColor, modifier = Modifier.size(20.dp))
+        val providerDrawable = ProviderIcons.resolve(transaction.provider, transaction.provider)
+        if (providerDrawable != null) {
+            ProviderIcon(
+                providerCode = transaction.provider,
+                providerName = transaction.provider,
+                modifier = Modifier,
+                size = 40.dp,
+                fallbackIcon = typeIcon,
+                fallbackTint = typeColor,
+                backgroundColor = typeColor.copy(alpha = 0.08f),
+                contentPadding = 3.dp
+            )
+        } else {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = typeColor.copy(alpha = 0.12f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(typeIcon, transaction.type, tint = typeColor, modifier = Modifier.size(20.dp))
+                }
             }
         }
         Spacer(modifier = Modifier.width(12.dp))

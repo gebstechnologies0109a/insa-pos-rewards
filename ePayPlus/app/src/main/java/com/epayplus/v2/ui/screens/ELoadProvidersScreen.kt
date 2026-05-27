@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.epayplus.v2.ui.components.ProviderIcon
 import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.ELoadViewModel
@@ -82,7 +83,7 @@ fun ELoadProvidersScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("No network providers available", color = EPayMediumGray)
                     Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedButton(onClick = {}) {
+                    OutlinedButton(onClick = { viewModel.reloadProviders() }) {
                         Icon(Icons.Filled.Refresh, "Retry", modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Retry")
@@ -126,20 +127,15 @@ fun ELoadProvidersScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                Surface(
-                                    modifier = Modifier.size(48.dp),
-                                    shape = CircleShape,
-                                    color = color.copy(alpha = 0.12f)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            Icons.Filled.SimCard,
-                                            provider.providerName,
-                                            tint = color,
-                                            modifier = Modifier.size(26.dp)
-                                        )
-                                    }
-                                }
+                                ProviderIcon(
+                                    providerCode = provider.providerCode,
+                                    providerName = provider.providerName,
+                                    size = 48.dp,
+                                    fallbackIcon = Icons.Filled.SimCard,
+                                    fallbackTint = color,
+                                    backgroundColor = color.copy(alpha = 0.08f),
+                                    contentPadding = 4.dp
+                                )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     provider.providerName,

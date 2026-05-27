@@ -84,4 +84,18 @@ class ELoadViewModel @Inject constructor(
     fun retry() {
         _processState.value = ProcessState.Idle
     }
+
+    fun reloadProviders() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            try {
+                productRepository.refreshProducts("ELOAD")
+            } catch (e: Exception) {
+                _error.value = e.message
+            }
+            productRepository.ensureProductsExist()
+            _isLoading.value = false
+        }
+    }
 }
