@@ -148,13 +148,6 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 ServiceButton(
-                    "Maya Negosyo",
-                    Color(0xFF00B464),
-                    iconRes = R.drawable.ic_quick_maya_negosyo
-                ) {
-                    navController.navigate(NavRoutes.MayaNegosyo.route)
-                }
-                ServiceButton(
                     "Kiosk Mode",
                     Color(0xFF6A1B9A),
                     iconRes = R.drawable.ic_quick_kiosk

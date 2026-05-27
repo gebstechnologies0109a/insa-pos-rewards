@@ -151,8 +151,8 @@ fun KioskNavigation(
             )
         }
 
-        composable(NavRoutes.MayaNegosyo.route) {
-            MayaNegosyoHubScreen(navController = navController)
+        composable(NavRoutes.TransactionHistory.route) {
+            TransactionHistoryScreen(navController = navController)
         }
 
         composable(
