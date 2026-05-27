@@ -48,6 +48,7 @@ Use this for `insa-pos-rewards-tasxesjq.on-forge.com` and similar INSA Forge sit
 | **Deploy script** | Full contents of `scripts/forge-deploy-insa.sh` from latest `deploy/insa` (not root `deploy.sh` unless you accept delegation) |
 | **Environment** | `APP_PRODUCT=insa` |
 | **Deployment option** | Enable **Make .env variables available to deployment script** |
+| **Server** → Forge worker key | Line with `worker@forge.laravel.com` in `/home/forge/.ssh/authorized_keys` (see below) |
 
 Then click **Deploy Now** (or push to `deploy/insa` if Quick Deploy is on).
 
