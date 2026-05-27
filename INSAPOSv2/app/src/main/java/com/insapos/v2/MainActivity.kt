@@ -75,6 +75,9 @@ class MainActivity : AppCompatActivity() {
     private var pageLoaded = false
     private var isOfflineShown = false
     private var usingHttp = false
+    /** After a successful sign-in, do not switch HTTP/HTTPS (would drop session cookies). */
+    private var protocolLocked = false
+    private var protocolProbeComplete = false
 
     private var hidScanner: HidScannerDriver? = null
     private var usbPermissionCallback: ((Boolean) -> Unit)? = null
@@ -296,6 +299,13 @@ class MainActivity : AppCompatActivity() {
         cookieManager.setAcceptCookie(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             cookieManager.setAcceptThirdPartyCookies(webView, true)
+            cookieManager.flush()
+        }
+    }
+
+    private fun persistCookies() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().flush()
         }
     }
 
@@ -343,10 +353,14 @@ class MainActivity : AppCompatActivity() {
                 pageLoaded = true
                 hideOffline()
                 hideStatus()
+                persistCookies()
 
                 url?.let {
                     if (!isSuperAdminPath(it)) {
                         session.lastUrl = it
+                    }
+                    if (isAuthenticatedPosPath(it)) {
+                        protocolLocked = true
                     }
                 }
 
@@ -368,7 +382,7 @@ class MainActivity : AppCompatActivity() {
                 if (request?.isForMainFrame == true) {
                     Log.e(TAG, "WebView error: ${error?.description}")
 
-                    if (!usingHttp) {
+                    if (!usingHttp && !protocolLocked) {
                         Log.w(TAG, "HTTPS failed, falling back to HTTP")
                         usingHttp = true
                         session.useHttp = true
@@ -385,7 +399,7 @@ class MainActivity : AppCompatActivity() {
             ) {
                 Log.w(TAG, "SSL error: ${error?.primaryError} on ${error?.url}")
 
-                if (!usingHttp) {
+                if (!usingHttp && !protocolLocked) {
                     usingHttp = true
                     session.useHttp = true
                     handler?.cancel()
@@ -449,42 +463,59 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- Protocol probe: HTTPS first, fallback to HTTP ---
+    // --- Protocol probe: HTTPS first, fallback to HTTP (complete before WebView load) ---
 
     private fun probeAndLoad() {
-        if (usingHttp) {
+        if (protocolProbeComplete) {
             loadPosUrl()
             return
         }
 
-        loadPosUrl()
+        if (usingHttp || session.useHttp) {
+            usingHttp = true
+            protocolProbeComplete = true
+            loadPosUrl()
+            return
+        }
 
+        showStatus("Connecting...")
         Thread {
-            val httpsOk = try {
-                val url = java.net.URL("https://${session.serverDomain}/api/pos/ping")
-                val conn = url.openConnection() as javax.net.ssl.HttpsURLConnection
-                conn.connectTimeout = 2500
-                conn.readTimeout = 2500
-                conn.requestMethod = "HEAD"
-                val code = conn.responseCode
-                conn.disconnect()
-                code in 200..399
-            } catch (e: Exception) {
-                Log.w(TAG, "HTTPS probe failed: ${e.message}")
-                false
-            }
-
-            if (!httpsOk) {
-                runOnUiThread {
-                    if (!usingHttp) {
-                        Log.i(TAG, "HTTPS unavailable, switching to HTTP")
-                        usingHttp = true
-                        session.useHttp = true
-                        loadPosUrl()
-                    }
+            val httpsOk = probeHttpsAvailable()
+            runOnUiThread {
+                protocolProbeComplete = true
+                if (!httpsOk && !protocolLocked) {
+                    Log.i(TAG, "HTTPS unavailable, using HTTP for this device")
+                    usingHttp = true
+                    session.useHttp = true
                 }
+                loadPosUrl()
             }
         }.start()
+    }
+
+    private fun probeHttpsAvailable(): Boolean {
+        return try {
+            val url = java.net.URL("https://${session.serverDomain}/api/pos/ping")
+            val conn = url.openConnection() as javax.net.ssl.HttpsURLConnection
+            conn.connectTimeout = 2500
+            conn.readTimeout = 2500
+            conn.requestMethod = "HEAD"
+            val code = conn.responseCode
+            conn.disconnect()
+            code in 200..399
+        } catch (e: Exception) {
+            Log.w(TAG, "HTTPS probe failed: ${e.message}")
+            false
+        }
+    }
+
+    private fun isAuthenticatedPosPath(url: String): Boolean {
+        return try {
+            val path = Uri.parse(url).path?.lowercase() ?: return false
+            path.startsWith("/pos/cashier") || path.startsWith("/stockman/")
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun warmDns() {

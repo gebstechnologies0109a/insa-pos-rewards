@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -41,6 +42,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'epayplus.product' => \App\Http\Middleware\EnsureEpayPlusProduct::class,
             'insa.product' => \App\Http\Middleware\EnsureInsaProduct::class,
         ]);
+
+        $middleware->redirectGuestsTo(function (Request $request) {
+            return route('login', login_redirect_params($request));
+        });
 
         $middleware->validateCsrfTokens(except: [
             'api/pos',

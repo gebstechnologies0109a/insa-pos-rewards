@@ -53,6 +53,40 @@ if (! function_exists('is_insa_android_app')) {
     }
 }
 
+if (! function_exists('login_error_message')) {
+    /**
+     * Human-readable login page message for ?error= codes (WebView-friendly).
+     */
+    function login_error_message(?string $code): ?string
+    {
+        if ($code === null || $code === '') {
+            return null;
+        }
+
+        return match ($code) {
+            'session_required', 'session_expired', 'session_lost' => 'Your session was not kept after sign-in. This often happens when the app switches between HTTP and HTTPS. Please sign in again. If it keeps happening, ask your administrator to use a stable HTTPS URL.',
+            'forbidden_role' => 'This account is not allowed to open the POS cashier screen.',
+            'license_inactive' => 'Your branch license is inactive. Contact your administrator before using POS.',
+            'csrf' => 'Security token expired. Please try signing in again.',
+            default => 'Unable to sign in. Please try again or contact support.',
+        };
+    }
+}
+
+if (! function_exists('login_redirect_params')) {
+    /**
+     * @return array<string, string>
+     */
+    function login_redirect_params(?Request $request, string $error = 'session_required'): array
+    {
+        if ($request !== null && is_insa_android_app($request)) {
+            return ['error' => $error];
+        }
+
+        return is_insa_android_app() ? ['error' => $error] : [];
+    }
+}
+
 if (! function_exists('provider_code_to_slug')) {
     /**
      * Map epay provider code to ic_provider_{slug} filename slug.

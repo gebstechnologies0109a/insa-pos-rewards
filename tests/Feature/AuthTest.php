@@ -102,4 +102,31 @@ class AuthTest extends TestCase
         $this->get(route('backoffice.dashboard'))->assertRedirect('/login');
         $this->get(route('admin.products.index'))->assertRedirect('/login');
     }
+
+    public function test_unauthenticated_android_pos_redirect_includes_error_hint(): void
+    {
+        $this->withHeader('User-Agent', 'INSAPOSv3/1.0 Android/14')
+            ->get(route('pos.cashier'))
+            ->assertRedirect(route('login', ['error' => 'session_required']));
+    }
+
+    public function test_login_page_shows_android_session_error_message(): void
+    {
+        $this->withHeader('User-Agent', 'INSAPOSv3/1.0 Android/14')
+            ->get(route('login', ['error' => 'session_required']))
+            ->assertOk()
+            ->assertSee('session was not kept', false);
+    }
+
+    public function test_android_cashier_login_redirect_stays_on_request_host(): void
+    {
+        User::create([
+            'name' => 'Cashier', 'email' => 'android-cashier@test.com',
+            'password' => bcrypt('password'), 'role' => 'cashier',
+        ]);
+
+        $this->withHeader('User-Agent', 'INSAPOSv3/1.0 Android/14')
+            ->post('/login', ['email' => 'android-cashier@test.com', 'password' => 'password'])
+            ->assertRedirectContains('/pos/cashier');
+    }
 }

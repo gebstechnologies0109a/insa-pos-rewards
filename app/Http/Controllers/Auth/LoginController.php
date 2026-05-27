@@ -10,9 +10,14 @@ use Illuminate\Support\Facades\Auth;
 
 class LoginController extends Controller
 {
-    public function showLoginForm()
+    public function showLoginForm(Request $request)
     {
-        return view('auth.login');
+        $errorCode = $request->query('error') ?? $request->session()->pull('login_error');
+
+        return view('auth.login', [
+            'loginError'   => login_error_message(is_string($errorCode) ? $errorCode : null),
+            'isAndroidApp' => is_insa_android_app($request),
+        ]);
     }
 
     public function login(Request $request): RedirectResponse
@@ -36,7 +41,7 @@ class LoginController extends Controller
             }
 
             if (is_insa_product($request) && is_insa_android_app($request)) {
-                return $this->redirectInsaAndroidAfterLogin($user);
+                return $this->redirectInsaAndroidAfterLogin($user, $request);
             }
 
             if ($user->isSuperAdmin()) {
@@ -62,13 +67,13 @@ class LoginController extends Controller
     /**
      * INSA POS Android shells default to cashier POS, not web admin panels.
      */
-    private function redirectInsaAndroidAfterLogin(User $user): RedirectResponse
+    private function redirectInsaAndroidAfterLogin(User $user, Request $request): RedirectResponse
     {
-        if ($user->isStockman()) {
-            return redirect()->intended(route('stockman.inventory'));
-        }
+        $target = $user->isStockman()
+            ? route('stockman.inventory', absolute: false)
+            : route('pos.cashier', absolute: false);
 
-        return redirect()->intended(route('pos.cashier'));
+        return redirect()->intended($request->getSchemeAndHttpHost().$target);
     }
 
     public function logout(Request $request): RedirectResponse

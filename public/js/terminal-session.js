@@ -60,10 +60,29 @@
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': getCsrf(),
             },
+            credentials: 'same-origin',
             body: JSON.stringify(body),
         });
 
-        const data = await res.json();
+        if (res.status === 401 || res.status === 419) {
+            return {
+                ok: false,
+                message: 'Session expired. Please sign in again.',
+                code: 'session_expired',
+                redirectLogin: true,
+            };
+        }
+
+        let data;
+        try {
+            data = await res.json();
+        } catch {
+            return {
+                ok: false,
+                message: 'Could not reach the server. Check your connection.',
+                code: 'network_error',
+            };
+        }
 
         if (data.success && data.session_id) {
             localStorage.setItem(STORAGE_KEY, data.session_id);
@@ -89,6 +108,7 @@
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': getCsrf(),
                 },
+                credentials: 'same-origin',
                 body: JSON.stringify({
                     session_id: sessionId,
                     device_fingerprint: getFingerprint(),

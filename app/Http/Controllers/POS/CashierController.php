@@ -23,9 +23,10 @@ class CashierController extends Controller
         $activeSessions = $branchId > 0 ? $this->sessions->activeCountForBranch($branchId) : 0;
 
         return view('pos.cashier.index', [
-            'licenseActive'  => $licenseActive,
-            'maxSlots'       => $maxSlots,
-            'activeSessions' => $activeSessions,
+            'licenseActive'        => $licenseActive,
+            'licenseInactiveNote'  => $licenseActive ? null : 'Branch license is inactive or expired. POS cannot start until your administrator reactivates it.',
+            'maxSlots'             => $maxSlots,
+            'activeSessions'       => $activeSessions,
         ]);
     }
 }

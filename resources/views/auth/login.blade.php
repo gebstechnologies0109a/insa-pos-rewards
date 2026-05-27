@@ -17,6 +17,12 @@
                 <p class="text-gray-500 text-sm mt-1">Sign in to your account</p>
             </div>
 
+            @if(!empty($loginError))
+            <div class="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded mb-4 text-sm" role="alert">
+                {{ $loginError }}
+            </div>
+            @endif
+
             @if($errors->any())
             <div class="bg-red-50 border border-red-200 text-red-700 p-3 rounded mb-4 text-sm">
                 {{ $errors->first() }}

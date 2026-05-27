@@ -87,7 +87,7 @@
 <div x-show="!licenseActive && !licenseBlocked" class="fixed inset-0 bg-slate-900/95 z-[240] flex items-center justify-center p-6" x-cloak>
     <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
         <h2 class="text-xl font-bold text-gray-900 mb-2">Branch license inactive</h2>
-        <p class="text-gray-600 text-sm mb-6">POS is unavailable until your administrator reactivates this branch license.</p>
+        <p class="text-gray-600 text-sm mb-6">{{ $licenseInactiveNote ?? 'POS is unavailable until your administrator reactivates this branch license.' }}</p>
         <a href="{{ route('logout') }}" onclick="event.preventDefault(); document.getElementById('logout-form-license').submit();" class="inline-block px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-medium">Logout</a>
         <form id="logout-form-license" method="POST" action="{{ route('logout') }}" class="hidden">@csrf</form>
     </div>
@@ -1433,6 +1433,7 @@ function posApp() {
         licenseBlocked: false,
         licenseBlockMessage: '',
         terminalSessionReady: false,
+        _terminalSessionRedirectLogin: false,
 
         syncStatus: 'offline',
         pendingSyncCount: 0,
@@ -1576,7 +1577,12 @@ function posApp() {
             }
             if (!this.licenseActive) return;
             const seatOk = await this.registerTerminalSession();
-            if (!seatOk) return;
+            if (!seatOk) {
+                if (this._terminalSessionRedirectLogin) {
+                    window.location.href = '/login?error=session_required';
+                }
+                return;
+            }
             await this.initOffline();
             this.loadShift();
             this.initBuddy();
@@ -1597,6 +1603,10 @@ function posApp() {
                     try { window.INSAPOS.setTerminalSessionId(result.sessionId || ''); } catch (e) {}
                 }
                 return true;
+            }
+            if (result.code === 'session_expired' || result.redirectLogin) {
+                this._terminalSessionRedirectLogin = true;
+                return false;
             }
             this.licenseBlocked = true;
             this.licenseBlockMessage = result.message || 'License limit reached.';
