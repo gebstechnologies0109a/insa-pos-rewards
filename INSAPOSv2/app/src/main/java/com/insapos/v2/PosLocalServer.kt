@@ -24,7 +24,7 @@ class PosLocalServer(
 
     companion object {
         const val PORT = 18182
-        private const val TAG = "INSAPOSv2Server"
+        private const val TAG = "INSAPOSv3Server"
     }
 
     @Volatile

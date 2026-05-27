@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 class PosService : Service() {
 
     companion object {
-        private const val TAG = "INSAPOSv2Service"
+        private const val TAG = "INSAPOSv3Service"
         private const val CHANNEL_ID = "insapos_v2_service"
         private const val NOTIFICATION_ID = 2001
     }

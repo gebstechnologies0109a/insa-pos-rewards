@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "INSAPOSv2"
+rootProject.name = "INSAPOSv3"
 include(":app")

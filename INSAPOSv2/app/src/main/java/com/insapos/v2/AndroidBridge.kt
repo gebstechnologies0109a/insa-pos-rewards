@@ -8,7 +8,7 @@ import org.json.JSONObject
 class AndroidBridge(private val activity: MainActivity) {
 
     companion object {
-        private const val TAG = "INSAPOSv2Bridge"
+        private const val TAG = "INSAPOSv3Bridge"
         const val BRIDGE_NAME = "INSAPOS"
     }
 

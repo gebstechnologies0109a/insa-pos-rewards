@@ -48,7 +48,7 @@ import com.journeyapps.barcodescanner.ScanOptions
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        private const val TAG = "INSAPOSv2"
+        private const val TAG = "INSAPOSv3"
         private const val PERMISSION_REQUEST = 1001
         private const val ACTION_USB_PERMISSION = "com.insapos.v2.USB_PERMISSION"
     }

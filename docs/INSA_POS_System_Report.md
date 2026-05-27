@@ -35,7 +35,7 @@
 | **Analytics & shift tools** | Sales trends, shift variance, audit trails, CSV/PDF exports |
 | **BIR-style X/Z readings** | Mid-shift (X) and end-of-day (Z) reading reports for reconciliation |
 | **Cafe vs retail modes** | Grid ordering for restaurants; barcode-first flow for retail |
-| **Android apps** | Full-featured **INSAPOSv2**, lightweight **INSAPOSlight**, hardware **INSABuddy** |
+| **Android apps** | Full-featured **INSAPOSv3** (`INSAPOSv2/` module), lightweight **INSAPOSlight**, hardware **INSABuddy** |
 | **Customer / loyalty hooks** | Member lookup and rewards integration points on the web POS |
 | **Device logging** | Remote diagnostics from Android terminals |
 
@@ -72,7 +72,7 @@
   - **Cafe/Resto:** Category grid; tap products to add to cart
   - **Retail:** Barcode scan or search; optional preview-before-add
 - **Offline:** Dexie/IndexedDB (`public/js/db.js`) caches products, customers, local transactions; `public/js/sync-engine.js` pings server and pushes/pulls on interval (~15s)
-- **Hardware:** `public/js/insabuddy.js` talks to INSABuddy (port **18181**) or INSAPOSv2 built-in server (port **18182**) for print, drawer, scan
+- **Hardware:** `public/js/insabuddy.js` talks to INSABuddy (port **18181**) or INSAPOSv3 built-in server (port **18182**) for print, drawer, scan
 - **Shifts:** Open/close via `/api/pos/shift/*`
 - **Payments:** Cash, cards, GCash, Maya, PalawanPay, other (validated server-side on sync)
 - **Readings:** X/Z via `/api/pos/x-reading` and `/api/pos/z-reading`
@@ -112,12 +112,12 @@ Dedicated UI under `/stockman`:
 
 | App | Package | Version (build.gradle) | Use when |
 |-----|---------|------------------------|----------|
-| **INSAPOSv2** | `com.insapos.v2` | **2.2r** (versionCode 18) | **Recommended** full POS terminal: WebView + foreground service, NanoHTTPD on **18182**, native offline DB, printer/scanner bridge, barcode events |
+| **INSAPOSv3** | `com.insapos.v2` | **3.0.1** (versionCode 24) | **Recommended** full POS terminal: WebView + foreground service, NanoHTTPD on **18182**, native offline DB, printer/scanner bridge, barcode events |
 | **INSAPOSlight** | `com.insapos.light` | **1.0a** (versionCode 1) | Minimal WebView shell; online-focused (`INSAPOS_OFFLINE_CAPABLE = false`); no local hardware server |
 | **INSABuddy** | `com.insapos.insabuddy` | **1.3.0** (versionCode 3) | Standalone hardware companion: thermal printer, cash drawer, scanner on port **18181** while any browser/WebView loads the web POS |
 | **INSAPOS** (legacy) | `com.insapos.posapp` | 1.0.0 | Older WebView wrapper; superseded by v2 for new deployments |
 
-**Typical setup:** Install **INSAPOSv2** on the cashier tablet *or* use **INSAPOSlight** + **INSABuddy** on separate devices if you split hardware from display.
+**Typical setup:** Install **INSAPOSv3** on the cashier tablet *or* use **INSAPOSlight** + **INSABuddy** on separate devices if you split hardware from display.
 
 ### Inventory System (Batches, FEFO, Expiry)
 
@@ -152,7 +152,7 @@ Dedicated UI under `/stockman`:
 flowchart TB
     subgraph clients [Client Layer]
         Browser[Web Browser]
-        V2[INSAPOSv2 WebView]
+        V2[INSAPOSv3 WebView]
         Lite[INSAPOSlight WebView]
         Buddy[INSABuddy Service]
     end
@@ -278,7 +278,7 @@ INSA_POS/
 │   ├── web.php                  # All UI routes + role middleware
 │   ├── console.php              # Scheduler: inventory:scan-expiry daily
 │   └── pos/api.php              # /api/pos/* JSON endpoints
-├── INSAPOSv2/                   # Full Android POS (v2.2r)
+├── INSAPOSv2/                   # Full Android POS (INSAPOSv3 branding, v3.0.1)
 ├── INSAPOSlight/                # Lite WebView (1.0a)
 ├── INSABuddy/                   # Hardware companion (1.3.0)
 ├── INSAPOS/                     # Legacy WebView (1.0.0)
@@ -381,7 +381,7 @@ INSA_POS/
 
 ### `.github/workflows/build-android.yml`
 
-On push to `main` (or manual dispatch), builds debug APKs for INSABuddy, INSAPOS, INSAPOSv2 (debug + release unsigned), and INSAPOSlight; uploads artifacts (90-day retention).
+On push to `main` (or manual dispatch), builds debug APKs for INSABuddy, INSAPOS, INSAPOSv3 (`INSAPOSv2/` module; debug + release unsigned), and INSAPOSlight; uploads artifacts (90-day retention).
 
 ---
 
@@ -389,7 +389,7 @@ On push to `main` (or manual dispatch), builds debug APKs for INSABuddy, INSAPOS
 
 ### WebView ↔ Web (`window.INSAPOS`)
 
-**INSAPOSv2** injects on page load (simplified):
+**INSAPOSv3** injects on page load (simplified):
 
 ```javascript
 window.INSAPOS_DEVICE = { /* device JSON */ };
@@ -422,13 +422,13 @@ Base: `http://127.0.0.1:18181`
 
 CORS: `Access-Control-Allow-Origin: *` on responses.
 
-### INSAPOSv2 Local Server (port 18182)
+### INSAPOSv3 Local Server (port 18182)
 
 Base: `http://127.0.0.1:18182` (bound to localhost only)
 
 | Endpoint | Description |
 |----------|-------------|
-| `/ping` | `{ "ok": true, "app": "INSAPOSv2", "port": 18182 }` |
+| `/ping` | `{ "ok": true, "app": "INSAPOSv3", "port": 18182 }` |
 | `/device/info` | Device + app version |
 | `/print`, `/drawer/open` | Same semantics as Buddy |
 | `/printer/status`, `/printer/list`, `/printer/select` | Printer routing |
@@ -488,7 +488,7 @@ Workflow: `.github/workflows/build-android.yml`
 - **Trigger:** Push to `main` affecting Android folders, or `workflow_dispatch`
 - **JDK:** 17 (Temurin)
 - **SDK:** Android 35, build-tools 35.0.0
-- **Artifacts:** Debug APKs (all apps); INSAPOSv2 also uploads unsigned release APK
+- **Artifacts:** Debug APKs (all apps); INSAPOSv3 (`INSAPOSv2/` module) also uploads unsigned release APK
 
 ### Operational Commands
 

@@ -45,7 +45,8 @@ if (! function_exists('is_insa_android_app')) {
 
         $ua = strtolower($request->userAgent() ?? '');
 
-        return str_contains($ua, 'insaposv2/')
+        return str_contains($ua, 'insaposv3/')
+            || str_contains($ua, 'insaposv2/')
             || str_contains($ua, 'insapos/')
             || str_contains($ua, 'insaposlight/')
             || str_contains($ua, 'insabuddy/');

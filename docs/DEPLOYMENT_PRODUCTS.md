@@ -4,7 +4,7 @@ This monorepo contains **two products** that share Laravel code and a database, 
 
 | Product | Web hostname (production) | Android app | Admin UI |
 |---------|---------------------------|-------------|----------|
-| **INSA POS** | `insapos.diybizrewards.com` | `INSAPOS/`, `INSAPOSv2/` | Back office, cashier, super-admin (licenses/branches) |
+| **INSA POS** | `insapos.diybizrewards.com` | `INSAPOS/`, `INSAPOSv2/` (INSAPOSv3 app) | Back office, cashier, super-admin (licenses/branches) |
 | **ePay Plus** | `epayplus.diybizrewards.com` | `ePayPlus/` | `/epayplus/*` admin, kiosk API (`/api/v2/*`), Maya Biller |
 
 Do **not** deploy the ePay Plus APK to INSA devices (or vice versa). Each APK is configured for its own API base URL and feature set.

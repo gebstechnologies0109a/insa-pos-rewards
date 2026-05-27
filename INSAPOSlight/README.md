@@ -7,8 +7,8 @@ Minimal WebView shell for the fastest possible cold start. Use this app when you
 | Need | Use |
 |------|-----|
 | Fastest startup, online-only POS | **INSAPOSlight** |
-| USB/Bluetooth printer, cash drawer | **INSAPOSv2** or **INSABuddy** + Lite |
-| Offline sales + product cache | **INSAPOSv2** |
+| USB/Bluetooth printer, cash drawer | **INSAPOSv3** or **INSABuddy** + Lite |
+| Offline sales + product cache | **INSAPOSv3** |
 | HID barcode scanner (keyboard wedge) | Either (Lite passes keys to WebView) |
 
 ## Performance profile

@@ -159,7 +159,7 @@ class LocalServer(
         val json = JSONObject().apply {
             put("ok", true)
             put("io_api", false)
-            put("message", "Full I/O setup requires INSAPOSv2. HID scanner and camera scan still work.")
+            put("message", "Full I/O setup requires INSAPOSv3. HID scanner and camera scan still work.")
             put("keyboards", JSONArray())
             put("mice", JSONArray())
             put("scanners", JSONArray())
@@ -173,7 +173,7 @@ class LocalServer(
             put("ok", true)
             put("saved", false)
             put("io_api", false)
-            put("message", "I/O preferences are saved on INSAPOSv2 only.")
+            put("message", "I/O preferences are saved on INSAPOSv3 only.")
         }
         return jsonResponse(json)
     }
