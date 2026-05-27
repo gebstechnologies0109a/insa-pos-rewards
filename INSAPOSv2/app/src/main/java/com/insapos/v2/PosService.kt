@@ -5,7 +5,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.usb.UsbManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -40,6 +44,7 @@ class PosService : Service() {
     var hidScannerDriver: HidScannerDriver? = null
     var onCameraScanRequested: (() -> Unit)? = null
     val ioPreferences: IoPreferencesStore by lazy { IoPreferencesStore(this) }
+    private var usbReceiver: BroadcastReceiver? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): PosService = this@PosService
@@ -51,6 +56,8 @@ class PosService : Service() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
+
+        registerUsbReceiver()
 
         scope.launch {
             try {
@@ -94,15 +101,51 @@ class PosService : Service() {
         }
     }
 
-    fun startSyncEngine(connectivity: ConnectivityMonitor) {
+    fun startSyncEngine(connectivity: ConnectivityMonitor, cookies: () -> String? = { null }) {
         if (syncEngine != null) return
         val db = offlineDb ?: return
         val session = SessionManager(this)
-        syncEngine = SyncEngine(this, db, session, connectivity).also { it.start() }
+        syncEngine = SyncEngine(this, db, session, connectivity, cookies).also { it.start() }
         Log.i(TAG, "Sync engine started")
     }
 
+    private fun registerUsbReceiver() {
+        if (usbReceiver != null) return
+        usbReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                        Log.i(TAG, "USB device attached — reconnecting printer")
+                        scope.launch {
+                            printerManager?.scanUsbPrinters()?.forEach { /* refresh list */ }
+                            printerManager?.reconnect()
+                        }
+                    }
+                    UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                        Log.i(TAG, "USB device detached")
+                    }
+                }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(usbReceiver, filter)
+        }
+    }
+
     override fun onDestroy() {
+        usbReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (_: Exception) {
+            }
+        }
+        usbReceiver = null
         syncEngine?.stop()
         localServer?.stop()
         printerManager?.release()

@@ -1561,6 +1561,9 @@ function posApp() {
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
             if (this.hasNativeBridge) {
                 try { this._nativeScanPort = window.INSAPOS.getServicePort() || 18182; } catch { this._nativeScanPort = 18182; }
+                if (this.config.branchId && typeof window.INSAPOS.setBranchId === 'function') {
+                    try { window.INSAPOS.setBranchId(this.config.branchId); } catch (e) {}
+                }
                 this.checkAndroidLocalHealth();
             }
             if (!this.licenseActive) return;
@@ -1582,6 +1585,9 @@ function posApp() {
             if (result.ok) {
                 this.licenseBlocked = false;
                 this.terminalSessionReady = true;
+                if (typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.setTerminalSessionId === 'function') {
+                    try { window.INSAPOS.setTerminalSessionId(result.sessionId || ''); } catch (e) {}
+                }
                 return true;
             }
             this.licenseBlocked = true;

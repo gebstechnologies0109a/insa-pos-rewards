@@ -13,12 +13,14 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 class SyncEngine(
     private val context: Context,
     private val db: OfflineDatabase,
     private val session: SessionManager,
-    private val connectivity: ConnectivityMonitor
+    private val connectivity: ConnectivityMonitor,
+    private val cookieProvider: () -> String? = { null }
 ) {
     companion object {
         private const val TAG = "SyncEngine"
@@ -53,6 +55,7 @@ class SyncEngine(
     fun syncNow() {
         scope.launch {
             pushTransactions()
+            pushSyncQueue()
             pullData()
         }
     }
@@ -88,19 +91,22 @@ class SyncEngine(
         updateStatus(SyncStatus.PUSHING)
         Log.i(TAG, "Pushing ${unsynced.length()} unsynced transactions")
 
+        var synced = 0
         for (i in 0 until unsynced.length()) {
             val txn = unsynced.getJSONObject(i)
+            val payload = buildPushPayload(txn) ?: continue
             try {
                 val response = httpPost(
-                    "${session.getBaseUrl()}/api/pos/sync/push-transaction",
-                    txn
+                    "${session.getBaseUrl()}/api/pos/sync/push",
+                    payload
                 )
-                if (response != null && response.optBoolean("ok")) {
-                    val serverId = response.optInt("server_id", 0)
+                if (response != null && response.optBoolean("success")) {
+                    val serverId = response.optInt("server_id", response.optJSONObject("sale")?.optInt("id", 0) ?: 0)
                     db.markTransactionSynced(txn.getString("local_id"), serverId)
+                    synced++
                     Log.i(TAG, "Synced transaction: ${txn.getString("local_id")} -> server #$serverId")
                 } else {
-                    Log.w(TAG, "Push failed for ${txn.getString("local_id")}: ${response?.optString("error")}")
+                    Log.w(TAG, "Push failed for ${txn.optString("local_id")}: ${response?.optString("message")}")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Push error: ${e.message}")
@@ -108,7 +114,7 @@ class SyncEngine(
         }
 
         val remaining = db.getUnsyncedCount()
-        db.logSync("push", "transactions", unsynced.length() - remaining, "completed")
+        db.logSync("push", "transactions", synced, "completed")
         updateStatus(if (remaining > 0) SyncStatus.PARTIAL else SyncStatus.IDLE)
     }
 
@@ -121,15 +127,25 @@ class SyncEngine(
             try {
                 val payload = JSONObject(item.getString("payload"))
                 val action = item.getString("action")
-                val endpoint = "${session.getBaseUrl()}/api/pos/sync/$action"
+                val endpoint = when (action) {
+                    "push-transaction", "transaction_push" ->
+                        "${session.getBaseUrl()}/api/pos/sync/push"
+                    else -> "${session.getBaseUrl()}/api/pos/sync/$action"
+                }
 
-                val response = httpPost(endpoint, payload)
-                if (response != null && response.optBoolean("ok")) {
+                val body = if (action == "push-transaction" || action == "transaction_push") {
+                    buildPushPayload(payload) ?: payload
+                } else {
+                    payload
+                }
+
+                val response = httpPost(endpoint, body)
+                if (response != null && (response.optBoolean("success") || response.optBoolean("ok"))) {
                     db.markSyncItemDone(item.getLong("id"))
                 } else {
                     db.markSyncItemFailed(
                         item.getLong("id"),
-                        response?.optString("error") ?: "Unknown error"
+                        response?.optString("message") ?: response?.optString("error") ?: "Unknown error"
                     )
                 }
             } catch (e: Exception) {
@@ -143,20 +159,39 @@ class SyncEngine(
         Log.i(TAG, "Pulling data from server")
 
         try {
-            val lastSync = db.getSetting("last_pull_at") ?: ""
-            val params = if (lastSync.isNotBlank()) "?since=$lastSync" else ""
+            val branchId = session.branchId
+            if (branchId == null) {
+                Log.w(TAG, "Skipping pull — branch_id not set (call INSAPOS.setBranchId from cashier)")
+                updateStatus(SyncStatus.IDLE)
+                return
+            }
 
-            val productsJson = httpGet("${session.getBaseUrl()}/api/pos/sync/pull-products$params")
-            if (productsJson != null) {
+            val lastSync = db.getSetting("inventory_last_sync") ?: db.getSetting("last_pull_at") ?: ""
+            val params = buildString {
+                append("?branch_id=").append(URLEncoder.encode(branchId.toString(), "UTF-8"))
+                if (lastSync.isNotBlank()) {
+                    append("&since=").append(URLEncoder.encode(lastSync, "UTF-8"))
+                }
+            }
+
+            val productsJson = httpGet("${session.getBaseUrl()}/api/pos/sync/pull$params")
+            if (productsJson != null && productsJson.optBoolean("success", true)) {
                 val products = productsJson.optJSONArray("products") ?: JSONArray()
                 if (products.length() > 0) {
                     val count = db.upsertProducts(products)
                     db.logSync("pull", "products", count, "completed")
-                    Log.i(TAG, "Pulled $count products")
+                    Log.i(TAG, "Pulled $count products (batch stock)")
+                }
+                val pulledAt = productsJson.optString("pulled_at", "")
+                if (pulledAt.isNotBlank()) {
+                    db.setSetting("inventory_last_sync", pulledAt)
+                    db.setSetting("last_pull_at", pulledAt)
+                } else {
+                    db.setSetting("last_pull_at", now())
                 }
             }
 
-            val customersJson = httpGet("${session.getBaseUrl()}/api/pos/sync/pull-customers$params")
+            val customersJson = httpGet("${session.getBaseUrl()}/api/pos/customers/all")
             if (customersJson != null) {
                 val customers = customersJson.optJSONArray("customers") ?: JSONArray()
                 if (customers.length() > 0) {
@@ -166,7 +201,6 @@ class SyncEngine(
                 }
             }
 
-            db.setSetting("last_pull_at", now())
             updateStatus(SyncStatus.IDLE)
         } catch (e: Exception) {
             Log.e(TAG, "Pull failed: ${e.message}")
@@ -175,29 +209,84 @@ class SyncEngine(
         }
     }
 
-    // --- HTTP helpers ---
+    private fun buildPushPayload(txn: JSONObject): JSONObject? {
+        val localId = txn.optString("local_id", "")
+        if (localId.isBlank()) return null
+
+        val branchId = session.branchId ?: txn.optInt("branch_id", 0).takeIf { it > 0 }
+        if (branchId == null || branchId == 0) return null
+
+        val items = mapItemsForPush(parseItems(txn))
+        if (items.length() == 0) return null
+
+        return JSONObject().apply {
+            put("local_id", localId)
+            put("branch_id", branchId)
+            if (txn.has("shift_id") && !txn.isNull("shift_id")) {
+                put("shift_id", txn.optInt("shift_id"))
+            }
+            val cashierId = txn.optInt("cashier_id", 0)
+            if (cashierId > 0) put("cashier_id", cashierId)
+            if (txn.has("member_id") && !txn.isNull("member_id")) {
+                put("member_id", txn.optInt("member_id"))
+            }
+            put("payment_method", txn.optString("payment_method", "cash"))
+            put("amount_tendered", txn.optDouble("amount_tendered", txn.optDouble("total", 0.0)))
+            put("items", items)
+            put("created_at", txn.optString("created_at", now()))
+        }
+    }
+
+    private fun parseItems(txn: JSONObject): JSONArray {
+        val raw = txn.optString("items_json", "")
+        if (raw.isNotBlank()) {
+            try {
+                return JSONArray(raw)
+            } catch (_: Exception) {
+            }
+        }
+        return txn.optJSONArray("items") ?: JSONArray()
+    }
+
+    private fun mapItemsForPush(items: JSONArray): JSONArray {
+        val out = JSONArray()
+        for (i in 0 until items.length()) {
+            val item = items.getJSONObject(i)
+            out.put(JSONObject().apply {
+                put("product_id", item.optInt("product_id", item.optInt("id", 0)))
+                put("product_name", item.optString("product_name", item.optString("name", "Item")))
+                put("sku", item.optString("sku", JSONObject.NULL))
+                put("barcode", item.optString("barcode", JSONObject.NULL))
+                put("qty", item.optDouble("qty", item.optDouble("quantity", 1.0)))
+                put("price", item.optDouble("price", 0.0))
+                put("discount", item.optDouble("discount", 0.0))
+            })
+        }
+        return out
+    }
+
+    private fun applyRequestHeaders(conn: HttpURLConnection) {
+        conn.setRequestProperty("Accept", "application/json")
+        cookieProvider()?.let { cookies ->
+            if (cookies.isNotBlank()) {
+                conn.setRequestProperty("Cookie", cookies)
+            }
+        }
+    }
 
     private fun httpPost(urlStr: String, body: JSONObject): JSONObject? {
         return try {
             val conn = URL(urlStr).openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("Accept", "application/json")
+            applyRequestHeaders(conn)
             conn.connectTimeout = 15000
             conn.readTimeout = 15000
             conn.doOutput = true
 
             OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
 
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val responseText = BufferedReader(InputStreamReader(stream)).use { it.readText() }
-            conn.disconnect()
-
-            if (code in 200..299) JSONObject(responseText) else {
-                Log.w(TAG, "HTTP $code: $responseText")
-                null
-            }
+            readJsonResponse(conn)
         } catch (e: Exception) {
             Log.e(TAG, "httpPost error: ${e.message}")
             null
@@ -208,18 +297,27 @@ class SyncEngine(
         return try {
             val conn = URL(urlStr).openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
-            conn.setRequestProperty("Accept", "application/json")
+            applyRequestHeaders(conn)
             conn.connectTimeout = 15000
             conn.readTimeout = 15000
 
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val responseText = BufferedReader(InputStreamReader(stream)).use { it.readText() }
-            conn.disconnect()
-
-            if (code in 200..299) JSONObject(responseText) else null
+            readJsonResponse(conn)
         } catch (e: Exception) {
             Log.e(TAG, "httpGet error: ${e.message}")
+            null
+        }
+    }
+
+    private fun readJsonResponse(conn: HttpURLConnection): JSONObject? {
+        val code = conn.responseCode
+        val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+        val responseText = BufferedReader(InputStreamReader(stream)).use { it.readText() }
+        conn.disconnect()
+
+        return if (code in 200..299) {
+            JSONObject(responseText)
+        } else {
+            Log.w(TAG, "HTTP $code: $responseText")
             null
         }
     }

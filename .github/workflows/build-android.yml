@@ -95,7 +95,7 @@ jobs:
           retention-days: 90
 
   build-insaposv2:
-    name: Build INSAPOS v2.2t APK
+    name: Build INSAPOS v2.2u APK
     runs-on: ubuntu-latest
 
     steps:
@@ -132,17 +132,17 @@ jobs:
         working-directory: INSAPOSv2
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Upload INSAPOS v2.2t Debug APK
+      - name: Upload INSAPOS v2.2u Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: INSAPOS-v2.2t-debug
+          name: INSAPOS-v2.2u-debug
           path: INSAPOSv2/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 90
 
-      - name: Upload INSAPOS v2.2t Release APK
+      - name: Upload INSAPOS v2.2u Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: INSAPOS-v2.2t-release
+          name: INSAPOS-v2.2u-release
           path: INSAPOSv2/app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 90
 

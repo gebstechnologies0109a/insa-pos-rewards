@@ -75,10 +75,7 @@ class MainActivity : AppCompatActivity() {
             if (code != null) {
                 posService?.localServer?.lastCameraScanResult = code
                 handler.post {
-                    webView.evaluateJavascript(
-                        "if(window.onINSAPOSBarcode) window.onINSAPOSBarcode('${code.replace("'", "\\'")}');",
-                        null
-                    )
+                    dispatchBarcodeToWeb(code)
                 }
             } else {
                 posService?.localServer?.lastCameraScanResult = ""
@@ -134,12 +131,7 @@ class MainActivity : AppCompatActivity() {
 
         hidScanner = HidScannerDriver { barcode ->
             Log.i(TAG, "HID Scan: $barcode")
-            runOnUiThread {
-                webView.evaluateJavascript(
-                    "if(window.onINSAPOSBarcode) window.onINSAPOSBarcode('$barcode');",
-                    null
-                )
-            }
+            runOnUiThread { dispatchBarcodeToWeb(barcode) }
         }
 
         requestPermissions()
@@ -154,6 +146,9 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         goFullscreen()
+        if (::webView.isInitialized) {
+            webView.requestFocus()
+        }
     }
 
     override fun onDestroy() {
@@ -418,9 +413,19 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
+    private fun dispatchBarcodeToWeb(barcode: String) {
+        val quoted = org.json.JSONObject.quote(barcode)
+        webView.evaluateJavascript(
+            "if(window.onINSAPOSBarcode) window.onINSAPOSBarcode($quoted);",
+            null
+        )
+    }
+
     private fun onPageReadyForService(service: PosService) {
         if (!syncEngineStarted) {
-            service.startSyncEngine(connectivity)
+            service.startSyncEngine(connectivity) {
+                CookieManager.getInstance().getCookie(session.getBaseUrl())
+            }
             syncEngineStarted = true
             service.syncEngine?.onSyncStatusChanged = { runOnUiThread { updateSyncBadge() } }
             updateSyncBadge()
@@ -540,6 +545,11 @@ class MainActivity : AppCompatActivity() {
                 window.INSAPOS_SERVICE_PORT = ${PosLocalServer.PORT};
                 window.INSAPOS_OFFLINE_CAPABLE = true;
                 window.INSAPOS_ONLINE = $isOnline;
+                try {
+                    if (typeof INSAPOS !== 'undefined' && INSAPOS.getDeviceFingerprint) {
+                        localStorage.setItem('insapos_device_fingerprint', INSAPOS.getDeviceFingerprint());
+                    }
+                } catch (e) {}
                 if (window.onINSAPOSReady) window.onINSAPOSReady(window.INSAPOS_DEVICE);
                 document.dispatchEvent(new CustomEvent('insapos:ready', { detail: window.INSAPOS_DEVICE }));
             })();

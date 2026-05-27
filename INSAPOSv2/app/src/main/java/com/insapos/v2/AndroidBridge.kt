@@ -12,6 +12,8 @@ class AndroidBridge(private val context: Context) {
         const val BRIDGE_NAME = "INSAPOS"
     }
 
+    private val session by lazy { SessionManager(context) }
+
     @JavascriptInterface
     fun getDeviceInfo(): String {
         return DeviceInfo.toJsonString(context)
@@ -20,6 +22,28 @@ class AndroidBridge(private val context: Context) {
     @JavascriptInterface
     fun getAppVersion(): String {
         return BuildConfig.VERSION_NAME
+    }
+
+    @JavascriptInterface
+    fun getDeviceFingerprint(): String {
+        return DeviceFingerprint.get(context)
+    }
+
+    @JavascriptInterface
+    fun getTerminalId(): String {
+        return session.terminalSessionId ?: ""
+    }
+
+    @JavascriptInterface
+    fun setTerminalSessionId(sessionId: String?) {
+        session.terminalSessionId = sessionId?.takeIf { it.isNotBlank() }
+    }
+
+    @JavascriptInterface
+    fun setBranchId(branchId: Int) {
+        if (branchId > 0) {
+            session.branchId = branchId
+        }
     }
 
     @JavascriptInterface

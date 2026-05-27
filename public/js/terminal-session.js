@@ -17,6 +17,13 @@
 
     function getFingerprint() {
         try {
+            if (typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.getDeviceFingerprint === 'function') {
+                const nativeFp = window.INSAPOS.getDeviceFingerprint();
+                if (nativeFp) {
+                    localStorage.setItem(FINGERPRINT_KEY, nativeFp);
+                    return nativeFp;
+                }
+            }
             let fp = localStorage.getItem(FINGERPRINT_KEY);
             if (fp) return fp;
             const parts = [

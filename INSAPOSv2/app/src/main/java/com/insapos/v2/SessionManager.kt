@@ -14,6 +14,8 @@ class SessionManager(context: Context) {
         private const val KEY_SERVER_DOMAIN = "server_domain"
         private const val KEY_SELECTED_PRINTER = "selected_printer"
         private const val KEY_FIRST_LAUNCH = "first_launch"
+        private const val KEY_BRANCH_ID = "branch_id"
+        private const val KEY_TERMINAL_SESSION_ID = "terminal_session_id"
     }
 
     var lastUrl: String?
@@ -35,6 +37,19 @@ class SessionManager(context: Context) {
     var isFirstLaunch: Boolean
         get() = prefs.getBoolean(KEY_FIRST_LAUNCH, true)
         set(value) = prefs.edit().putBoolean(KEY_FIRST_LAUNCH, value).apply()
+
+    var branchId: Int?
+        get() {
+            val v = prefs.getInt(KEY_BRANCH_ID, -1)
+            return if (v > 0) v else null
+        }
+        set(value) = prefs.edit().apply {
+            if (value != null && value > 0) putInt(KEY_BRANCH_ID, value) else remove(KEY_BRANCH_ID)
+        }.apply()
+
+    var terminalSessionId: String?
+        get() = prefs.getString(KEY_TERMINAL_SESSION_ID, null)
+        set(value) = prefs.edit().putString(KEY_TERMINAL_SESSION_ID, value).apply()
 
     fun getBaseUrl(): String {
         val protocol = if (useHttp) "http" else "https"

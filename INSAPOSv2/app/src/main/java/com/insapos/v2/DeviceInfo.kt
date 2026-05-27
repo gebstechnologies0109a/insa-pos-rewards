@@ -15,11 +15,14 @@ object DeviceInfo {
             context.contentResolver,
             Settings.Secure.ANDROID_ID
         )
+        val fingerprint = DeviceFingerprint.get(context)
         return JSONObject().apply {
             put("app", "INSAPOSv2")
             put("version", BuildConfig.VERSION_NAME)
             put("versionCode", BuildConfig.VERSION_CODE)
             put("deviceId", deviceId)
+            put("device_fingerprint", fingerprint)
+            put("fingerprint", fingerprint)
             put("manufacturer", Build.MANUFACTURER)
             put("model", Build.MODEL)
             put("brand", Build.BRAND)
