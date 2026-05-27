@@ -6,7 +6,7 @@ Both products live in one Git repository but deploy to **separate Forge sites** 
 
 | Forge site | Hostname | Deploy branch | Deploy script |
 |------------|----------|---------------|---------------|
-| **insapos** | `insapos.diybizrewards.com` | `deploy/insa` | `scripts/forge-deploy-insa.sh` |
+| **insapos** / **insa-pos-rewards** | `insapos.diybizrewards.com` (or Forge site path) | `deploy/insa` | `scripts/forge-deploy-insa.sh` |
 | **epayplus** | `epayplus.diybizrewards.com` | `deploy/epayplus` | `scripts/forge-deploy-epayplus.sh` |
 
 | Branch | Role |
@@ -58,7 +58,7 @@ For each site: **Forge → Server → Site → App → Deployment**
 | **Deploy script** | Contents of `scripts/forge-deploy-insa.sh` (or append its steps after `git pull`) |
 | **Quick Deploy** | Optional — enable only if you want auto-deploy on push to `deploy/insa` |
 
-Confirm `.env` contains `APP_PRODUCT=insa`.
+Confirm Forge **Site → Environment** contains `APP_PRODUCT=insa` (required; deploy aborts if missing).
 
 ### epayplus.diybizrewards.com
 

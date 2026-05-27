@@ -1,4 +1,6 @@
 #!/bin/bash
+# Legacy generic template. Prefer scripts/forge-deploy-insa.sh or scripts/forge-deploy-epayplus.sh.
+# INSA Forge sites require APP_PRODUCT=insa in Site → Environment (see docs/FORGE_DEPLOY.md).
 cd $FORGE_SITE_PATH || cd /home/forge/insapos.diybizrewards.com
 
 git pull origin $FORGE_SITE_BRANCH

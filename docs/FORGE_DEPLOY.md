@@ -5,11 +5,37 @@ Production sites use **parted deploy branches** — see [DEPLOYMENT_SEPARATION.m
 | Site | Branch | Script |
 |------|--------|--------|
 | insapos.diybizrewards.com | `deploy/insa` | `scripts/forge-deploy-insa.sh` |
+| insa-pos-rewards (Forge site) | `deploy/insa` | `scripts/forge-deploy-insa.sh` |
 | epayplus.diybizrewards.com | `deploy/epayplus` | `scripts/forge-deploy-epayplus.sh` |
 
 The repo root `deploy.sh` is a legacy generic template. New Forge sites should use the product scripts above.
 
 Forge injects `FORGE_SITE_PATH`, `FORGE_SITE_BRANCH`, and `FORGE_COMPOSER` when the script runs on the server.
+
+## Required: APP_PRODUCT in Forge Environment
+
+Each Forge site must declare which product it runs. Without this, `scripts/forge-deploy-insa.sh` aborts with:
+
+```text
+ERROR: APP_PRODUCT must be 'insa' on this site (found: '<unset>')
+```
+
+**One-time setup for INSA sites** (insapos, insa-pos-rewards, etc.):
+
+1. Forge → **Server** → **Site** → **Environment**
+2. Add or confirm this line in the site's `.env`:
+
+   ```env
+   APP_PRODUCT=insa
+   ```
+
+3. Save. Redeploy.
+
+For ePay Plus sites, use `APP_PRODUCT=epayplus` instead (see [DEPLOYMENT_PRODUCTS.md](./DEPLOYMENT_PRODUCTS.md)).
+
+Optional: under **Site → Deployment**, enable **Make .env variables available to deployment script** so `APP_PRODUCT` is also visible as a shell variable during deploy.
+
+The INSA deploy script can auto-write `APP_PRODUCT=insa` on first deploy when the Forge site path looks like an INSA host (`insapos`, `insa-pos-rewards`, etc.) and the value is missing or `auto`. Setting it explicitly in Forge Environment is still recommended so config is correct before the deploy hook runs.
 
 ## SSH access
 
@@ -26,10 +52,10 @@ Do not commit or share private keys. Only the public key belongs in Forge.
 
 ## Forge deploy script
 
-In **Forge → Site → insapos (insapos.diybizrewards.com) → Deployment**:
+In **Forge → Site → Deployment**:
 
-1. Paste the contents of `deploy.sh`, **or**
-2. Set **Deploy branch** to `deploy/insa` (not `main`). Enable **Quick Deploy** on that branch if desired.
+1. Set **Deploy branch** to `deploy/insa` (not `main`). Enable **Quick Deploy** on that branch if desired.
+2. Paste the contents of `scripts/forge-deploy-insa.sh` as the deploy script (not the root `deploy.sh`).
 
 Forge sets `FORGE_SITE_PATH` automatically; the script falls back to `/home/forge/insapos.diybizrewards.com` if needed.
 
@@ -39,7 +65,8 @@ SSH to the server, then:
 
 ```bash
 cd $FORGE_SITE_PATH   # or cd /home/forge/insapos.diybizrewards.com
-git pull origin main
+grep APP_PRODUCT .env  # must show APP_PRODUCT=insa
+git pull origin deploy/insa
 composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 php artisan migrate --force
 php artisan config:cache

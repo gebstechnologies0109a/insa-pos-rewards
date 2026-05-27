@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Laravel Forge deploy hook — INSA POS (insapos.diybizrewards.com)
+# Laravel Forge deploy hook — INSA POS (insapos.diybizrewards.com, insa-pos-rewards, etc.)
 # Forge sets FORGE_SITE_PATH, FORGE_SITE_BRANCH, FORGE_COMPOSER.
 # Point the site at branch deploy/insa and call this script from Deployment.
+#
+# Required once in Forge → Site → Environment:
+#   APP_PRODUCT=insa
+# Enable "Make .env variables available to deployment script" so APP_PRODUCT is visible here.
 
 set -euo pipefail
 
@@ -12,9 +16,42 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-PRODUCT="$(grep -E '^APP_PRODUCT=' .env | tail -1 | cut -d= -f2- | tr -d "'\" \r" || true)"
+read_app_product() {
+  if [ -n "${APP_PRODUCT:-}" ]; then
+    echo "${APP_PRODUCT}"
+    return
+  fi
+  grep -E '^APP_PRODUCT=' .env | tail -1 | cut -d= -f2- | tr -d "'\" \r" || true
+}
+
+is_insa_forge_site() {
+  local path="${FORGE_SITE_PATH:-}${FORGE_SITE_ROOT:-}"
+  case "${path}" in
+    *insapos*|*insa-pos-rewards*|*insa_pos_rewards*|*insa-pos*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+PRODUCT="$(read_app_product)"
+
+if [ "${PRODUCT}" != "insa" ] && { [ -n "${FORGE_SITE_PATH:-}" ] || [ -n "${FORGE_SITE_ROOT:-}" ]; }; then
+  if is_insa_forge_site && { [ -z "${PRODUCT}" ] || [ "${PRODUCT}" = "auto" ]; }; then
+    echo "NOTE: APP_PRODUCT unset/auto on INSA Forge site — writing APP_PRODUCT=insa to .env"
+    if grep -qE '^APP_PRODUCT=' .env; then
+      sed -i.bak 's/^APP_PRODUCT=.*/APP_PRODUCT=insa/' .env
+      rm -f .env.bak
+    else
+      printf '\n# Set by forge-deploy-insa.sh — prefer Forge → Site → Environment\nAPP_PRODUCT=insa\n' >> .env
+    fi
+    PRODUCT=insa
+  fi
+fi
+
 if [ "${PRODUCT}" != "insa" ]; then
   echo "ERROR: APP_PRODUCT must be 'insa' on this site (found: '${PRODUCT:-<unset>}')"
+  echo "Fix: Forge → Site → Environment → add APP_PRODUCT=insa (then redeploy)"
   exit 1
 fi
 
