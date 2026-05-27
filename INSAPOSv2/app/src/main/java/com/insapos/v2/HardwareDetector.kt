@@ -25,7 +25,7 @@ object HardwareDetector {
         val scanners = detectBarcodeScanners(context).map { it.id }.toSet()
         return inputDevices()
             .filter { dev ->
-                dev.isKeyboard && !dev.isVirtual && dev.id !in scanners && !looksLikeScannerName(dev.name)
+                dev.isKeyboard && !dev.isVirtual && dev.id.toString() !in scanners && !looksLikeScannerName(dev.name)
             }
             .map { toIoDevice(it, "keyboard") }
             .distinctBy { it.id }
@@ -68,7 +68,7 @@ object HardwareDetector {
     }
 
     private fun inputDevices(): List<InputDevice> {
-        return InputDevice.getDeviceIds()
+        return InputDevice.getDeviceIds().toList()
             .mapNotNull { id -> InputDevice.getDevice(id) }
     }
 

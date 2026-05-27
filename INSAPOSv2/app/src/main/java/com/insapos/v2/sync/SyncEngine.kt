@@ -255,8 +255,8 @@ class SyncEngine(
             out.put(JSONObject().apply {
                 put("product_id", item.optInt("product_id", item.optInt("id", 0)))
                 put("product_name", item.optString("product_name", item.optString("name", "Item")))
-                put("sku", item.optString("sku", JSONObject.NULL))
-                put("barcode", item.optString("barcode", JSONObject.NULL))
+                put("sku", if (item.isNull("sku")) JSONObject.NULL else item.getString("sku"))
+                put("barcode", if (item.isNull("barcode")) JSONObject.NULL else item.getString("barcode"))
                 put("qty", item.optDouble("qty", item.optDouble("quantity", 1.0)))
                 put("price", item.optDouble("price", 0.0))
                 put("discount", item.optDouble("discount", 0.0))
