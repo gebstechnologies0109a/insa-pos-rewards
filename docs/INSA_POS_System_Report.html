@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>INSA POS System Report</title>
+  <style>
+@page { size: A4; margin: 2cm; }
+body {
+  font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.45;
+  color: #1a1a1a;
+}
+h1 { font-size: 22pt; color: #0f3460; border-bottom: 2px solid #0f3460; padding-bottom: 6px; }
+h2 { font-size: 14pt; color: #16213e; margin-top: 1.2em; page-break-after: avoid; }
+h3 { font-size: 11pt; color: #1a1a2e; page-break-after: avoid; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 9pt; }
+th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+th { background: #e8eef5; }
+code, pre { font-family: Consolas, monospace; font-size: 8.5pt; background: #f4f4f4; }
+pre { padding: 8px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+hr { border: none; border-top: 1px solid #ddd; margin: 1.5em 0; }
+a { color: #0f3460; }
+blockquote { border-left: 3px solid #0f3460; margin-left: 0; padding-left: 12px; color: #444; }
+</style>
+</head>
+<body>
+<h1 id="insa-pos-system-report">INSA POS — System Report</h1>
+<p><strong>Document version:</strong> 1.0<br />
+<strong>Date:</strong> May 27, 2026<br />
+<strong>Repository:</strong> INSA_POS (Laravel + Android companion apps)<br />
+<strong>Production URL:</strong> https://insapos.diybizrewards.com  </p>
+<hr />
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#part-a--executive-summary-for-clients">Part A — Executive Summary</a></li>
+<li><a href="#part-b--features-overview">Part B — Features Overview</a></li>
+<li><a href="#part-c--technical-overview-for-developers">Part C — Technical Overview</a></li>
+<li><a href="#part-d--project-structure-files--folders">Part D — Project Structure</a></li>
+<li><a href="#part-e--integration-points-for-app-developers">Part E — Integration Points for App Developers</a></li>
+<li><a href="#part-f--deployment--operations">Part F — Deployment &amp; Operations</a></li>
+</ol>
+<hr />
+<h2 id="part-a-executive-summary-for-clients">Part A — Executive Summary (for Clients)</h2>
+<h3 id="what-insa-pos-is">What INSA POS Is</h3>
+<p><strong>INSA POS</strong> is a cloud-hosted, branch-aware point-of-sale platform built for Philippine retail and food service businesses. Cashiers run sales through a modern web interface (browser or Android wrapper), while owners and managers use a back office for products, inventory, shifts, analytics, and compliance-style <strong>X/Z readings</strong>. The system is designed to keep selling when connectivity is weak: transactions can be recorded locally and synchronized when the network returns.</p>
+<h3 id="key-features-and-business-benefits">Key Features and Business Benefits</h3>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Business benefit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Offline-first POS</strong></td>
+<td>Continue checkout during outages; sales sync when online</td>
+</tr>
+<tr>
+<td><strong>Multi-branch</strong></td>
+<td>Central catalog with per-branch stock and reporting</td>
+</tr>
+<tr>
+<td><strong>Inventory batches &amp; expiry</strong></td>
+<td>Track lots, FEFO consumption, and expiry alerts (30-day / 7-day / expired)</td>
+</tr>
+<tr>
+<td><strong>Licensing (Super Admin)</strong></td>
+<td>Control how many POS terminals each branch may run</td>
+</tr>
+<tr>
+<td><strong>Analytics &amp; shift tools</strong></td>
+<td>Sales trends, shift variance, audit trails, CSV/PDF exports</td>
+</tr>
+<tr>
+<td><strong>BIR-style X/Z readings</strong></td>
+<td>Mid-shift (X) and end-of-day (Z) reading reports for reconciliation</td>
+</tr>
+<tr>
+<td><strong>Cafe vs retail modes</strong></td>
+<td>Grid ordering for restaurants; barcode-first flow for retail</td>
+</tr>
+<tr>
+<td><strong>Android apps</strong></td>
+<td>Full-featured <strong>INSAPOSv2</strong>, lightweight <strong>INSAPOSlight</strong>, hardware <strong>INSABuddy</strong></td>
+</tr>
+<tr>
+<td><strong>Customer / loyalty hooks</strong></td>
+<td>Member lookup and rewards integration points on the web POS</td>
+</tr>
+<tr>
+<td><strong>Device logging</strong></td>
+<td>Remote diagnostics from Android terminals</td>
+</tr>
+</tbody>
+</table>
+<h3 id="who-its-for">Who It's For</h3>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Typical use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Cashier</strong></td>
+<td><code>/pos/cashier</code> — take orders, payments, receipts</td>
+</tr>
+<tr>
+<td><strong>Stockman</strong></td>
+<td>Stock in/out, inventory views</td>
+</tr>
+<tr>
+<td><strong>Manager</strong></td>
+<td>Back office (read-mostly settings), shifts, inventory reports</td>
+</tr>
+<tr>
+<td><strong>Admin / Owner</strong></td>
+<td>Products, categories, branches, users, POS settings</td>
+</tr>
+<tr>
+<td><strong>Super Admin</strong></td>
+<td>Cross-tenant licenses and branch monitoring</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Business modes:</strong> On first launch, cashiers choose <strong>Cafe/Resto</strong> (product grid) or <strong>Retail</strong> (scan/type barcode). The choice persists in browser local storage (<code>insapos_mode</code>).</p>
+<h3 id="deployment">Deployment</h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Live site</strong></td>
+<td>https://insapos.diybizrewards.com</td>
+</tr>
+<tr>
+<td><strong>Hosting</strong></td>
+<td>Laravel Forge (PHP application server, MySQL, scheduled tasks)</td>
+</tr>
+<tr>
+<td><strong>Source control</strong></td>
+<td>GitHub repository; <code>main</code> branch deploys web app and triggers Android CI</td>
+</tr>
+<tr>
+<td><strong>Android builds</strong></td>
+<td>GitHub Actions workflow <code>build-android.yml</code> produces debug/release APK artifacts</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="part-b-features-overview">Part B — Features Overview</h2>
+<h3 id="web-pos-cashier">Web POS (Cashier)</h3>
+<ul>
+<li><strong>Route:</strong> <code>GET /pos/cashier</code> (roles: cashier, manager, admin, owner)</li>
+<li><strong>UI:</strong> Alpine.js SPA embedded in <code>resources/views/pos/cashier/index.blade.php</code></li>
+<li><strong>Modes:</strong></li>
+<li><strong>Cafe/Resto:</strong> Category grid; tap products to add to cart</li>
+<li><strong>Retail:</strong> Barcode scan or search; optional preview-before-add</li>
+<li><strong>Offline:</strong> Dexie/IndexedDB (<code>public/js/db.js</code>) caches products, customers, local transactions; <code>public/js/sync-engine.js</code> pings server and pushes/pulls on interval (~15s)</li>
+<li><strong>Hardware:</strong> <code>public/js/insabuddy.js</code> talks to INSABuddy (port <strong>18181</strong>) or INSAPOSv2 built-in server (port <strong>18182</strong>) for print, drawer, scan</li>
+<li><strong>Shifts:</strong> Open/close via <code>/api/pos/shift/*</code></li>
+<li><strong>Payments:</strong> Cash, cards, GCash, Maya, PalawanPay, other (validated server-side on sync)</li>
+<li><strong>Readings:</strong> X/Z via <code>/api/pos/x-reading</code> and <code>/api/pos/z-reading</code></li>
+</ul>
+<h3 id="back-office">Back Office</h3>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Routes (prefix)</th>
+<th>Highlights</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dashboard</td>
+<td><code>/backoffice</code></td>
+<td>KPIs, shift summary widgets</td>
+</tr>
+<tr>
+<td>Analytics</td>
+<td><code>/backoffice/analytics</code></td>
+<td>Chart.js charts, product drill-down</td>
+</tr>
+<tr>
+<td>Shifts</td>
+<td><code>/backoffice/shifts/*</code></td>
+<td>List, dashboard, variance, audit, PDF/CSV export</td>
+</tr>
+<tr>
+<td>Readings</td>
+<td><code>/backoffice/readings/x</code>, <code>z</code></td>
+<td>Printable X/Z reports + CSV export</td>
+</tr>
+<tr>
+<td>Inventory</td>
+<td><code>/backoffice/inventory/*</code></td>
+<td>Stock levels, movements, inventory &amp; expiry reports, stock in/out</td>
+</tr>
+</tbody>
+</table>
+<h3 id="admin-branch-operations">Admin (Branch Operations)</h3>
+<ul>
+<li><strong>Products &amp; categories:</strong> CRUD, Excel import/export (<code>maatwebsite/excel</code>)</li>
+<li><strong>Branches &amp; users:</strong> Branch assignment, role-based users</li>
+<li><strong>Inventory dashboard:</strong> Low-stock / batch visibility at <code>/admin/inventory</code></li>
+<li><strong>POS settings:</strong> Store name, receipt options, tax/display flags (<code>/pos/settings</code>)</li>
+<li><strong>Device logs:</strong> <code>/insaposlogs</code> — Android-forwarded diagnostics</li>
+</ul>
+<h3 id="super-admin">Super Admin</h3>
+<ul>
+<li><strong>Dashboard:</strong> Cross-branch overview</li>
+<li><strong>Licenses:</strong> <code>pos_slots</code>, active window per branch (<code>PosLicense</code> model)</li>
+<li><strong>Branches:</strong> Monitor branch health and drill into branch detail</li>
+</ul>
+<h3 id="stockman-module">Stockman Module</h3>
+<p>Dedicated UI under <code>/stockman</code>:</p>
+<ul>
+<li>Inventory overview</li>
+<li>Stock in / stock out forms (batch-aware via <code>InventoryService</code>)</li>
+</ul>
+<h3 id="android-applications-when-to-use-each">Android Applications — When to Use Each</h3>
+<table>
+<thead>
+<tr>
+<th>App</th>
+<th>Package</th>
+<th>Version (build.gradle)</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>INSAPOSv2</strong></td>
+<td><code>com.insapos.v2</code></td>
+<td><strong>2.2r</strong> (versionCode 18)</td>
+<td><strong>Recommended</strong> full POS terminal: WebView + foreground service, NanoHTTPD on <strong>18182</strong>, native offline DB, printer/scanner bridge, barcode events</td>
+</tr>
+<tr>
+<td><strong>INSAPOSlight</strong></td>
+<td><code>com.insapos.light</code></td>
+<td><strong>1.0a</strong> (versionCode 1)</td>
+<td>Minimal WebView shell; online-focused (<code>INSAPOS_OFFLINE_CAPABLE = false</code>); no local hardware server</td>
+</tr>
+<tr>
+<td><strong>INSABuddy</strong></td>
+<td><code>com.insapos.insabuddy</code></td>
+<td><strong>1.3.0</strong> (versionCode 3)</td>
+<td>Standalone hardware companion: thermal printer, cash drawer, scanner on port <strong>18181</strong> while any browser/WebView loads the web POS</td>
+</tr>
+<tr>
+<td><strong>INSAPOS</strong> (legacy)</td>
+<td><code>com.insapos.posapp</code></td>
+<td>1.0.0</td>
+<td>Older WebView wrapper; superseded by v2 for new deployments</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Typical setup:</strong> Install <strong>INSAPOSv2</strong> on the cashier tablet <em>or</em> use <strong>INSAPOSlight</strong> + <strong>INSABuddy</strong> on separate devices if you split hardware from display.</p>
+<h3 id="inventory-system-batches-fefo-expiry">Inventory System (Batches, FEFO, Expiry)</h3>
+<ul>
+<li><strong><code>inventory_batches</code>:</strong> Per-branch lots with optional <code>batch_code</code>, <code>expiry_date</code>, <code>quantity</code>, <code>cost_price</code></li>
+<li><strong>FEFO:</strong> <code>InventoryService::stockOut()</code> deducts from batches ordered by earliest expiry (<code>scopeFefoOrder</code>)</li>
+<li><strong>Movements:</strong> <code>stock_movements</code> audit trail (stock_in, sale, adjustment, etc.)</li>
+<li><strong>Alerts:</strong> Daily scheduler runs <code>inventory:scan-expiry</code> → creates idempotent <code>expiry_alerts</code> for 30-day, 7-day, and expired batches</li>
+<li><strong>POS stock display:</strong> Sync pull aggregates non-expired batch quantities per product for the active branch</li>
+</ul>
+<hr />
+<h2 id="part-c-technical-overview-for-developers">Part C — Technical Overview (for Developers)</h2>
+<h3 id="technology-stack">Technology Stack</h3>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Technology</th>
+<th>Version / notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backend framework</td>
+<td>Laravel</td>
+<td><strong>^13.8</strong> (<code>composer.json</code>)</td>
+</tr>
+<tr>
+<td>Language</td>
+<td>PHP</td>
+<td><strong>^8.3</strong></td>
+</tr>
+<tr>
+<td>Database</td>
+<td>MySQL (production), SQLite (local dev)</td>
+<td>Via Laravel <code>.env</code></td>
+</tr>
+<tr>
+<td>PDF (server)</td>
+<td>barryvdh/laravel-dompdf</td>
+<td>^3.1 — shift/report PDFs</td>
+</tr>
+<tr>
+<td>Excel</td>
+<td>maatwebsite/excel</td>
+<td>^3.1 — product import/export</td>
+</tr>
+<tr>
+<td>Frontend (POS)</td>
+<td>Alpine.js 3, Tailwind CSS (CDN)</td>
+<td>Cashier blade</td>
+</tr>
+<tr>
+<td>Build tooling</td>
+<td>Vite 8, Tailwind 4</td>
+<td><code>package.json</code> — welcome/assets pipeline</td>
+</tr>
+<tr>
+<td>Offline storage</td>
+<td>Dexie.js 4</td>
+<td>IndexedDB database name <code>insapos</code></td>
+</tr>
+<tr>
+<td>Charts</td>
+<td>Chart.js 4</td>
+<td>Back-office analytics</td>
+</tr>
+<tr>
+<td>Android</td>
+<td>Kotlin, WebView, NanoHTTPD 2.3.1</td>
+<td>API 23–35, JDK 17</td>
+</tr>
+</tbody>
+</table>
+<h3 id="architecture-diagram">Architecture Diagram</h3>
+<p><em>Architecture diagram: see markdown source or HTML version (Mermaid).</em></p>
+<p><strong>Request flow (online sale):</strong> Cashier UI → optional local queue in IndexedDB → <code>POST /api/pos/sync/push</code> → <code>PosSaleService</code> → <code>inventory_batches</code> deduction (FEFO) + <code>pos_sales</code> / items.</p>
+<h3 id="api-structure-apipos">API Structure (<code>/api/pos/*</code>)</h3>
+<p>Registered in <code>bootstrap/app.php</code>:</p>
+<pre><code class="language-php">Route::middleware(['web', 'auth'])
+    -&gt;prefix('api/pos')
+    -&gt;group(base_path('routes/pos/api.php'));
+</code></pre>
+<p>Uses <strong>web middleware</strong> (session cookies + CSRF). CSRF exceptions: <code>device-log</code>, <code>ping</code>, <code>sync/*</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Auth</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/pos/ping</code></td>
+<td>No</td>
+<td>Connectivity check</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/pos/sync/push</code></td>
+<td>Yes</td>
+<td>Idempotent sale upload (<code>local_id</code>)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/pos/sync/pull</code></td>
+<td>Yes</td>
+<td>Product delta + branch stock</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/pos/customers/all</code></td>
+<td>Yes</td>
+<td>Customer cache for offline</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/pos/sales</code></td>
+<td>Yes</td>
+<td>Direct sale (online)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/pos/products/all</code>, <code>/search</code></td>
+<td>Yes</td>
+<td>Product lookup</td>
+</tr>
+<tr>
+<td>GET/POST</td>
+<td><code>/api/pos/shift/*</code></td>
+<td>Yes</td>
+<td>Shift open/close/current</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/pos/x-reading</code>, <code>/z-reading</code></td>
+<td>Yes</td>
+<td>Generate readings</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/pos/device-log</code></td>
+<td>No</td>
+<td>Android log ingest</td>
+</tr>
+</tbody>
+</table>
+<h3 id="offline-first-indexeddb-and-syncengine">Offline-First: IndexedDB and SyncEngine</h3>
+<p><strong><code>public/js/db.js</code> (INSADB)</strong></p>
+<ul>
+<li>Dexie schema v2: <code>products</code>, <code>customers</code>, <code>categories</code>, <code>cart</code>, <code>transactions_local</code>, <code>sync_queue</code>, <code>receipts</code>, <code>settings</code></li>
+<li>UUID <code>local_id</code> for idempotent server sync</li>
+</ul>
+<p><strong><code>public/js/sync-engine.js</code></strong></p>
+<ul>
+<li>Polls <code>/api/pos/ping</code> (3s timeout)</li>
+<li>Pushes pending transactions to <code>/api/pos/sync/push</code></li>
+<li>Pulls <code>/api/pos/sync/pull?branch_id=&amp;since=</code></li>
+<li>Emits <code>connectivity</code> and <code>syncStatus</code> events for UI badges</li>
+</ul>
+<p><strong>Conflict handling:</strong> Server compares item prices on push; returns <code>conflict</code> array if local price ≠ server price.</p>
+<h3 id="android-integration-summary">Android Integration Summary</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JS bridge name</td>
+<td><code>window.INSAPOS</code> (<code>@JavascriptInterface</code> / <code>addJavascriptInterface</code>)</td>
+</tr>
+<tr>
+<td>Device payload</td>
+<td><code>window.INSAPOS_DEVICE</code>, <code>insapos:ready</code> event</td>
+</tr>
+<tr>
+<td>Service port</td>
+<td><code>window.INSAPOS_SERVICE_PORT</code> (18182 on v2)</td>
+</tr>
+<tr>
+<td>Barcode callback</td>
+<td><code>window.onINSAPOSBarcode(code)</code></td>
+</tr>
+<tr>
+<td>Connectivity</td>
+<td><code>window.onINSAPOSConnectivity(online)</code></td>
+</tr>
+<tr>
+<td>Cookies</td>
+<td>WebView shares Laravel session cookie with hosted origin</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="part-d-project-structure-files-folders">Part D — Project Structure (Files &amp; Folders)</h2>
+<pre><code>INSA_POS/
+├── app/                         # Laravel application code
+│   ├── Console/Commands/        # Artisan commands (incl. inventory:scan-expiry)
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   │   ├── Admin/           # Products, categories, branches, users, inventory dash
+│   │   │   ├── Auth/            # LoginController (session auth)
+│   │   │   ├── Backoffice/      # Analytics, shifts, inventory reports
+│   │   │   ├── POS/             # Sync, sales, shift, readings, settings, lookups
+│   │   │   ├── Stockman/        # Stock in/out UI
+│   │   │   └── SuperAdmin/      # Licenses, branch overview
+│   │   ├── Middleware/
+│   │   │   └── CheckRole.php    # Role gate; super_admin bypasses lists
+│   │   └── Requests/POS/        # StoreSaleRequest, StoreStockInRequest
+│   ├── Models/
+│   │   ├── POS/                 # Product, Branch, PosSale, PosShift, readings, etc.
+│   │   ├── Inventory/           # InventoryBatch, StockMovement, ExpiryAlert
+│   │   ├── Rewards/             # Loyalty / wallet (rewards engine hooks)
+│   │   └── User.php             # Roles: super_admin, owner, admin, manager, cashier, stockman
+│   ├── Services/
+│   │   ├── POS/                 # PosSaleService, ShiftService, StockInService, …
+│   │   ├── Inventory/           # InventoryService (FEFO stock out, stock in)
+│   │   ├── ReadingService.php   # X/Z reading generation
+│   │   └── Rewards/             # RewardsEngineService
+│   └── Imports/                 # ProductsImport (Excel)
+├── bootstrap/app.php            # Routes web + api/pos group; CSRF exceptions
+├── database/migrations/         # 35 migrations (POS core + inventory batches May 2026)
+├── resources/views/             # Blade templates by module (pos, backoffice, admin, …)
+├── public/js/                   # db.js, sync-engine.js, insabuddy.js, json-viewer.js
+├── routes/
+│   ├── web.php                  # All UI routes + role middleware
+│   ├── console.php              # Scheduler: inventory:scan-expiry daily
+│   └── pos/api.php              # /api/pos/* JSON endpoints
+├── INSAPOSv2/                   # Full Android POS (v2.2r)
+├── INSAPOSlight/                # Lite WebView (1.0a)
+├── INSABuddy/                   # Hardware companion (1.3.0)
+├── INSAPOS/                     # Legacy WebView (1.0.0)
+├── .github/workflows/           # build-android.yml — APK CI on main
+└── docs/                        # Project documentation (this report)
+</code></pre>
+<h3 id="apphttpcontrollers-pos-relevant"><code>app/Http/Controllers/</code> (POS-relevant)</h3>
+<table>
+<thead>
+<tr>
+<th>Folder</th>
+<th>Key controllers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POS/</code></td>
+<td><code>SyncController</code>, <code>PosSaleController</code>, <code>ShiftController</code>, <code>ReadingController</code>, <code>PosSettingsController</code>, <code>ProductLookupController</code>, <code>CustomerLookupController</code>, <code>StockInController</code></td>
+</tr>
+<tr>
+<td><code>Admin/</code></td>
+<td><code>ProductController</code>, <code>CategoryController</code>, <code>BranchController</code>, <code>UserManagementController</code>, <code>InventoryDashboardController</code>, <code>DashboardController</code></td>
+</tr>
+<tr>
+<td><code>Backoffice/</code></td>
+<td><code>AnalyticsController</code>, <code>ShiftManagementController</code>, <code>ShiftDashboardController</code>, <code>ShiftVarianceController</code>, <code>ShiftAuditController</code>, <code>ShiftExportController</code>, <code>InventoryStockController</code>, <code>InventoryMovementController</code>, <code>InventoryReportController</code>, <code>InventoryAdjustmentController</code></td>
+</tr>
+<tr>
+<td><code>Stockman/</code></td>
+<td><code>StockmanController</code></td>
+</tr>
+<tr>
+<td><code>SuperAdmin/</code></td>
+<td><code>DashboardController</code>, <code>LicenseController</code>, <code>BranchOverviewController</code></td>
+</tr>
+<tr>
+<td>Root</td>
+<td><code>DeviceLogController</code>, <code>Auth/LoginController</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="appmodels-core"><code>app/Models/</code> (core)</h3>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POS/Product</code>, <code>Category</code>, <code>Branch</code></td>
+<td>Catalog</td>
+</tr>
+<tr>
+<td><code>POS/PosSale</code>, <code>PosSaleItem</code></td>
+<td>Transactions</td>
+</tr>
+<tr>
+<td><code>POS/PosShift</code>, <code>ShiftAuditLog</code>, <code>PosShiftAudit</code></td>
+<td>Cashier shifts</td>
+</tr>
+<tr>
+<td><code>POS/PosXReading</code>, <code>PosZReading</code></td>
+<td>BIR-style readings</td>
+</tr>
+<tr>
+<td><code>POS/PosLicense</code></td>
+<td>Branch terminal licensing</td>
+</tr>
+<tr>
+<td><code>POS/PosSetting</code></td>
+<td>Store configuration key-value</td>
+</tr>
+<tr>
+<td><code>POS/Customer</code></td>
+<td>Member lookup</td>
+</tr>
+<tr>
+<td><code>Inventory/InventoryBatch</code></td>
+<td>Batch/lot stock</td>
+</tr>
+<tr>
+<td><code>Inventory/StockMovement</code></td>
+<td>Audit trail</td>
+</tr>
+<tr>
+<td><code>Inventory/ExpiryAlert</code></td>
+<td>Expiry notifications</td>
+</tr>
+<tr>
+<td><code>DeviceLog</code></td>
+<td>Android remote logs</td>
+</tr>
+</tbody>
+</table>
+<h3 id="appservices"><code>app/Services/</code></h3>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POS/PosSaleService</code></td>
+<td>Sale creation, stock deduction</td>
+</tr>
+<tr>
+<td><code>POS/ShiftService</code></td>
+<td>Shift lifecycle</td>
+</tr>
+<tr>
+<td><code>POS/StockInService</code></td>
+<td>POS-side stock in API</td>
+</tr>
+<tr>
+<td><code>POS/PosSettingsService</code></td>
+<td>Settings read/update</td>
+</tr>
+<tr>
+<td><code>POS/CustomerLookupService</code></td>
+<td>Member search</td>
+</tr>
+<tr>
+<td><code>Inventory/InventoryService</code></td>
+<td>Batch stock in/out, FEFO</td>
+</tr>
+<tr>
+<td><code>ReadingService</code></td>
+<td>X/Z reading totals</td>
+</tr>
+<tr>
+<td><code>Rewards/RewardsEngineService</code></td>
+<td>Loyalty accrual hooks</td>
+</tr>
+</tbody>
+</table>
+<h3 id="databasemigrations-highlights"><code>database/migrations/</code> (highlights)</h3>
+<table>
+<thead>
+<tr>
+<th>Migration</th>
+<th>Creates / alters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>create_branches_table</code></td>
+<td>Multi-branch</td>
+</tr>
+<tr>
+<td><code>create_products_table</code>, <code>categories</code></td>
+<td>Catalog</td>
+</tr>
+<tr>
+<td><code>create_pos_sales_table</code>, <code>pos_sale_items</code></td>
+<td>Sales + <code>local_id</code> for sync</td>
+</tr>
+<tr>
+<td><code>create_pos_shifts_table</code>, audit tables</td>
+<td>Shifts</td>
+</tr>
+<tr>
+<td><code>create_pos_x_readings</code>, <code>pos_z_readings</code></td>
+<td>Readings</td>
+</tr>
+<tr>
+<td><code>create_pos_licenses_table</code></td>
+<td>Licensing</td>
+</tr>
+<tr>
+<td><code>create_inventory_batches_table</code></td>
+<td>Batch inventory</td>
+</tr>
+<tr>
+<td><code>create_expiry_alerts_table</code></td>
+<td>Expiry monitoring</td>
+</tr>
+<tr>
+<td><code>create_stock_movements_table</code></td>
+<td>Movement log</td>
+</tr>
+</tbody>
+</table>
+<h3 id="resourcesviews"><code>resources/views/</code></h3>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pos/cashier/index.blade.php</code></td>
+<td>Main POS SPA</td>
+</tr>
+<tr>
+<td><code>pos/settings/</code></td>
+<td>Store settings form</td>
+</tr>
+<tr>
+<td><code>backoffice/</code></td>
+<td>Dashboard, analytics, shifts, readings, inventory</td>
+</tr>
+<tr>
+<td><code>admin/</code></td>
+<td>Products, categories, users, branches, device logs</td>
+</tr>
+<tr>
+<td><code>stockman/</code></td>
+<td>Stockman workflows</td>
+</tr>
+<tr>
+<td><code>super-admin/</code></td>
+<td>Licenses, branch monitor</td>
+</tr>
+<tr>
+<td><code>auth/login.blade.php</code></td>
+<td>Session login</td>
+</tr>
+<tr>
+<td><code>layouts/*.blade.php</code></td>
+<td>Tailwind layouts per role</td>
+</tr>
+</tbody>
+</table>
+<h3 id="publicjs"><code>public/js/</code></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>db.js</code></td>
+<td>Dexie/IndexedDB <code>INSADB</code> API</td>
+</tr>
+<tr>
+<td><code>sync-engine.js</code></td>
+<td>Online detection + push/pull orchestration</td>
+</tr>
+<tr>
+<td><code>insabuddy.js</code></td>
+<td>Hardware bridge client (ports 18181/18182)</td>
+</tr>
+<tr>
+<td><code>json-viewer.js</code></td>
+<td>Device log JSON viewer</td>
+</tr>
+</tbody>
+</table>
+<h3 id="routes"><code>routes/</code></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>web.php</code></td>
+<td>UI routes with <code>auth</code> + <code>role:</code> middleware</td>
+</tr>
+<tr>
+<td><code>pos/api.php</code></td>
+<td>JSON API under <code>/api/pos</code></td>
+</tr>
+<tr>
+<td><code>console.php</code></td>
+<td><code>Schedule::command('inventory:scan-expiry')-&gt;daily()</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="android-projects">Android projects</h3>
+<table>
+<thead>
+<tr>
+<th>Directory</th>
+<th>Notable files</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>INSAPOSv2/</code></td>
+<td><code>MainActivity.kt</code>, <code>PosService.kt</code>, <code>PosLocalServer.kt</code> (port 18182), <code>AndroidBridge.kt</code>, <code>sync/SyncEngine.kt</code>, <code>db/OfflineDatabase.kt</code></td>
+</tr>
+<tr>
+<td><code>INSABuddy/</code></td>
+<td><code>LocalServer.kt</code> (port 18181), <code>PrinterManager</code>, scanner bridges</td>
+</tr>
+<tr>
+<td><code>INSAPOSlight/</code></td>
+<td>Minimal <code>MainActivity.kt</code>, <code>JsBridge</code> as <code>INSAPOS</code></td>
+</tr>
+<tr>
+<td><code>INSAPOS/</code></td>
+<td>Legacy WebView shell</td>
+</tr>
+</tbody>
+</table>
+<h3 id="githubworkflowsbuild-androidyml"><code>.github/workflows/build-android.yml</code></h3>
+<p>On push to <code>main</code> (or manual dispatch), builds debug APKs for INSABuddy, INSAPOS, INSAPOSv2 (debug + release unsigned), and INSAPOSlight; uploads artifacts (90-day retention).</p>
+<hr />
+<h2 id="part-e-integration-points-for-app-developers">Part E — Integration Points for App Developers</h2>
+<h3 id="webview-web-windowinsapos">WebView ↔ Web (<code>window.INSAPOS</code>)</h3>
+<p><strong>INSAPOSv2</strong> injects on page load (simplified):</p>
+<pre><code class="language-javascript">window.INSAPOS_DEVICE = { /* device JSON */ };
+window.INSAPOS_SERVICE_PORT = 18182;
+window.INSAPOS_OFFLINE_CAPABLE = true;
+window.INSAPOS_ONLINE = true|false;
+// Bridge methods: getDeviceInfo(), printReceipt(json), openDrawer(),
+//   scanBarcode(), getPrinterStatus(), getServicePort(), getOfflineStats(), triggerSync()
+</code></pre>
+<p><strong>INSAPOSlight</strong> exposes a smaller <code>INSAPOS</code> bridge and sets <code>INSAPOS_OFFLINE_CAPABLE = false</code>.</p>
+<p><strong>Session:</strong> WebView loads <code>https://insapos.diybizrewards.com</code> (or staging URL); Laravel session cookie authenticates <code>/api/pos/*</code> calls from JavaScript <code>fetch</code> with <code>X-CSRF-TOKEN</code> from <code>&lt;meta name="csrf-token"&gt;</code>.</p>
+<h3 id="insabuddy-http-api-port-18181">INSABuddy HTTP API (port 18181)</h3>
+<p>Base: <code>http://127.0.0.1:18181</code></p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Method</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/ping</code></td>
+<td>GET</td>
+<td>Health + printer connected flag</td>
+</tr>
+<tr>
+<td><code>/print</code></td>
+<td>POST</td>
+<td><code>{ "data": "&lt;base64&gt;" }</code> or <code>{ "text": "..." }</code></td>
+</tr>
+<tr>
+<td><code>/drawer/open</code></td>
+<td>POST</td>
+<td>Open cash drawer</td>
+</tr>
+<tr>
+<td><code>/scan</code></td>
+<td>POST</td>
+<td>Trigger camera scan</td>
+</tr>
+<tr>
+<td><code>/scan/hid</code></td>
+<td>GET</td>
+<td>HID scanner buffer</td>
+</tr>
+<tr>
+<td><code>/device/info</code></td>
+<td>GET</td>
+<td>Device metadata</td>
+</tr>
+<tr>
+<td><code>/printer/status</code>, <code>/printer/list</code>, <code>/printer/select</code></td>
+<td>GET/POST</td>
+<td>Printer management</td>
+</tr>
+<tr>
+<td><code>/receipt/save</code>, <code>/transaction/save</code></td>
+<td>POST</td>
+<td>Offline cache files</td>
+</tr>
+<tr>
+<td><code>/sync/push</code>, <code>/sync/pull</code></td>
+<td>POST/GET</td>
+<td>Buddy-local sync helpers</td>
+</tr>
+</tbody>
+</table>
+<p>CORS: <code>Access-Control-Allow-Origin: *</code> on responses.</p>
+<h3 id="insaposv2-local-server-port-18182">INSAPOSv2 Local Server (port 18182)</h3>
+<p>Base: <code>http://127.0.0.1:18182</code> (bound to localhost only)</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/ping</code></td>
+<td><code>{ "ok": true, "app": "INSAPOSv2", "port": 18182 }</code></td>
+</tr>
+<tr>
+<td><code>/device/info</code></td>
+<td>Device + app version</td>
+</tr>
+<tr>
+<td><code>/print</code>, <code>/drawer/open</code></td>
+<td>Same semantics as Buddy</td>
+</tr>
+<tr>
+<td><code>/printer/status</code>, <code>/printer/list</code>, <code>/printer/select</code></td>
+<td>Printer routing</td>
+</tr>
+<tr>
+<td><code>/scan</code>, <code>/scan/hid</code></td>
+<td>Camera / HID barcode</td>
+</tr>
+<tr>
+<td><code>/offline/products</code>, <code>/offline/products/barcode</code></td>
+<td>SQLite-backed catalog</td>
+</tr>
+<tr>
+<td><code>/offline/customers</code></td>
+<td>Cached customers</td>
+</tr>
+<tr>
+<td><code>/offline/transaction</code>, <code>/offline/receipt</code></td>
+<td>Persist offline sale</td>
+</tr>
+<tr>
+<td><code>/offline/stats</code>, <code>/offline/sync/status</code>, <code>/offline/sync/now</code></td>
+<td>Native sync engine control</td>
+</tr>
+</tbody>
+</table>
+<p><code>insabuddy.js</code> calls <code>INSABuddy.detectV2()</code> to repoint <code>BASE_URL</code> from 18181 → 18182 when <code>window.INSAPOS</code> exists.</p>
+<h3 id="authentication-session">Authentication / Session</h3>
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Login</td>
+<td><code>POST /login</code> — email/password, <code>Auth::attempt</code>, session regenerate</td>
+</tr>
+<tr>
+<td>Role redirect</td>
+<td>Super admin → super-admin dashboard; backoffice roles → <code>/backoffice</code>; stockman → stockman; else cashier</td>
+</tr>
+<tr>
+<td>API auth</td>
+<td>Same session cookie on <code>/api/pos/*</code> (not Sanctum token for POS JS)</td>
+</tr>
+<tr>
+<td>CSRF</td>
+<td>Required on mutating routes except ping, sync/*, device-log</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sync-api-endpoints-server">Sync API Endpoints (server)</h3>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Body / query</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /api/pos/sync/push</code></td>
+<td>Full sale + <code>local_id</code></td>
+<td>Idempotent; price conflict detection</td>
+</tr>
+<tr>
+<td><code>GET /api/pos/sync/pull</code></td>
+<td><code>branch_id</code>, optional <code>since</code></td>
+<td>Products with batch-aggregated <code>stock</code></td>
+</tr>
+<tr>
+<td><code>GET /api/pos/customers/all</code></td>
+<td>—</td>
+<td>Full customer list for cache</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="part-f-deployment-operations">Part F — Deployment &amp; Operations</h2>
+<h3 id="laravel-forge">Laravel Forge</h3>
+<p>Typical Forge setup for <strong>insapos.diybizrewards.com</strong>:</p>
+<ol>
+<li>Connect GitHub repo; deploy <code>main</code> on push</li>
+<li><strong>Deploy script:</strong> <code>composer install --no-dev</code>, <code>php artisan migrate --force</code>, <code>php artisan config:cache</code>, <code>php artisan route:cache</code>, <code>npm run build</code> (if asset pipeline used)</li>
+<li><strong>Scheduler:</strong> Forge cron runs <code>php artisan schedule:run</code> every minute → executes <code>inventory:scan-expiry</code> daily</li>
+<li><strong>Queue:</strong> Optional <code>php artisan queue:listen</code> for async jobs (composer <code>dev</code> script includes queue worker)</li>
+<li><strong>Environment:</strong> <code>.env</code> with <code>APP_URL</code>, DB credentials, <code>APP_KEY</code></li>
+</ol>
+<h3 id="environment-requirements">Environment Requirements</h3>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PHP</td>
+<td>8.3+</td>
+</tr>
+<tr>
+<td>Composer</td>
+<td>2.x</td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td>8.x recommended</td>
+</tr>
+<tr>
+<td>Node.js</td>
+<td>18+ (Vite build)</td>
+</tr>
+<tr>
+<td>SSL</td>
+<td>Required for production WebView cookies</td>
+</tr>
+</tbody>
+</table>
+<h3 id="github-actions-apk-builds">GitHub Actions (APK builds)</h3>
+<p>Workflow: <code>.github/workflows/build-android.yml</code></p>
+<ul>
+<li><strong>Trigger:</strong> Push to <code>main</code> affecting Android folders, or <code>workflow_dispatch</code></li>
+<li><strong>JDK:</strong> 17 (Temurin)</li>
+<li><strong>SDK:</strong> Android 35, build-tools 35.0.0</li>
+<li><strong>Artifacts:</strong> Debug APKs (all apps); INSAPOSv2 also uploads unsigned release APK</li>
+</ul>
+<h3 id="operational-commands">Operational Commands</h3>
+<pre><code class="language-bash"># Migrations
+php artisan migrate --force
+
+# Expiry scan (also scheduled daily)
+php artisan inventory:scan-expiry
+
+# Health check
+curl https://insapos.diybizrewards.com/up
+</code></pre>
+<hr />
+<h2 id="document-history">Document History</h2>
+<table>
+<thead>
+<tr>
+<th>Date</th>
+<th>Version</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>May 27, 2026</td>
+<td>1.0</td>
+<td>Initial client + developer system report</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>INSA POS — prepared for client distribution and third-party developer onboarding.</em></p>
+<p style="margin-top:2em;font-size:9pt;color:#666;">Generated May 27, 2026 — Print to PDF via browser if needed.</p>
+</body>
+</html>
