@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="#ECEFF1"
+      android:pathData="M12,2c5.52,0 10,4.48 10,10s-4.48,10 -10,10S2,17.52 2,12 6.48,2 12,2z"/>
+  <path
+      android:fillColor="#78909C"
+      android:pathData="M12,3.75c4.56,0 8.25,3.69 8.25,8.25S16.56,20.25 12,20.25 3.75,16.56 3.75,12 7.44,3.75 12,3.75zM12,5.5c-3.59,0 -6.5,2.91 -6.5,6.5s2.91,6.5 6.5,6.5 6.5,-2.91 6.5,-6.5 -2.91,-6.5 -6.5,-6.5z"
+      android:fillType="evenOdd"/>
+  <!-- Receipt body -->
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M7.5,5.75h7.25c0.41,0 0.75,0.34 0.75,0.75v11.5c0,0.41 -0.34,0.75 -0.75,0.75H7.5c-0.41,0 -0.75,-0.34 -0.75,-0.75V6.5c0,-0.41 0.34,-0.75 0.75,-0.75z"/>
+  <path
+      android:fillColor="#CFD8DC"
+      android:pathData="M14.75,5.75 L14.75,8.25 L12.25,5.75z"/>
+  <path
+      android:fillColor="#546E7A"
+      android:pathData="M8.25,9.25h6v0.9h-6zM8.25,11.15h5.2v0.9h-5.2zM8.25,13.05h4.4v0.9h-4.4zM8.25,14.95h3.5v0.9h-3.5z"/>
+  <!-- Ellipsis dots (misc category) -->
+  <path
+      android:fillColor="#455A64"
+      android:pathData="M10.35,16.55c0.45,0 0.8,0.35 0.8,0.8s-0.35,0.8 -0.8,0.8 -0.8,-0.35 -0.8,-0.8 0.35,-0.8 0.8,-0.8zM12,16.55c0.45,0 0.8,0.35 0.8,0.8s-0.35,0.8 -0.8,0.8 -0.8,-0.35 -0.8,-0.8 0.35,-0.8 0.8,-0.8zM13.65,16.55c0.45,0 0.8,0.35 0.8,0.8s-0.35,0.8 -0.8,0.8 -0.8,-0.35 -0.8,-0.8 0.35,-0.8 0.8,-0.8z"/>
+</vector>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="#EFEBE9"
+      android:pathData="M12,2c5.52,0 10,4.48 10,10s-4.48,10 -10,10S2,17.52 2,12 6.48,2 12,2z"/>
+  <path
+      android:fillColor="#8D6E63"
+      android:pathData="M12,3.75c4.56,0 8.25,3.69 8.25,8.25S16.56,20.25 12,20.25 3.75,16.56 3.75,12 7.44,3.75 12,3.75zM12,5.5c-3.59,0 -6.5,2.91 -6.5,6.5s2.91,6.5 6.5,6.5 6.5,-2.91 6.5,-6.5 -2.91,-6.5 -6.5,-6.5z"
+      android:fillType="evenOdd"/>
+  <!-- House -->
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M12,6.35 L18.25,11v6.15c0,0.41 -0.34,0.75 -0.75,0.75H6.5c-0.41,0 -0.75,-0.34 -0.75,-0.75V11z"/>
+  <path
+      android:fillColor="#BCAAA4"
+      android:pathData="M12,7.55 L16.85,11.35v5.05H7.15V11.35z"/>
+  <!-- Roof -->
+  <path
+      android:fillColor="#6D4C41"
+      android:pathData="M12,5.5 L19.1,11.1 17.9,12.05 12,7.55 6.1,12.05 4.9,11.1z"/>
+  <!-- Door -->
+  <path
+      android:fillColor="#5D4037"
+      android:pathData="M10.65,13.85h2.7v3.55h-2.7z"/>
+  <path
+      android:fillColor="#FFD54F"
+      android:pathData="M12.85,15.35c0,0.2 -0.15,0.35 -0.35,0.35s-0.35,-0.15 -0.35,-0.35 0.15,-0.35 0.35,-0.35 0.35,0.15 0.35,0.35z"/>
+  <!-- Window -->
+  <path
+      android:fillColor="#81D4FA"
+      android:pathData="M8.35,12.35h2.1v1.55h-2.1z"/>
+</vector>

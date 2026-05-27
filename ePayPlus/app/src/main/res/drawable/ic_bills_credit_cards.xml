@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="#FCE4EC"
+      android:pathData="M12,2c5.52,0 10,4.48 10,10s-4.48,10 -10,10S2,17.52 2,12 6.48,2 12,2z"/>
+  <path
+      android:fillColor="#EC407A"
+      android:pathData="M12,3.75c4.56,0 8.25,3.69 8.25,8.25S16.56,20.25 12,20.25 3.75,16.56 3.75,12 7.44,3.75 12,3.75zM12,5.5c-3.59,0 -6.5,2.91 -6.5,6.5s2.91,6.5 6.5,6.5 6.5,-2.91 6.5,-6.5 -2.91,-6.5 -6.5,-6.5z"
+      android:fillType="evenOdd"/>
+  <!-- Back card -->
+  <path
+      android:fillColor="#F48FB1"
+      android:pathData="M8.2,8.1h9.6c0.41,0 0.75,0.34 0.75,0.75v6.5c0,0.41 -0.34,0.75 -0.75,0.75H8.2c-0.41,0 -0.75,-0.34 -0.75,-0.75V8.85c0,-0.41 0.34,-0.75 0.75,-0.75z"/>
+  <!-- Front card -->
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M5.8,7.35h9.6c0.41,0 0.75,0.34 0.75,0.75v6.5c0,0.41 -0.34,0.75 -0.75,0.75H5.8c-0.41,0 -0.75,-0.34 -0.75,-0.75V8.1c0,-0.41 0.34,-0.75 0.75,-0.75z"/>
+  <path
+      android:fillColor="#AD1457"
+      android:pathData="M5.05,9.85h11.1v1.45H5.05z"/>
+  <path
+      android:fillColor="#F8BBD0"
+      android:pathData="M6.55,12.65h3.2v0.75h-3.2zM6.55,14.05h2.1v0.55h-2.1z"/>
+  <!-- Chip -->
+  <path
+      android:fillColor="#FFD54F"
+      android:pathData="M7.15,11.55h1.55v1.1H7.15z"/>
+</vector>
