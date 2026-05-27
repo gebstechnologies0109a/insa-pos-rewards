@@ -1,4 +1,4 @@
-@php $isEpayPlus = is_epayplus_product(); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
+@php $isEpayPlus = \App\Support\ProductMode::isEpayPlusHost(); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
 <!DOCTYPE html>
 <html>
 <head>

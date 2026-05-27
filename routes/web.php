@@ -56,6 +56,7 @@ Route::middleware(['auth', 'role:stockman,manager,admin,owner,super_admin'])->pr
     Route::post('/audit', [StockmanController::class, 'auditUpdate'])->name('stockman.audit.update');
     Route::get('/stock-in', [StockmanController::class, 'stockInForm'])->name('stockman.stock-in');
     Route::post('/stock-in', [StockmanController::class, 'stockInStore'])->name('stockman.stock-in.store');
+    Route::get('/products/search', [StockmanController::class, 'productSearch'])->name('stockman.products.search');
 });
 
 // ── Back-Office (manager, admin, owner) ──────────

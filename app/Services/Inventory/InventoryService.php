@@ -8,6 +8,7 @@ use App\Models\POS\Product;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class InventoryService
 {
@@ -17,6 +18,12 @@ class InventoryService
 
     public function getStockOnHand(int $branchId, int $productId): float
     {
+        if (! $this->batchInventoryEnabled()) {
+            return (float) StockMovement::where('branch_id', $branchId)
+                ->where('product_id', $productId)
+                ->sum('qty');
+        }
+
         $batchStock = (float) InventoryBatch::forBranch($branchId)
             ->forProduct($productId)
             ->notExpired()
@@ -70,6 +77,22 @@ class InventoryService
         ?int $userId = null,
         ?string $supplierName = null,
     ): array {
+        if (! $this->batchInventoryEnabled()) {
+            foreach ($items as $item) {
+                $this->recordMovement(
+                    branchId: $branchId,
+                    productId: $item['product_id'],
+                    qty: (float) $item['qty'],
+                    type: $type,
+                    referenceId: $referenceId,
+                    referenceNumber: $referenceNumber,
+                    userId: $userId,
+                );
+            }
+
+            return [];
+        }
+
         $batches = [];
 
         foreach ($items as $item) {
@@ -303,6 +326,20 @@ class InventoryService
      */
     public function stockTotalsForProducts(int $branchId, array $productIds): array
     {
+        if ($productIds === []) {
+            return [];
+        }
+
+        if (! $this->batchInventoryEnabled()) {
+            return StockMovement::where('branch_id', $branchId)
+                ->whereIn('product_id', $productIds)
+                ->selectRaw('product_id, SUM(qty) as total')
+                ->groupBy('product_id')
+                ->pluck('total', 'product_id')
+                ->map(fn ($v) => (float) $v)
+                ->all();
+        }
+
         $batchTotals = InventoryBatch::forBranch($branchId)
             ->whereIn('product_id', $productIds)
             ->notExpired()
@@ -344,6 +381,10 @@ class InventoryService
      */
     public function earliestExpiryForProducts(int $branchId, array $productIds): array
     {
+        if ($productIds === [] || ! $this->batchInventoryEnabled()) {
+            return [];
+        }
+
         return InventoryBatch::forBranch($branchId)
             ->whereIn('product_id', $productIds)
             ->withStock()
@@ -362,6 +403,15 @@ class InventoryService
      */
     public function nearExpiryFlagsForProducts(int $branchId, array $productIds): array
     {
+        $result = [];
+        foreach ($productIds as $productId) {
+            $result[$productId] = false;
+        }
+
+        if ($productIds === [] || ! $this->batchInventoryEnabled()) {
+            return $result;
+        }
+
         $cutoff = now()->addDays(self::NEAR_EXPIRY_DAYS)->toDateString();
 
         $flags = InventoryBatch::forBranch($branchId)
@@ -392,6 +442,11 @@ class InventoryService
         return app(InventoryForecastService::class)->forecastReport($branchId, $lookbackDays, $reorderCoverDays);
     }
 
+    protected function batchInventoryEnabled(): bool
+    {
+        return Schema::hasTable('inventory_batches');
+    }
+
     protected function recordMovement(
         int $branchId,
         int $productId,
@@ -404,7 +459,7 @@ class InventoryService
         ?int $batchId = null,
         ?string $reason = null,
     ): StockMovement {
-        return StockMovement::create([
+        $attributes = [
             'branch_id'          => $branchId,
             'shift_id'           => $shiftId,
             'product_id'         => $productId,
@@ -415,6 +470,14 @@ class InventoryService
             'reference_id'       => $referenceId,
             'reference_number'   => $referenceNumber,
             'reason'             => $reason,
-        ]);
+        ];
+
+        return StockMovement::create(
+            array_filter(
+                $attributes,
+                fn ($value, string $column) => Schema::hasColumn('stock_movements', $column),
+                ARRAY_FILTER_USE_BOTH,
+            ),
+        );
     }
 }
