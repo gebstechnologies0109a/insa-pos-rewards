@@ -9,6 +9,7 @@ use App\Models\EPayPlus\Retailer;
 use App\Models\EPayPlus\Transaction;
 use Database\Seeders\EPayPlusSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\Support\MayaBillerHttp;
 use Tests\TestCase;
@@ -31,6 +32,7 @@ class MayaBillerCallbackTest extends TestCase
         ]);
 
         $this->seed(EPayPlusSeeder::class);
+        Cache::flush();
     }
 
     public function test_posting_job_sends_callback_to_maya_url(): void
@@ -58,6 +60,12 @@ class MayaBillerCallbackTest extends TestCase
 
         $txn = MayaBillerTransaction::where('request_reference_no', $rrn)->first();
         $this->assertNotNull($txn);
+
+        if (! $txn->state->isTerminal()) {
+            ProcessMayaBillerPostingJob::dispatchSync($txn->id);
+            $txn->refresh();
+        }
+
         $this->assertSame(MayaBillerState::Fulfilled, $txn->state);
         $this->assertNotNull($txn->callback_sent_at);
 
