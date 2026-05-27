@@ -15,7 +15,7 @@
                 <label class="block text-xs font-medium text-gray-600 mb-1">Branch</label>
                 <select name="branch_id" required class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                     <option value="">Select branch...</option>
-                    @foreach($branches->where('license', null) as $branch)
+                    @foreach($branches as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                     @endforeach
                 </select>
