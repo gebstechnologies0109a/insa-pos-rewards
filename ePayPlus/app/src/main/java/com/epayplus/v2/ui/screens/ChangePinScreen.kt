@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.epayplus.v2.ui.layout.CenteredContent
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.ChangePinViewModel
 
@@ -50,7 +51,8 @@ fun ChangePinScreen(
             )
         )
 
-        Column(modifier = Modifier.padding(20.dp)) {
+        CenteredContent(maxWidth = 480.dp) {
+            Column(modifier = Modifier.padding(20.dp)) {
             OutlinedTextField(
                 value = uiState.currentPin,
                 onValueChange = viewModel::updateCurrentPin,
@@ -123,6 +125,7 @@ fun ChangePinScreen(
                 } else {
                     Text("Change PIN", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
+            }
             }
         }
     }

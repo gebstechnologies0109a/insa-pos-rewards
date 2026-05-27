@@ -26,7 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import com.epayplus.v2.R
 import com.epayplus.v2.ui.components.ProviderIcon
 import com.epayplus.v2.ui.components.ProviderIcons
-import androidx.compose.ui.text.style.TextAlign
+import com.epayplus.v2.ui.layout.isLandscape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +35,7 @@ import androidx.navigation.NavController
 import com.epayplus.v2.data.local.entity.TransactionEntity
 import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
+import com.epayplus.v2.ui.viewmodel.HomeUiState
 import com.epayplus.v2.ui.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -46,6 +47,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val landscape = isLandscape
 
     Column(
         modifier = Modifier
@@ -60,135 +62,43 @@ fun HomeScreen(
                         colors = listOf(EPayGreenDark, EPayGreen)
                     )
                 )
-                .padding(top = 16.dp, bottom = 20.dp)
+                .padding(
+                    top = if (landscape) 12.dp else 16.dp,
+                    bottom = if (landscape) 14.dp else 20.dp
+                )
         ) {
-            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            if (landscape) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text(
-                            "ePayPlus",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            uiState.businessName.ifEmpty { "Welcome" },
-                            fontSize = 13.sp,
-                            color = Color.White.copy(alpha = 0.8f)
+                    Column(modifier = Modifier.weight(0.35f)) {
+                        HomeHeaderTitle(
+                            businessName = uiState.businessName,
+                            onHistoryClick = { navController.navigate(NavRoutes.TransactionHistory.route) }
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        IconButton(onClick = { navController.navigate(NavRoutes.TransactionHistory.route) }) {
-                            Icon(Icons.Outlined.Notifications, "Notifications", tint = Color.White)
-                        }
-                    }
+                    WalletCard(
+                        uiState = uiState,
+                        onRefresh = viewModel::refreshBalance,
+                        modifier = Modifier.weight(0.65f)
+                    )
                 }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Dual Wallets",
-                                fontSize = 13.sp,
-                                color = EPayMediumGray
-                            )
-                            if (uiState.isRefreshing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = EPayGreen,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                IconButton(
-                                    onClick = { viewModel.refreshBalance() },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Refresh,
-                                        "Refresh",
-                                        tint = EPayGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                        Text(
-                            "₱ ${String.format("%,.2f", uiState.eloadBalance.takeIf { it > 0 } ?: uiState.balance)}",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = EPayGreenDark
-                        )
-                        Text(
-                            "E-Load Wallet",
-                            fontSize = 11.sp,
-                            color = EPayMediumGray
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text("Bills / Cash-In", fontSize = 11.sp, color = EPayMediumGray)
-                                Text(
-                                    "₱ ${String.format("%,.2f", uiState.billsBalance)}",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp,
-                                    color = EPayBlue
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Combined", fontSize = 11.sp, color = EPayMediumGray)
-                                Text(
-                                    "₱ ${String.format("%,.2f", uiState.balance)}",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp,
-                                    color = EPayDarkGray
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Divider(color = EPayLightGray)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text("Today's Sales", fontSize = 11.sp, color = EPayMediumGray)
-                                Text(
-                                    "₱ ${String.format("%,.2f", uiState.todaySales)}",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp,
-                                    color = EPayGreen
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Transactions", fontSize = 11.sp, color = EPayMediumGray)
-                                Text(
-                                    "${uiState.todayTransactions}",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp,
-                                    color = EPayDarkGray
-                                )
-                            }
-                        }
-                    }
+            } else {
+                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    HomeHeaderTitle(
+                        businessName = uiState.businessName,
+                        onHistoryClick = { navController.navigate(NavRoutes.TransactionHistory.route) }
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    WalletCard(
+                        uiState = uiState,
+                        onRefresh = viewModel::refreshBalance,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
@@ -197,7 +107,7 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 16.dp)
+                .padding(top = if (landscape) 12.dp else 16.dp)
         ) {
             Text(
                 "Quick Services",
@@ -227,7 +137,7 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(if (landscape) 14.dp else 20.dp))
 
             if (uiState.announcements.isNotEmpty()) {
                 Text(
@@ -243,7 +153,7 @@ fun HomeScreen(
                 ) {
                     items(uiState.announcements) { announcement ->
                         Card(
-                            modifier = Modifier.width(280.dp),
+                            modifier = Modifier.width(if (landscape) 360.dp else 280.dp),
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = EPayGoldSurface)
                         ) {
@@ -276,7 +186,7 @@ fun HomeScreen(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(if (landscape) 14.dp else 20.dp))
             }
 
             Row(
@@ -307,7 +217,7 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(32.dp),
+                            .padding(if (landscape) 24.dp else 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
@@ -317,11 +227,7 @@ fun HomeScreen(
                             tint = EPayMediumGray.copy(alpha = 0.5f)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "No transactions yet",
-                            color = EPayMediumGray,
-                            fontSize = 14.sp
-                        )
+                        Text("No transactions yet", color = EPayMediumGray, fontSize = 14.sp)
                         Text(
                             "Start by loading, paying bills, or cashing in",
                             color = EPayMediumGray.copy(alpha = 0.7f),
@@ -357,6 +263,171 @@ fun HomeScreen(
 }
 
 @Composable
+private fun HomeHeaderTitle(businessName: String, onHistoryClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(
+                "ePayPlus",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                businessName.ifEmpty { "Welcome" },
+                fontSize = 13.sp,
+                color = Color.White.copy(alpha = 0.8f)
+            )
+        }
+        IconButton(onClick = onHistoryClick) {
+            Icon(Icons.Outlined.Notifications, "Notifications", tint = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun WalletCard(
+    uiState: HomeUiState,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val landscape = isLandscape
+
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        if (landscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                WalletPrimarySection(
+                    uiState = uiState,
+                    onRefresh = onRefresh,
+                    modifier = Modifier.weight(1f)
+                )
+                Divider(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(1.dp),
+                    color = EPayLightGray
+                )
+                WalletSecondarySection(
+                    uiState = uiState,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        } else {
+            Column(modifier = Modifier.padding(20.dp)) {
+                WalletPrimarySection(uiState = uiState, onRefresh = onRefresh)
+                Spacer(modifier = Modifier.height(12.dp))
+                Divider(color = EPayLightGray)
+                Spacer(modifier = Modifier.height(12.dp))
+                WalletSecondarySection(uiState = uiState)
+            }
+        }
+    }
+}
+
+@Composable
+private fun WalletPrimarySection(
+    uiState: HomeUiState,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Dual Wallets", fontSize = 13.sp, color = EPayMediumGray)
+            if (uiState.isRefreshing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    color = EPayGreen,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                IconButton(onClick = onRefresh, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Filled.Refresh, "Refresh", tint = EPayGreen, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+        Text(
+            "₱ ${String.format("%,.2f", uiState.eloadBalance.takeIf { it > 0 } ?: uiState.balance)}",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = EPayGreenDark
+        )
+        Text("E-Load Wallet", fontSize = 11.sp, color = EPayMediumGray)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text("Bills / Cash-In", fontSize = 11.sp, color = EPayMediumGray)
+                Text(
+                    "₱ ${String.format("%,.2f", uiState.billsBalance)}",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    color = EPayBlue
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("Combined", fontSize = 11.sp, color = EPayMediumGray)
+                Text(
+                    "₱ ${String.format("%,.2f", uiState.balance)}",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    color = EPayDarkGray
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WalletSecondarySection(
+    uiState: HomeUiState,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text("Today's Sales", fontSize = 11.sp, color = EPayMediumGray)
+            Text(
+                "₱ ${String.format("%,.2f", uiState.todaySales)}",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+                color = EPayGreen
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text("Transactions", fontSize = 11.sp, color = EPayMediumGray)
+            Text(
+                "${uiState.todayTransactions}",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+                color = EPayDarkGray
+            )
+        }
+    }
+}
+
+@Composable
 private fun ServiceButton(
     label: String,
     color: Color,
@@ -364,6 +435,7 @@ private fun ServiceButton(
     @DrawableRes iconRes: Int? = null,
     onClick: () -> Unit
 ) {
+    val landscape = isLandscape
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -372,7 +444,7 @@ private fun ServiceButton(
             .padding(8.dp)
     ) {
         Surface(
-            modifier = Modifier.size(56.dp),
+            modifier = Modifier.size(if (landscape) 64.dp else 56.dp),
             shape = CircleShape,
             color = color.copy(alpha = 0.12f),
             tonalElevation = 1.dp
@@ -383,7 +455,7 @@ private fun ServiceButton(
                         androidx.compose.foundation.Image(
                             painter = painterResource(iconRes),
                             contentDescription = label,
-                            modifier = Modifier.size(34.dp),
+                            modifier = Modifier.size(if (landscape) 38.dp else 34.dp),
                             contentScale = androidx.compose.ui.layout.ContentScale.Fit
                         )
                     }

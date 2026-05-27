@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.epayplus.v2.ui.navigation.NavRoutes
+import com.epayplus.v2.ui.layout.isLandscape
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.SettingsViewModel
 
@@ -33,6 +34,8 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
+
+    val landscape = isLandscape
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(
@@ -75,48 +78,62 @@ fun SettingsScreen(
             }
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            SectionLabel("Account")
-            SettingsItem(Icons.Outlined.BarChart, "Sales Report", "View daily sales summary") {
-                navController.navigate(NavRoutes.Sales.route)
-            }
-            SettingsItem(Icons.Outlined.History, "Transaction History", "View all transactions") {
-                navController.navigate(NavRoutes.TransactionHistory.route)
-            }
-            SettingsItem(Icons.Outlined.Lock, "Change PIN", "Update your security PIN") {
-                navController.navigate(NavRoutes.ChangePin.route)
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            SectionLabel("App")
-            SettingsItem(Icons.Outlined.Info, "About", "App version and information") {
-                navController.navigate(NavRoutes.About.route)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Card(
+        if (landscape) {
+            Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showLogoutDialog = true },
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = StatusError.copy(alpha = 0.08f))
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(Icons.Filled.Logout, "Logout", tint = StatusError, modifier = Modifier.size(22.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Logout", color = StatusError, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    SectionLabel("Account")
+                    SettingsItem(Icons.Outlined.BarChart, "Sales Report", "View daily sales summary") {
+                        navController.navigate(NavRoutes.Sales.route)
+                    }
+                    SettingsItem(Icons.Outlined.History, "Transaction History", "View all transactions") {
+                        navController.navigate(NavRoutes.TransactionHistory.route)
+                    }
+                    SettingsItem(Icons.Outlined.Lock, "Change PIN", "Update your security PIN") {
+                        navController.navigate(NavRoutes.ChangePin.route)
+                    }
                 }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    SectionLabel("App")
+                    SettingsItem(Icons.Outlined.Info, "About", "App version and information") {
+                        navController.navigate(NavRoutes.About.route)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LogoutCard(onClick = { showLogoutDialog = true })
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                SectionLabel("Account")
+                SettingsItem(Icons.Outlined.BarChart, "Sales Report", "View daily sales summary") {
+                    navController.navigate(NavRoutes.Sales.route)
+                }
+                SettingsItem(Icons.Outlined.History, "Transaction History", "View all transactions") {
+                    navController.navigate(NavRoutes.TransactionHistory.route)
+                }
+                SettingsItem(Icons.Outlined.Lock, "Change PIN", "Update your security PIN") {
+                    navController.navigate(NavRoutes.ChangePin.route)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                SectionLabel("App")
+                SettingsItem(Icons.Outlined.Info, "About", "App version and information") {
+                    navController.navigate(NavRoutes.About.route)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                LogoutCard(onClick = { showLogoutDialog = true })
             }
         }
     }
@@ -144,6 +161,27 @@ fun SettingsScreen(
             dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Cancel") } },
             shape = RoundedCornerShape(20.dp)
         )
+    }
+}
+
+@Composable
+private fun LogoutCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = StatusError.copy(alpha = 0.08f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(Icons.Filled.Logout, "Logout", tint = StatusError, modifier = Modifier.size(22.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Logout", color = StatusError, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        }
     }
 }
 

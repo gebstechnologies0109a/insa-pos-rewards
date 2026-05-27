@@ -25,6 +25,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.epayplus.v2.data.local.entity.ProductEntity
 import com.epayplus.v2.ui.navigation.NavRoutes
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import com.epayplus.v2.ui.layout.isLandscape
+import com.epayplus.v2.ui.layout.productGridColumns
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.ELoadViewModel
 
@@ -39,6 +42,8 @@ fun ELoadProductsScreen(
     var phoneNumber by remember { mutableStateOf("") }
     var selectedProduct by remember { mutableStateOf<ProductEntity?>(null) }
     var showConfirmDialog by remember { mutableStateOf(false) }
+
+    val landscape = isLandscape
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(
@@ -63,94 +68,73 @@ fun ELoadProductsScreen(
             }
         }
 
-        Column(modifier = Modifier.padding(16.dp)) {
-            OutlinedTextField(
-                value = phoneNumber,
-                onValueChange = { if (it.length <= 11 && it.all { c -> c.isDigit() }) phoneNumber = it },
-                label = { Text("Mobile Number") },
-                placeholder = { Text("09xxxxxxxxx") },
-                leadingIcon = { Icon(Icons.Filled.Phone, "Phone", tint = EPayGreen) },
-                trailingIcon = {
-                    if (phoneNumber.isNotEmpty()) {
-                        IconButton(onClick = { phoneNumber = "" }) {
-                            Icon(Icons.Filled.Clear, "Clear", modifier = Modifier.size(18.dp))
-                        }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = EPayGreen,
-                    focusedLabelColor = EPayGreen
-                )
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                "Regular Load",
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = EPayMediumGray
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+        if (landscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(products) { product ->
-                    val isSelected = selectedProduct == product
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selectedProduct = product
-                                if (phoneNumber.length >= 10) {
-                                    showConfirmDialog = true
-                                }
-                            },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected) EPayGreen else Color.White
-                        ),
-                        elevation = CardDefaults.cardElevation(
-                            defaultElevation = if (isSelected) 4.dp else 1.dp
-                        )
+                Column(modifier = Modifier.weight(0.35f)) {
+                    ELoadPhoneInput(
+                        phoneNumber = phoneNumber,
+                        onPhoneChange = { if (it.length <= 11 && it.all { c -> c.isDigit() }) phoneNumber = it },
+                        onClear = { phoneNumber = "" }
+                    )
+                    if (phoneNumber.length < 10 && selectedProduct != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        PhoneWarningCard()
+                    }
+                }
+                Column(modifier = Modifier.weight(0.65f)) {
+                    Text("Regular Load", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = EPayMediumGray)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyVerticalGrid(
+                        columns = productGridColumns(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 14.dp, horizontal = 8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                "₱${String.format("%,.0f", product.amount)}",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = if (isSelected) Color.White else EPayGreenDark,
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                        productGridItems(
+                            products = products,
+                            selectedProduct = selectedProduct,
+                            phoneNumber = phoneNumber,
+                            onProductSelected = { product ->
+                                selectedProduct = product
+                                if (phoneNumber.length >= 10) showConfirmDialog = true
+                            }
+                        )
                     }
                 }
             }
-
-            if (phoneNumber.length < 10 && selectedProduct != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(containerColor = StatusWarning.copy(alpha = 0.1f))
+        } else {
+            Column(modifier = Modifier.padding(16.dp)) {
+                ELoadPhoneInput(
+                    phoneNumber = phoneNumber,
+                    onPhoneChange = { if (it.length <= 11 && it.all { c -> c.isDigit() }) phoneNumber = it },
+                    onClear = { phoneNumber = "" }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Regular Load", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = EPayMediumGray)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyVerticalGrid(
+                    columns = productGridColumns(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Info, "Info", tint = StatusWarning, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Please enter a valid mobile number first", fontSize = 13.sp, color = StatusWarning)
-                    }
+                    productGridItems(
+                        products = products,
+                        selectedProduct = selectedProduct,
+                        phoneNumber = phoneNumber,
+                        onProductSelected = { product ->
+                            selectedProduct = product
+                            if (phoneNumber.length >= 10) showConfirmDialog = true
+                        }
+                    )
+                }
+                if (phoneNumber.length < 10 && selectedProduct != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    PhoneWarningCard()
                 }
             }
         }
@@ -189,6 +173,89 @@ fun ELoadProductsScreen(
             },
             shape = RoundedCornerShape(20.dp)
         )
+    }
+}
+
+@Composable
+private fun ELoadPhoneInput(
+    phoneNumber: String,
+    onPhoneChange: (String) -> Unit,
+    onClear: () -> Unit
+) {
+    OutlinedTextField(
+        value = phoneNumber,
+        onValueChange = onPhoneChange,
+        label = { Text("Mobile Number") },
+        placeholder = { Text("09xxxxxxxxx") },
+        leadingIcon = { Icon(Icons.Filled.Phone, "Phone", tint = EPayGreen) },
+        trailingIcon = {
+            if (phoneNumber.isNotEmpty()) {
+                IconButton(onClick = onClear) {
+                    Icon(Icons.Filled.Clear, "Clear", modifier = Modifier.size(18.dp))
+                }
+            }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        singleLine = true,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = EPayGreen,
+            focusedLabelColor = EPayGreen
+        )
+    )
+}
+
+@Composable
+private fun PhoneWarningCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = StatusWarning.copy(alpha = 0.1f))
+    ) {
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Info, "Info", tint = StatusWarning, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Please enter a valid mobile number first", fontSize = 13.sp, color = StatusWarning)
+        }
+    }
+}
+
+private fun LazyGridScope.productGridItems(
+    products: List<ProductEntity>,
+    selectedProduct: ProductEntity?,
+    phoneNumber: String,
+    onProductSelected: (ProductEntity) -> Unit
+) {
+    items(products) { product ->
+        val isSelected = selectedProduct == product
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onProductSelected(product) },
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isSelected) EPayGreen else Color.White
+            ),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = if (isSelected) 4.dp else 1.dp
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 14.dp, horizontal = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "₱${String.format("%,.0f", product.amount)}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = if (isSelected) Color.White else EPayGreenDark,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }
 

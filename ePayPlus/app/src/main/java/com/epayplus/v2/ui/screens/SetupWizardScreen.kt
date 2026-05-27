@@ -17,6 +17,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.epayplus.v2.ui.layout.CenteredContent
+import com.epayplus.v2.ui.layout.isLandscape
 import com.epayplus.v2.ui.viewmodel.SetupWizardViewModel
 
 @Composable
@@ -34,17 +36,20 @@ fun SetupWizardScreen(
     val pin by viewModel.pin.collectAsState()
     val deviceMode by viewModel.deviceMode.collectAsState()
 
+    val landscape = isLandscape
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(48.dp))
+        CenteredContent(maxWidth = if (landscape) 720.dp else 520.dp) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (landscape) 32.dp else 24.dp, vertical = if (landscape) 16.dp else 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(if (landscape) 16.dp else 48.dp))
 
             Text(
                 "ePayPlus Setup",
@@ -73,7 +78,7 @@ fun SetupWizardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(if (landscape) 24.dp else 48.dp))
 
             AnimatedContent(targetState = currentStep, label = "wizard_step") { step ->
                 when (step) {
@@ -112,6 +117,7 @@ fun SetupWizardScreen(
                         isLoading = isLoading
                     )
                 }
+            }
             }
         }
     }

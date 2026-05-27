@@ -76,6 +76,8 @@
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:screenOrientation="sensorLandscape"
             android:theme="@style/Theme.EPayPlus"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -91,7 +93,9 @@
         <activity
             android:name=".ui.KioskActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
             android:theme="@style/Theme.EPayPlus">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

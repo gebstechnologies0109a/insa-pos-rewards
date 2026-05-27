@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.epayplus.v2.data.local.entity.TransactionEntity
+import androidx.compose.foundation.lazy.LazyListScope
+import com.epayplus.v2.ui.layout.isLandscape
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.TransactionViewModel
 import java.text.SimpleDateFormat
@@ -34,6 +36,8 @@ fun TransactionHistoryScreen(
     val transactions by viewModel.transactions.collectAsState()
     var selectedFilter by remember { mutableStateOf("ALL") }
     var searchQuery by remember { mutableStateOf("") }
+
+    val landscape = isLandscape
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         CenterAlignedTopAppBar(
@@ -50,84 +54,145 @@ fun TransactionHistoryScreen(
             )
         )
 
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = {
-                    searchQuery = it
-                    viewModel.search(it)
-                },
-                placeholder = { Text("Search transactions...") },
-                leadingIcon = { Icon(Icons.Outlined.Search, "Search", tint = EPayMediumGray) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = ""; viewModel.search("") }) {
-                            Icon(Icons.Filled.Clear, "Clear", modifier = Modifier.size(18.dp))
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = EPayGreen,
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White
-                )
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("ALL", "ELOAD", "BILLS", "ECASH").forEach { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = {
+        if (landscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Column(modifier = Modifier.weight(0.35f)) {
+                    TransactionFilters(
+                        searchQuery = searchQuery,
+                        selectedFilter = selectedFilter,
+                        onSearchChange = {
+                            searchQuery = it
+                            viewModel.search(it)
+                        },
+                        onClearSearch = {
+                            searchQuery = ""
+                            viewModel.search("")
+                        },
+                        onFilterSelected = { filter ->
                             selectedFilter = filter
                             viewModel.filterByType(filter)
-                        },
-                        label = {
-                            Text(
-                                when (filter) {
-                                    "ALL" -> "All"
-                                    "ELOAD" -> "Load"
-                                    "BILLS" -> "Bills"
-                                    "ECASH" -> "Cash-In"
-                                    else -> filter
-                                },
-                                fontSize = 12.sp
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = EPayGreen.copy(alpha = 0.12f),
-                            selectedLabelColor = EPayGreen
-                        )
+                        }
                     )
                 }
+                LazyColumn(
+                    modifier = Modifier.weight(0.65f),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    transactionListItems(transactions)
+                }
+            }
+        } else {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                TransactionFilters(
+                    searchQuery = searchQuery,
+                    selectedFilter = selectedFilter,
+                    onSearchChange = {
+                        searchQuery = it
+                        viewModel.search(it)
+                    },
+                    onClearSearch = {
+                        searchQuery = ""
+                        viewModel.search("")
+                    },
+                    onFilterSelected = { filter ->
+                        selectedFilter = filter
+                        viewModel.filterByType(filter)
+                    }
+                )
+            }
+
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                transactionListItems(transactions)
             }
         }
+    }
+}
 
-        LazyColumn(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(transactions) { transaction ->
-                TransactionCard(transaction)
+@Composable
+private fun TransactionFilters(
+    searchQuery: String,
+    selectedFilter: String,
+    onSearchChange: (String) -> Unit,
+    onClearSearch: () -> Unit,
+    onFilterSelected: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = searchQuery,
+        onValueChange = onSearchChange,
+        placeholder = { Text("Search transactions...") },
+        leadingIcon = { Icon(Icons.Outlined.Search, "Search", tint = EPayMediumGray) },
+        trailingIcon = {
+            if (searchQuery.isNotEmpty()) {
+                IconButton(onClick = onClearSearch) {
+                    Icon(Icons.Filled.Clear, "Clear", modifier = Modifier.size(18.dp))
+                }
             }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        singleLine = true,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = EPayGreen,
+            unfocusedContainerColor = Color.White,
+            focusedContainerColor = Color.White
+        )
+    )
 
-            if (transactions.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Outlined.Inbox, "Empty", modifier = Modifier.size(56.dp), tint = EPayMediumGray.copy(alpha = 0.4f))
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("No transactions found", fontWeight = FontWeight.Medium, color = EPayMediumGray)
-                            Text("Your transactions will appear here", fontSize = 13.sp, color = EPayMediumGray.copy(alpha = 0.7f))
-                        }
-                    }
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf("ALL", "ELOAD", "BILLS", "ECASH").forEach { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterSelected(filter) },
+                label = {
+                    Text(
+                        when (filter) {
+                            "ALL" -> "All"
+                            "ELOAD" -> "Load"
+                            "BILLS" -> "Bills"
+                            "ECASH" -> "Cash-In"
+                            else -> filter
+                        },
+                        fontSize = 12.sp
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = EPayGreen.copy(alpha = 0.12f),
+                    selectedLabelColor = EPayGreen
+                )
+            )
+        }
+    }
+}
+
+private fun LazyListScope.transactionListItems(
+    transactions: List<TransactionEntity>
+) {
+    items(transactions) { transaction ->
+        TransactionCard(transaction)
+    }
+
+    if (transactions.isEmpty()) {
+        item {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(40.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Outlined.Inbox, "Empty", modifier = Modifier.size(56.dp), tint = EPayMediumGray.copy(alpha = 0.4f))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("No transactions found", fontWeight = FontWeight.Medium, color = EPayMediumGray)
+                    Text("Your transactions will appear here", fontSize = 13.sp, color = EPayMediumGray.copy(alpha = 0.7f))
                 }
             }
         }

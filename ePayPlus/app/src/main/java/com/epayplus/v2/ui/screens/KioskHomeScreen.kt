@@ -1,8 +1,10 @@
 package com.epayplus.v2.ui.screens
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -25,12 +27,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.epayplus.v2.R
+import com.epayplus.v2.ui.layout.kioskGridColumns
+import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun KioskHomeScreen(
-    onServiceSelected: (String) -> Unit = {}
+    navController: NavController,
+    onAdminExitRequested: () -> Unit = {}
 ) {
     val services = listOf(
         KioskServiceItem("LOAD", Icons.Filled.PhoneAndroid, CategoryEload, "eload", R.drawable.ic_quick_eload_large),
@@ -48,27 +55,39 @@ fun KioskHomeScreen(
                 )
             )
     ) {
-        // Header
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 32.dp, vertical = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                "ePayPlus",
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                "Select a service to get started",
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 16.sp
-            )
+            Column(
+                modifier = Modifier.combinedClickable(
+                    onClick = {},
+                    onLongClick = onAdminExitRequested
+                )
+            ) {
+                Text(
+                    "ePayPlus",
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    "Select a service to get started",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 16.sp
+                )
+                Text(
+                    "Long-press title to exit kiosk",
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
 
-        // Service Grid
         Card(
             modifier = Modifier
                 .fillMaxSize()
@@ -76,27 +95,40 @@ fun KioskHomeScreen(
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
         ) {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = kioskGridColumns(),
                 contentPadding = PaddingValues(24.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(services) { service ->
-                    KioskServiceCard(service) { onServiceSelected(service.route) }
+                    KioskServiceCard(service) {
+                        navigateKioskService(navController, service.route)
+                    }
                 }
             }
         }
     }
 }
 
+private fun navigateKioskService(navController: NavController, routeKey: String) {
+    val destination = when (routeKey) {
+        "eload" -> NavRoutes.ELoadProviders.route
+        "bills" -> NavRoutes.BillsCategories.route
+        "ecash" -> NavRoutes.ECashProviders.route
+        "rfid" -> NavRoutes.Rfid.route
+        else -> return
+    }
+    navController.navigate(destination)
+}
+
 @Composable
-private fun KioskServiceCard(service: KioskServiceItem, onClick: () -> Unit = {}) {
+private fun KioskServiceCard(service: KioskServiceItem, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
-            .clickable { onClick() },
+            .aspectRatio(1.15f)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)

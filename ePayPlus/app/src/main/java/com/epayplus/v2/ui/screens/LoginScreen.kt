@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.epayplus.v2.ui.layout.CenteredContent
+import com.epayplus.v2.ui.layout.isLandscape
 import com.epayplus.v2.ui.navigation.NavRoutes
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.LoginViewModel
@@ -52,6 +54,8 @@ fun LoginScreen(
         }
     }
 
+    val landscape = isLandscape
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -61,14 +65,15 @@ fun LoginScreen(
                 )
             )
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(60.dp))
+        CenteredContent(maxWidth = if (landscape) 560.dp else 520.dp) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = if (landscape) 32.dp else 24.dp, vertical = if (landscape) 16.dp else 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(if (landscape) 16.dp else 60.dp))
 
             Surface(
                 modifier = Modifier.size(90.dp),
@@ -252,23 +257,24 @@ fun LoginScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(if (landscape) 16.dp else 32.dp))
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (landscape) 32.dp else 24.dp)
             ) {
                 FeatureBadge(Icons.Outlined.PhoneAndroid, "E-Load")
                 FeatureBadge(Icons.Outlined.Receipt, "Bills Pay")
                 FeatureBadge(Icons.Outlined.AccountBalanceWallet, "Cash-In")
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(if (landscape) 16.dp else 40.dp))
 
             Text(
-                "Version 2.2",
+                "Version 3.1.4",
                 fontSize = 12.sp,
                 color = Color.White.copy(alpha = 0.6f)
             )
+            }
         }
     }
 }

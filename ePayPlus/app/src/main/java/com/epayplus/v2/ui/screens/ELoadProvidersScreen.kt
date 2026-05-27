@@ -25,6 +25,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.epayplus.v2.ui.components.ProviderIcon
 import com.epayplus.v2.ui.navigation.NavRoutes
+import com.epayplus.v2.ui.layout.providerGridColumns
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.ELoadViewModel
 
@@ -91,7 +92,7 @@ fun ELoadProvidersScreen(
                 }
             }
         } else {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                 Text(
                     "Select Network Provider",
                     style = MaterialTheme.typography.titleSmall,
@@ -101,16 +102,17 @@ fun ELoadProvidersScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+                    columns = providerGridColumns(minSize = 180.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     items(providers) { provider ->
                         val color = providerColors[provider.providerCode] ?: CategoryEload
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(1f)
+                                .aspectRatio(1.1f)
                                 .clickable {
                                     navController.navigate(
                                         NavRoutes.ELoadProducts.createRoute(provider.providerCode)

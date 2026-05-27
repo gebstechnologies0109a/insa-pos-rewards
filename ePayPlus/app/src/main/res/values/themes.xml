@@ -4,5 +4,6 @@
         <item name="colorPrimary">@color/epay_green</item>
         <item name="colorPrimaryDark">@color/epay_green_dark</item>
         <item name="android:statusBarColor">@color/epay_green_dark</item>
+        <item name="android:windowFullscreen">false</item>
     </style>
 </resources>

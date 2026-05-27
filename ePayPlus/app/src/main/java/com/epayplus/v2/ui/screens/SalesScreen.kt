@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.epayplus.v2.data.local.entity.SalesSummaryEntity
+import androidx.compose.foundation.lazy.LazyListScope
+import com.epayplus.v2.ui.layout.isLandscape
 import com.epayplus.v2.ui.theme.*
 import com.epayplus.v2.ui.viewmodel.SalesViewModel
 
@@ -31,6 +33,8 @@ fun SalesScreen(
     val salesSummaries by viewModel.salesSummaries.collectAsState()
     val todaySales by viewModel.todaySales.collectAsState()
     val todayCount by viewModel.todayCount.collectAsState()
+
+    val landscape = isLandscape
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(
@@ -47,64 +51,97 @@ fun SalesScreen(
             }
         }
 
-        LazyColumn(
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
+        if (landscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .weight(0.35f)
+                        .fillMaxHeight(),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = EPayBlue)
                 ) {
-                    Column(modifier = Modifier.padding(24.dp)) {
-                        Text("Today's Summary", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "₱ ${String.format("%,.2f", todaySales)}",
-                            color = Color.White,
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text("Total Sales", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                            Column {
-                                Text("Transactions", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
-                                Text("$todayCount", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                            }
-                        }
-                    }
+                    SalesSummaryContent(todaySales = todaySales, todayCount = todayCount)
+                }
+                LazyColumn(
+                    modifier = Modifier.weight(0.65f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    salesListItems(salesSummaries)
                 }
             }
-
-            item {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("Recent Days", fontWeight = FontWeight.SemiBold, color = EPayMediumGray)
-            }
-
-            if (salesSummaries.isEmpty()) {
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = EPayBlue)
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(Icons.Filled.BarChart, "No data", modifier = Modifier.size(48.dp), tint = EPayMediumGray.copy(alpha = 0.4f))
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("No sales data yet", color = EPayMediumGray)
-                        }
+                        SalesSummaryContent(todaySales = todaySales, todayCount = todayCount)
                     }
                 }
-            }
-
-            items(salesSummaries) { summary ->
-                SalesDayCard(summary)
+                salesListItems(salesSummaries)
             }
         }
+    }
+}
+
+@Composable
+private fun SalesSummaryContent(todaySales: Double, todayCount: Int) {
+    Column(modifier = Modifier.padding(24.dp)) {
+        Text("Today's Summary", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "₱ ${String.format("%,.2f", todaySales)}",
+            color = Color.White,
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text("Total Sales", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(16.dp))
+        Column {
+            Text("Transactions", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
+            Text("$todayCount", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        }
+    }
+}
+
+private fun LazyListScope.salesListItems(
+    salesSummaries: List<SalesSummaryEntity>
+) {
+    item {
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Recent Days", fontWeight = FontWeight.SemiBold, color = EPayMediumGray)
+    }
+
+    if (salesSummaries.isEmpty()) {
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Filled.BarChart, "No data", modifier = Modifier.size(48.dp), tint = EPayMediumGray.copy(alpha = 0.4f))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("No sales data yet", color = EPayMediumGray)
+                }
+            }
+        }
+    }
+
+    items(salesSummaries) { summary ->
+        SalesDayCard(summary)
     }
 }
 

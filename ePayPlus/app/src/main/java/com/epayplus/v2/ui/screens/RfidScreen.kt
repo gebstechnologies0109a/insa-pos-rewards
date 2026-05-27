@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.epayplus.v2.R
+import com.epayplus.v2.ui.layout.isLandscape
 import com.epayplus.v2.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -92,6 +93,8 @@ fun RfidScreen(navController: NavController) {
         }
     }
 
+    val landscape = isLandscape
+
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         TopAppBar(
             title = { Text("RFID", fontWeight = FontWeight.Bold) },
@@ -107,74 +110,95 @@ fun RfidScreen(navController: NavController) {
             )
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Surface(
-                modifier = Modifier.size(96.dp),
-                shape = CircleShape,
-                color = CategoryRfid.copy(alpha = 0.12f)
+        if (landscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                horizontalArrangement = Arrangement.spacedBy(32.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_quick_rfid),
-                        contentDescription = "RFID",
-                        modifier = Modifier.size(56.dp),
-                        contentScale = ContentScale.Fit
-                    )
+                Column(
+                    modifier = Modifier.weight(0.4f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    RfidHeroIcon()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("RFID Services", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = EPayDarkGray)
+                    Text("Coming soon", fontSize = 14.sp, color = EPayMediumGray, textAlign = TextAlign.Center)
                 }
+                RfidStatusCard(
+                    statusMessage = statusMessage,
+                    tagId = tagId,
+                    modifier = Modifier.weight(0.6f)
+                )
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                "RFID Services",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = EPayDarkGray
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "Coming soon",
-                fontSize = 14.sp,
-                color = EPayMediumGray,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CategoryRfid.copy(alpha = 0.08f))
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Filled.Nfc,
-                            contentDescription = null,
-                            tint = CategoryRfid,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            "Tap to Read",
-                            fontWeight = FontWeight.SemiBold,
-                            color = CategoryRfid
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(statusMessage, fontSize = 14.sp, color = EPayMediumGray)
-                    tagId?.let { id ->
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("Tag ID", fontSize = 12.sp, color = EPayMediumGray)
-                        Text(id, fontWeight = FontWeight.Medium, fontSize = 13.sp)
-                    }
-                }
+                RfidHeroIcon()
+                Spacer(modifier = Modifier.height(24.dp))
+                Text("RFID Services", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = EPayDarkGray)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Coming soon", fontSize = 14.sp, color = EPayMediumGray, textAlign = TextAlign.Center)
+                Spacer(modifier = Modifier.height(24.dp))
+                RfidStatusCard(statusMessage = statusMessage, tagId = tagId)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RfidHeroIcon() {
+    Surface(
+        modifier = Modifier.size(96.dp),
+        shape = CircleShape,
+        color = CategoryRfid.copy(alpha = 0.12f)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Image(
+                painter = painterResource(R.drawable.ic_quick_rfid),
+                contentDescription = "RFID",
+                modifier = Modifier.size(56.dp),
+                contentScale = ContentScale.Fit
+            )
+        }
+    }
+}
+
+@Composable
+private fun RfidStatusCard(
+    statusMessage: String,
+    tagId: String?,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CategoryRfid.copy(alpha = 0.08f))
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Nfc,
+                    contentDescription = null,
+                    tint = CategoryRfid,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Tap to Read", fontWeight = FontWeight.SemiBold, color = CategoryRfid)
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(statusMessage, fontSize = 14.sp, color = EPayMediumGray)
+            tagId?.let { id ->
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Tag ID", fontSize = 12.sp, color = EPayMediumGray)
+                Text(id, fontWeight = FontWeight.Medium, fontSize = 13.sp)
             }
         }
     }

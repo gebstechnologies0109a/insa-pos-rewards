@@ -3,6 +3,7 @@ package com.epayplus.v2.ui.navigation
 sealed class NavRoutes(val route: String) {
     object Login : NavRoutes("login")
     object Home : NavRoutes("home")
+    object KioskHome : NavRoutes("kiosk_home")
     object ELoadProviders : NavRoutes("eload/providers")
     object ELoadProducts : NavRoutes("eload/products/{providerCode}") {
         fun createRoute(providerCode: String) = "eload/products/$providerCode"
