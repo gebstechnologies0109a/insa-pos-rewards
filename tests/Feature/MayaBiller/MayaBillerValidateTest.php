@@ -49,8 +49,9 @@ class MayaBillerValidateTest extends TestCase
         $response = $this->postValidate($payload, 'rrn-valid-001');
 
         $response->assertOk()
-            ->assertExactJson(['result' => ['code' => '0000']])
-            ->assertJsonMissing(['fees']);
+            ->assertJsonPath('result.code', '0000')
+            ->assertJsonPath('fees.serviceFee', 15)
+            ->assertJsonPath('fees.totalFee', 15);
 
         $this->assertSame($before, MayaBillerTransaction::count());
     }
