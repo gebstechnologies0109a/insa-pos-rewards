@@ -11,8 +11,13 @@ android {
         applicationId = "com.insapos.v2"
         minSdk = 23
         targetSdk = 35
+<<<<<<< Updated upstream
         versionCode = 23
         versionName = "3.0.0"
+=======
+        versionCode = 24
+        versionName = "3.0.1"
+>>>>>>> Stashed changes
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")

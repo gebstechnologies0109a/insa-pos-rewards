@@ -35,6 +35,10 @@ class LoginController extends Controller
                 abort(403, 'This account is not authorized for ePay Plus Admin.');
             }
 
+            if (is_insa_product($request) && is_insa_android_app($request)) {
+                return $this->redirectInsaAndroidAfterLogin($user);
+            }
+
             if ($user->isSuperAdmin()) {
                 return redirect()->intended(route('super-admin.dashboard'));
             }
@@ -53,6 +57,18 @@ class LoginController extends Controller
         return back()->withErrors([
             'email' => 'Invalid credentials.',
         ])->onlyInput('email');
+    }
+
+    /**
+     * INSA POS Android shells default to cashier POS, not web admin panels.
+     */
+    private function redirectInsaAndroidAfterLogin(User $user): RedirectResponse
+    {
+        if ($user->isStockman()) {
+            return redirect()->intended(route('stockman.inventory'));
+        }
+
+        return redirect()->intended(route('pos.cashier'));
     }
 
     public function logout(Request $request): RedirectResponse

@@ -27,6 +27,31 @@ if (! function_exists('is_insa_product')) {
     }
 }
 
+if (! function_exists('is_insa_android_app')) {
+    /**
+     * True when the request comes from an INSA POS Android WebView shell.
+     */
+    function is_insa_android_app(?Request $request = null): bool
+    {
+        $request ??= request();
+
+        if ($request === null) {
+            return false;
+        }
+
+        if ($request->boolean('android') || $request->query('android') === '1') {
+            return true;
+        }
+
+        $ua = strtolower($request->userAgent() ?? '');
+
+        return str_contains($ua, 'insaposv2/')
+            || str_contains($ua, 'insapos/')
+            || str_contains($ua, 'insaposlight/')
+            || str_contains($ua, 'insabuddy/');
+    }
+}
+
 if (! function_exists('provider_code_to_slug')) {
     /**
      * Map epay provider code to ic_provider_{slug} filename slug.

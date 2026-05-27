@@ -61,6 +61,14 @@
 
                 <div class="px-5 pt-4 pb-1 text-xs uppercase text-indigo-500 tracking-wider font-semibold">Quick Links</div>
 
+                <a href="{{ route('pos.cashier') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition {{ request()->routeIs('pos.cashier') ? 'bg-indigo-900 text-white' : '' }}"
+                   @if(is_insa_android_app()) onclick="if(window.INSAPOS&&window.INSAPOS.openPosMode){window.INSAPOS.openPosMode();return false;}" @endif>
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        POS Mode
+                    </span>
+                </a>
+
                 <a href="{{ route('backoffice.dashboard') }}" class="block px-5 py-2.5 hover:bg-indigo-900 hover:text-white transition">
                     <span class="flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>

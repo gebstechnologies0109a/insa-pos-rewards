@@ -43,7 +43,15 @@ Route::middleware('insa.product')->group(function () {
 
 // ── POS Cashier (cashier, manager, admin, owner) ─
 Route::middleware(['auth', 'role:cashier,manager,admin,owner'])->group(function () {
+<<<<<<< Updated upstream
     Route::get('/pos/cashier', [CashierController::class, 'index'])->name('pos.cashier');
+=======
+    Route::redirect('/pos', '/pos/cashier')->name('pos.home');
+
+    Route::get('/pos/cashier', function () {
+        return view('pos.cashier.index');
+    })->name('pos.cashier');
+>>>>>>> Stashed changes
 });
 
 // ── Stockman (stockman, manager, admin, owner) ───

@@ -5,7 +5,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import org.json.JSONObject
 
-class AndroidBridge(private val context: Context) {
+class AndroidBridge(private val activity: MainActivity) {
 
     companion object {
         private const val TAG = "INSAPOSv2Bridge"
@@ -16,7 +16,22 @@ class AndroidBridge(private val context: Context) {
 
     @JavascriptInterface
     fun getDeviceInfo(): String {
-        return DeviceInfo.toJsonString(context)
+        return DeviceInfo.toJsonString(activity)
+    }
+
+    @JavascriptInterface
+    fun notifySuperAdminStatus(isSuperAdmin: Boolean) {
+        activity.runOnUiThread { activity.setSuperAdminFromWeb(isSuperAdmin) }
+    }
+
+    @JavascriptInterface
+    fun openPosMode() {
+        activity.runOnUiThread { activity.openPosMode() }
+    }
+
+    @JavascriptInterface
+    fun openSuperAdminPanel() {
+        activity.runOnUiThread { activity.openSuperAdminPanel() }
     }
 
     @JavascriptInterface

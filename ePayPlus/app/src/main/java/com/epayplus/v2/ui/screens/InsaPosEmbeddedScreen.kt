@@ -2,6 +2,7 @@ package com.epayplus.v2.ui.screens
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.view.ViewGroup
@@ -149,6 +150,10 @@ fun InsaPosEmbeddedScreen(navController: NavController) {
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 isLoading = false
+                                if (url != null && isInsaSuperAdminPath(url)) {
+                                    view?.loadUrl(cashierUrl)
+                                    return
+                                }
                                 view?.evaluateJavascript(bridge.injectReadyScript(), null)
                             }
 
@@ -182,6 +187,10 @@ fun InsaPosEmbeddedScreen(navController: NavController) {
                                 request: WebResourceRequest?
                             ): Boolean {
                                 val url = request?.url?.toString() ?: return false
+                                if (isInsaSuperAdminPath(url)) {
+                                    view?.loadUrl(cashierUrl)
+                                    return true
+                                }
                                 return when {
                                     url.startsWith("http://") || url.startsWith("https://") -> false
                                     else -> {
@@ -236,5 +245,13 @@ fun InsaPosEmbeddedScreen(navController: NavController) {
             }
             webViewRef = null
         }
+    }
+}
+
+private fun isInsaSuperAdminPath(url: String): Boolean {
+    return try {
+        Uri.parse(url).path?.contains("/super-admin", ignoreCase = true) == true
+    } catch (_: Exception) {
+        false
     }
 }

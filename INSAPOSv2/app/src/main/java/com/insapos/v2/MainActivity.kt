@@ -33,11 +33,11 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.FrameLayout
+import android.net.Uri
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.TextView
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import androidx.activity.result.ActivityResultLauncher
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -61,8 +61,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var syncBadge: LinearLayout
     private lateinit var tvSyncBadge: TextView
     private lateinit var tvOfflineStats: TextView
+    private lateinit var fabModeToggle: ExtendedFloatingActionButton
     private lateinit var session: SessionManager
     private lateinit var connectivity: ConnectivityMonitor
+
+    private var isSuperAdminFromWeb = false
+    private var allowSuperAdminPanel = false
 
     private val handler = Handler(Looper.getMainLooper())
     private var posService: PosService? = null
@@ -145,6 +149,8 @@ class MainActivity : AppCompatActivity() {
         syncBadge = findViewById(R.id.syncBadge)
         tvSyncBadge = findViewById(R.id.tvSyncBadge)
         tvOfflineStats = findViewById(R.id.tvOfflineStats)
+        fabModeToggle = findViewById(R.id.fabModeToggle)
+        fabModeToggle.setOnClickListener { onModeToggleClicked() }
 
         val versionText = findViewById<TextView>(R.id.versionText)
         versionText.text = "v${BuildConfig.VERSION_NAME}"
@@ -338,10 +344,21 @@ class MainActivity : AppCompatActivity() {
                 hideOffline()
                 hideStatus()
 
-                url?.let { session.lastUrl = it }
+                url?.let {
+                    if (!isSuperAdminPath(it)) {
+                        session.lastUrl = it
+                    }
+                }
+
+                if (url != null && shouldRedirectFromSuperAdmin(url)) {
+                    handler.post { loadPosUrl() }
+                    return
+                }
 
                 view?.requestFocus()
                 injectBridgeReady()
+                detectSuperAdminFromPage()
+                updateModeToggleFab(url)
                 posService?.let { onPageReadyForService(it) }
             }
 
@@ -388,6 +405,10 @@ class MainActivity : AppCompatActivity() {
                 view: WebView?, request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
+                if (shouldRedirectFromSuperAdmin(url)) {
+                    handler.post { loadPosUrl() }
+                    return true
+                }
                 val domain = session.serverDomain
                 return !(url.contains(domain) || url.contains("127.0.0.1"))
             }
@@ -497,9 +518,76 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadPosUrl() {
+        allowSuperAdminPanel = false
         val url = session.getPosUrl()
         Log.i(TAG, "Loading: $url")
         webView.loadUrl(url)
+    }
+
+    fun setSuperAdminFromWeb(isSuperAdmin: Boolean) {
+        isSuperAdminFromWeb = isSuperAdmin
+        updateModeToggleFab(webView.url)
+    }
+
+    fun openPosMode() {
+        allowSuperAdminPanel = false
+        loadPosUrl()
+    }
+
+    fun openSuperAdminPanel() {
+        if (!isSuperAdminFromWeb) {
+            loadPosUrl()
+            return
+        }
+        allowSuperAdminPanel = true
+        val url = "${session.getBaseUrl()}/super-admin"
+        Log.i(TAG, "Opening super admin: $url")
+        webView.loadUrl(url)
+    }
+
+    private fun onModeToggleClicked() {
+        if (!isSuperAdminFromWeb) return
+        if (allowSuperAdminPanel || isSuperAdminPath(webView.url ?: "")) {
+            openPosMode()
+        } else {
+            openSuperAdminPanel()
+        }
+    }
+
+    private fun detectSuperAdminFromPage() {
+        webView.evaluateJavascript(
+            "(window.INSA_IS_SUPER_ADMIN === true)"
+        ) { result ->
+            val isSa = result == "true"
+            if (isSa != isSuperAdminFromWeb) {
+                isSuperAdminFromWeb = isSa
+                runOnUiThread { updateModeToggleFab(webView.url) }
+            }
+        }
+    }
+
+    private fun updateModeToggleFab(currentUrl: String?) {
+        if (!isSuperAdminFromWeb) {
+            fabModeToggle.visibility = View.GONE
+            return
+        }
+        fabModeToggle.visibility = View.VISIBLE
+        val onSuperAdmin = isSuperAdminPath(currentUrl ?: "")
+        fabModeToggle.text = if (onSuperAdmin) "POS Mode" else "Super Admin"
+    }
+
+    private fun isSuperAdminPath(url: String): Boolean {
+        return try {
+            val path = Uri.parse(url).path?.lowercase() ?: return false
+            path.contains("/super-admin")
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun shouldRedirectFromSuperAdmin(url: String): Boolean {
+        if (!isSuperAdminPath(url)) return false
+        return !isSuperAdminFromWeb || !allowSuperAdminPanel
     }
 
     // --- Connectivity ---
