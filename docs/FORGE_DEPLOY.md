@@ -16,7 +16,11 @@ Forge injects `FORGE_SITE_PATH`, `FORGE_SITE_BRANCH`, `FORGE_SITE_NAME`, and `FO
 
 Forge runs whatever is pasted under **Site → Deployment → Deploy Script** on **every** deploy. That script executes **before** `git pull` updates the repo on disk.
 
-If the dashboard still contains an old copy of `forge-deploy-insa.sh` (for example from commit `be335e4`), deploy will fail on `APP_PRODUCT` even when branch `deploy/insa` already has the fix. You must **update the deploy script in Forge once** (paste the latest `scripts/forge-deploy-insa.sh` from this repo) **or** set `APP_PRODUCT=insa` in Forge Environment so the guard passes on the first line.
+If the dashboard still contains an old copy of `forge-deploy-insa.sh` (for example from commit `be335e4`), deploy will fail on `APP_PRODUCT` even when branch `deploy/insa` already has the fix.
+
+**Fastest unblock (no script paste):** add `APP_PRODUCT=insa` under **Site → Environment**, enable **Make .env variables available to deployment script**, save, **Deploy Now**. The old guard then sees `insa` before `git pull`.
+
+**Permanent fix:** replace the dashboard script with the one-box script below (same as `scripts/forge-deploy-insa-standalone.sh`).
 
 After the dashboard script is updated, future deploys pick up repo changes via `git pull` inside the script.
 
@@ -53,6 +57,56 @@ Use this for `insa-pos-rewards-tasxesjq.on-forge.com` and similar INSA Forge sit
 Then click **Deploy Now** (or push to `deploy/insa` if Quick Deploy is on).
 
 Verify deploy log shows a recent commit (after `48e75df` / auto-`APP_PRODUCT` fix), not an old SHA like `be335e4` unless that is intentionally deployed.
+
+## One-box deploy script (paste into Forge dashboard)
+
+Copy **everything** inside the fence below into **Site → Deployment → Deploy Script** for `insa-pos-rewards-tasxesjq.on-forge.com` (and other INSA sites). Source file: `scripts/forge-deploy-insa-standalone.sh`.
+
+```bash
+#!/usr/bin/env bash
+# Paste this ENTIRE file into Forge → Site → Deployment → Deploy Script.
+# Self-contained: sets APP_PRODUCT before git pull (dashboard script runs on old repo tree).
+# Branch: deploy/insa | Site: insa-pos-rewards-tasxesjq.on-forge.com and similar INSA hosts.
+
+export APP_PRODUCT=insa
+
+set -euo pipefail
+
+cd "${FORGE_SITE_PATH:-/home/forge/insa-pos-rewards-tasxesjq.on-forge.com}"
+
+if [ ! -f .env ]; then
+  echo "ERROR: .env not found in $(pwd)"
+  exit 1
+fi
+
+if grep -qE '^APP_PRODUCT=' .env; then
+  sed -i.bak 's/^APP_PRODUCT=.*/APP_PRODUCT=insa/' .env
+  rm -f .env.bak
+else
+  printf '\nAPP_PRODUCT=insa\n' >> .env
+fi
+
+git pull origin "${FORGE_SITE_BRANCH:-deploy/insa}"
+
+if grep -r '<<<<<<<' routes/ 2>/dev/null; then
+  echo "ERROR: Git merge conflict markers found in routes/ — fix before deploying"
+  exit 1
+fi
+
+${FORGE_COMPOSER:-composer} install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+
+php artisan migrate --force
+
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+if php artisan list --raw 2>/dev/null | grep -q '^queue:restart'; then
+  php artisan queue:restart
+fi
+
+echo "INSA deploy complete ($(git rev-parse --short HEAD))"
+```
 
 ## Forge worker SSH key
 

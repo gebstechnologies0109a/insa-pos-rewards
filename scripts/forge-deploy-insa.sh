@@ -1,17 +1,30 @@
 #!/usr/bin/env bash
 # Laravel Forge deploy hook — INSA POS (insapos.diybizrewards.com, insa-pos-rewards, etc.)
 # Forge sets FORGE_SITE_PATH, FORGE_SITE_BRANCH, FORGE_COMPOSER, FORGE_SITE_NAME.
-# Point the site at branch deploy/insa and paste this script in Site → Deployment.
+# Point the site at branch deploy/insa and paste this script (or forge-deploy-insa-standalone.sh) in Site → Deployment.
 #
 # Recommended in Forge → Site → Environment: APP_PRODUCT=insa
 # Enable "Make .env variables available to deployment script" so APP_PRODUCT is visible here.
 
+# MUST be first executable logic — Forge runs the dashboard script before git pull.
+_insactx="$(printf '%s' "${FORGE_SITE_PATH:-}${FORGE_SITE_ROOT:-}${FORGE_SITE_NAME:-}${FORGE_SITE_DIRECTORY:-}" | tr '[:upper:]' '[:lower:]')"
+case "${_insactx}" in
+  *insapos*|*insa-pos-rewards*|*insa_pos_rewards*|*insa-pos*|*insa*)
+    export APP_PRODUCT=insa
+    ;;
+esac
+if [ -z "${APP_PRODUCT:-}" ] || [ "${APP_PRODUCT}" = "auto" ]; then
+  case "${_insactx}" in
+    *insapos*|*insa-pos-rewards*|*insa_pos_rewards*|*insa-pos*|*insa*)
+      export APP_PRODUCT=insa
+      ;;
+  esac
+fi
+
 set -euo pipefail
 
 is_insa_forge_site() {
-  local ctx
-  ctx="$(printf '%s' "${FORGE_SITE_PATH:-}${FORGE_SITE_ROOT:-}${FORGE_SITE_NAME:-}${FORGE_SITE_DIRECTORY:-}" | tr '[:upper:]' '[:lower:]')"
-  case "${ctx}" in
+  case "${_insactx}" in
     *insapos*|*insa-pos-rewards*|*insa_pos_rewards*|*insa-pos*|*insa*)
       return 0
       ;;
@@ -19,13 +32,9 @@ is_insa_forge_site() {
   return 1
 }
 
-ensure_insa_app_product() {
-  local current="${1:-}"
-  if [ -n "${current}" ] && [ "${current}" != "auto" ]; then
-    return 1
-  fi
+sync_insa_app_product_to_env() {
   if ! is_insa_forge_site; then
-    return 1
+    return 0
   fi
   export APP_PRODUCT=insa
   if [ -f .env ]; then
@@ -36,8 +45,6 @@ ensure_insa_app_product() {
       printf '\n# Set by forge-deploy-insa.sh — prefer Forge → Site → Environment\nAPP_PRODUCT=insa\n' >> .env
     fi
   fi
-  echo "NOTE: APP_PRODUCT unset/auto on INSA Forge site — set APP_PRODUCT=insa (exported for this deploy)"
-  return 0
 }
 
 read_app_product() {
@@ -60,15 +67,41 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
+# INSA Forge sites: default to insa; only abort when explicitly misconfigured.
+if is_insa_forge_site; then
+  export APP_PRODUCT=insa
+fi
+
 PRODUCT="$(read_app_product)"
-if ensure_insa_app_product "${PRODUCT}"; then
-  PRODUCT=insa
+if [ -z "${PRODUCT}" ] || [ "${PRODUCT}" = "auto" ]; then
+  if is_insa_forge_site; then
+    PRODUCT=insa
+    export APP_PRODUCT=insa
+    sync_insa_app_product_to_env
+  fi
+fi
+
+if [ "${PRODUCT}" = "epayplus" ]; then
+  echo "ERROR: APP_PRODUCT=epayplus on an INSA Forge site — set APP_PRODUCT=insa in Forge → Environment"
+  exit 1
+fi
+
+if [ -n "${PRODUCT}" ] && [ "${PRODUCT}" != "insa" ]; then
+  echo "ERROR: APP_PRODUCT must be 'insa' on this site (found: '${PRODUCT}')"
+  echo "Fix: Forge → Site → Environment → add APP_PRODUCT=insa (then redeploy)"
+  exit 1
 fi
 
 if [ "${PRODUCT}" != "insa" ]; then
-  echo "ERROR: APP_PRODUCT must be 'insa' on this site (found: '${PRODUCT:-<unset>}')"
-  echo "Fix: Forge → Site → Environment → add APP_PRODUCT=insa (then redeploy)"
-  exit 1
+  if is_insa_forge_site; then
+    PRODUCT=insa
+    export APP_PRODUCT=insa
+    sync_insa_app_product_to_env
+  else
+    echo "WARN: APP_PRODUCT unset on non-INSA-named site — continuing with APP_PRODUCT=insa for this script"
+    export APP_PRODUCT=insa
+    PRODUCT=insa
+  fi
 fi
 
 git pull origin "${FORGE_SITE_BRANCH:-deploy/insa}"
