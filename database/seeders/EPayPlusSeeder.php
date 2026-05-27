@@ -34,7 +34,19 @@ class EPayPlusSeeder extends Seeder
             $this->billsProviders(),
             $this->ecashProviders(),
             $this->rfidProviders(),
+            $this->mayaNegosyoSupplementProviders(),
         );
+
+        $seen = [];
+        $providers = array_values(array_filter($providers, function (array $provider) use (&$seen) {
+            $code = strtoupper($provider['code']);
+            if (isset($seen[$code])) {
+                return false;
+            }
+            $seen[$code] = true;
+
+            return true;
+        }));
 
         foreach ($providers as $i => $provider) {
             Provider::updateOrCreate(
@@ -150,6 +162,141 @@ class EPayPlusSeeder extends Seeder
         return $providers;
     }
 
+    /**
+     * Maya Negosyo (com.paymaya.negosyo) + DaFox /portal promos alignment.
+     * Billers are API-driven in Negosyo; APK only embeds ABSCBNMOB asset slug.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function mayaNegosyoSupplementProviders(): array
+    {
+        $groups = [
+            'Telecommunications' => [
+                ['code' => 'BAYANTEL', 'name' => 'Bayantel'],
+            ],
+            'Electricity' => [
+                ['code' => 'DAVAOLIGHT', 'name' => 'Davao Light'],
+                ['code' => 'BENECO', 'name' => 'BENECO'],
+                ['code' => 'CEPALCO', 'name' => 'CEPALCO'],
+                ['code' => 'ANGELES_ELECTRIC', 'name' => 'Angeles Electric'],
+                ['code' => 'PENELCO', 'name' => 'PENELCO'],
+                ['code' => 'DANECO', 'name' => 'DANECO'],
+                ['code' => 'CEBECO1', 'name' => 'CEBECO I'],
+                ['code' => 'CEBECO2', 'name' => 'CEBECO II'],
+                ['code' => 'CEBECO3', 'name' => 'CEBECO III'],
+                ['code' => 'PELCO1', 'name' => 'PELCO I'],
+                ['code' => 'PELCO2', 'name' => 'PELCO II'],
+                ['code' => 'SFELAPCO', 'name' => 'San Fernando Light'],
+                ['code' => 'FLECO', 'name' => 'FLECO'],
+                ['code' => 'NEECO1', 'name' => 'NEECO I'],
+                ['code' => 'NEECO2_AREA1', 'name' => 'NEECO II Area 1'],
+                ['code' => 'QUEZELCO1', 'name' => 'QUEZELCO I'],
+                ['code' => 'QUEZELCO2', 'name' => 'QUEZELCO II'],
+                ['code' => 'DECORP', 'name' => 'Dagupan Electric (DECORP)'],
+                ['code' => 'ZAMCELCO', 'name' => 'ZAMCELCO'],
+            ],
+            'Water' => [
+                ['code' => 'LAGUNAWATER', 'name' => 'Laguna Water'],
+                ['code' => 'BORACAYWATER', 'name' => 'Boracay Water'],
+                ['code' => 'CLARKWATER', 'name' => 'Clark Water'],
+                ['code' => 'LAGUNA_WATER_DISTRICT', 'name' => 'Laguna Water District'],
+                ['code' => 'BP_WATERWORKS', 'name' => 'BP Waterworks'],
+                ['code' => 'STA_LUCIA_WATER', 'name' => 'Sta. Lucia Water'],
+            ],
+            'Internet/Cable' => [
+                ['code' => 'ABSCBNMOB', 'name' => 'ABS-CBN Mobile'],
+                ['code' => 'STREAMTECH', 'name' => 'Streamtech (Planet Cable)'],
+                ['code' => 'CABLELINK', 'name' => 'Cablelink'],
+                ['code' => 'GALAXY_CABLE', 'name' => 'Galaxy Cable'],
+                ['code' => 'NOW_CORP', 'name' => 'NOW Corporation'],
+                ['code' => 'PARASAT', 'name' => 'Parasat Cable'],
+            ],
+            'Government' => [
+                ['code' => 'DFA', 'name' => 'DFA'],
+                ['code' => 'LTO', 'name' => 'LTO'],
+                ['code' => 'PSA', 'name' => 'PSA Serbilis'],
+                ['code' => 'BIR', 'name' => 'BIR'],
+                ['code' => 'LTFRB', 'name' => 'LTFRB'],
+                ['code' => 'MARINA', 'name' => 'MARINA'],
+                ['code' => 'PEZA', 'name' => 'PEZA'],
+                ['code' => 'TIEZA', 'name' => 'TIEZA'],
+                ['code' => 'MYEG', 'name' => 'MyEG Philippines'],
+            ],
+            'Insurance' => [
+                ['code' => 'INSULAR_LIFE', 'name' => 'Insular Life'],
+                ['code' => 'GENERALI', 'name' => 'Generali Philippines'],
+                ['code' => 'COCOLIFE', 'name' => 'Cocolife'],
+                ['code' => 'PARAMOUNT', 'name' => 'Paramount Life'],
+                ['code' => 'STANDARD_INSURANCE', 'name' => 'Standard Insurance'],
+                ['code' => 'PHILLIFE', 'name' => 'Philippine Life Financial'],
+            ],
+            'Loans' => [
+                ['code' => 'TONIK', 'name' => 'Tonik Digital Bank'],
+                ['code' => 'CASHALO', 'name' => 'Cashalo'],
+                ['code' => 'AEON', 'name' => 'AEON Credit Service'],
+                ['code' => 'TALA', 'name' => 'Tala'],
+                ['code' => 'UNIONDIGITAL', 'name' => 'UnionDigital Bank'],
+                ['code' => 'SKYPAY_LOAN', 'name' => 'SkyPay Loans'],
+                ['code' => 'SB_FINANCE', 'name' => 'SB Finance'],
+                ['code' => 'CHINATRUST_LOAN', 'name' => 'Chinabank (CTBC) Loan'],
+                ['code' => 'GLOBAL_DOMINION', 'name' => 'Global Dominion Financing'],
+                ['code' => 'ASIALINK', 'name' => 'Asialink'],
+            ],
+            'Credit Cards' => [
+                ['code' => 'CHINABANK_CC', 'name' => 'China Bank Credit Card'],
+                ['code' => 'AUB_CC', 'name' => 'AUB Credit Card'],
+                ['code' => 'SECURITYBANK_CC', 'name' => 'Security Bank Mastercard'],
+                ['code' => 'UNIONBANK_CC', 'name' => 'UnionBank Credit Card'],
+                ['code' => 'ROBINSONSBANK_CC', 'name' => 'Robinsons Bank Credit Card'],
+                ['code' => 'BOC_CC', 'name' => 'Bank of Commerce Credit Card'],
+            ],
+            'Transportation' => [
+                ['code' => 'BEEP', 'name' => 'Beep Card'],
+            ],
+            'Travel' => [
+                ['code' => 'PAL', 'name' => 'Philippine Airlines'],
+                ['code' => 'CEBUPACIFIC', 'name' => 'Cebu Pacific'],
+                ['code' => 'AIRASIA', 'name' => 'AirAsia'],
+            ],
+            'Payment Services' => [
+                ['code' => 'DRAGONPAY', 'name' => 'Dragonpay'],
+                ['code' => 'PESOPAY', 'name' => 'PesoPay'],
+                ['code' => 'MULTIPAY', 'name' => 'Multipay'],
+            ],
+            'Education' => [
+                ['code' => 'PHINMA_EDUCATION', 'name' => 'Phinma Education'],
+                ['code' => 'MAPUA', 'name' => 'Mapua University'],
+            ],
+            'Real Estate' => [
+                ['code' => 'BRIA_HOMES', 'name' => 'Bria Homes'],
+                ['code' => 'AVIDA', 'name' => 'Avida Land'],
+            ],
+        ];
+
+        $providers = [];
+        foreach ($groups as $category => $items) {
+            foreach ($items as $item) {
+                $providers[] = [
+                    'type' => 'BILLS',
+                    'code' => $item['code'],
+                    'name' => $item['name'],
+                    'category' => $category,
+                    'billing_type' => 'postpaid',
+                ];
+            }
+        }
+
+        $providers[] = [
+            'type' => 'ECASH',
+            'code' => 'GCASH_PERA_OUTLET',
+            'name' => 'GCash Pera Outlet',
+            'category' => 'E-Wallet',
+            'billing_type' => 'prepaid',
+        ];
+
+        return $providers;
+    }
+
     /** @return list<array<string, mixed>> */
     private function ecashProviders(): array
     {
@@ -231,7 +378,10 @@ class EPayPlusSeeder extends Seeder
     private function seedProducts(): void
     {
         $eloadAmounts = [10, 15, 20, 25, 30, 50, 100, 150, 200, 300, 500, 1000];
-        $eloadCodes = ['GLOBE', 'SMART', 'TNT', 'SUN', 'TM', 'DITO', 'GOMO'];
+        $eloadCodes = [
+            'GLOBE', 'SMART', 'TNT', 'SUN', 'TM', 'DITO', 'GOMO',
+            'CIGNAL', 'GSAT', 'SMARTBRO', 'CHERRYPREPAID', 'GAMEPIN', 'KURYENTELOAD',
+        ];
 
         foreach ($eloadCodes as $network) {
             $provider = Provider::where('code', $network)->first();
@@ -277,6 +427,7 @@ class EPayPlusSeeder extends Seeder
             );
         }
 
+        $ecashTiers = [100, 200, 500, 1000, 2000, 5000];
         $wallets = Provider::where('type', 'ECASH')->get();
         foreach ($wallets as $wallet) {
             Product::updateOrCreate(
@@ -290,11 +441,31 @@ class EPayPlusSeeder extends Seeder
                     'retailer_price' => 0,
                     'fee' => 0,
                     'commission' => 0,
-                    'description' => "{$wallet->name} wallet top-up",
+                    'description' => "{$wallet->name} wallet top-up (any amount)",
+                    'sort_order' => 0,
                 ]
             );
+
+            foreach ($ecashTiers as $i => $amount) {
+                Product::updateOrCreate(
+                    ['code' => "{$wallet->code}_CASHIN_{$amount}"],
+                    [
+                        'provider_id' => $wallet->id,
+                        'type' => 'ECASH',
+                        'billing_type' => 'prepaid',
+                        'name' => "{$wallet->name} Cash-In ₱{$amount}",
+                        'amount' => $amount,
+                        'retailer_price' => $amount,
+                        'fee' => 0,
+                        'commission' => 0,
+                        'description' => "{$wallet->name} minimum cash-in ₱{$amount}",
+                        'sort_order' => $i + 1,
+                    ]
+                );
+            }
         }
 
+        $rfidAmounts = [100, 200, 500, 1000];
         $rfidProviders = Provider::where('type', 'RFID')->get();
         foreach ($rfidProviders as $rfid) {
             Product::updateOrCreate(
@@ -308,9 +479,28 @@ class EPayPlusSeeder extends Seeder
                     'retailer_price' => 0,
                     'fee' => 0,
                     'commission' => 0,
-                    'description' => "{$rfid->name} RFID wallet reload",
+                    'description' => "{$rfid->name} RFID wallet reload (any amount)",
+                    'sort_order' => 0,
                 ]
             );
+
+            foreach ($rfidAmounts as $i => $amount) {
+                Product::updateOrCreate(
+                    ['code' => "{$rfid->code}_RELOAD_{$amount}"],
+                    [
+                        'provider_id' => $rfid->id,
+                        'type' => 'RFID',
+                        'billing_type' => 'prepaid',
+                        'name' => "{$rfid->name} Reload ₱{$amount}",
+                        'amount' => $amount,
+                        'retailer_price' => $amount,
+                        'fee' => 0,
+                        'commission' => 0,
+                        'description' => "{$rfid->name} RFID reload ₱{$amount}",
+                        'sort_order' => $i + 1,
+                    ]
+                );
+            }
         }
     }
 

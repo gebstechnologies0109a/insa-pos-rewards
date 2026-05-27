@@ -12,7 +12,9 @@ Icons: local `public/images/providers/` when present; else portal CDN (`/assets/
 | E-Load (prepaid) | 13 | — |
 | Cash-in / E-Wallet | 29 | — |
 | RFID | 7 | — |
-| Bills (seeded subset) | 18 | 919 |
+| Bills (seeded subset) | 107 | 919 |
+
+**Maya Negosyo supplement (2026-05-27):** +75 providers — see `docs/MAYA_NEGOSYO_PROVIDERS.md`.
 
 ## 1. E-Load (prepaid) — `/promos`
 
