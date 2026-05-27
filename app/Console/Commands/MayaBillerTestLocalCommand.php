@@ -6,20 +6,27 @@ use Illuminate\Console\Command;
 class MayaBillerTestLocalCommand extends Command
 {
     protected $signature = 'maya-biller:test-local
-                            {--filter= : PHPUnit filter (default: MayaBiller)}';
+                            {--filter= : Optional PHPUnit method/class filter within Maya Biller tests}';
 
     protected $description = 'Run Maya Biller smoke tests (in-memory HTTP via PHPUnit)';
 
     public function handle(): int
     {
-        $filter = $this->option('filter') ?: 'MayaBiller';
-
-        $this->info('Running Maya Biller test suite (filter: '.$filter.')...');
+        $this->info('Running Maya Biller feature + unit tests...');
         $this->newLine();
 
-        $exitCode = $this->call('test', [
-            '--filter' => $filter,
-        ]);
+        $params = [
+            'tests/Feature/MayaBiller',
+            'tests/Unit/MayaBillerFeeServiceTest.php',
+            'tests/Unit/MayaBillerResponseTest.php',
+            'tests/Unit/MayaBillerSignatureVerifierTest.php',
+        ];
+
+        if ($filter = $this->option('filter')) {
+            $params['--filter'] = $filter;
+        }
+
+        $exitCode = $this->call('test', $params);
 
         if ($exitCode === 0) {
             $this->info('All Maya Biller smoke tests passed.');
