@@ -14,6 +14,7 @@
                 <span class="font-bold text-lg">{{ $brandName }} — Stockman</span>
                 <div class="flex gap-4 text-sm">
                     <a href="{{ route('stockman.inventory') }}" class="hover:text-blue-300 {{ request()->routeIs('stockman.inventory') ? 'text-blue-400' : '' }}">Inventory</a>
+                    <a href="{{ route('stockman.audit') }}" class="hover:text-blue-300 {{ request()->routeIs('stockman.audit*') ? 'text-blue-400' : '' }}">Stock Audit</a>
                     <a href="{{ route('stockman.stock-in') }}" class="hover:text-blue-300 {{ request()->routeIs('stockman.stock-in*') ? 'text-blue-400' : '' }}">Stock In</a>
                 </div>
             </div>

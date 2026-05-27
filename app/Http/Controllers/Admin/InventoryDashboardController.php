@@ -2,61 +2,80 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Concerns\ResolvesInventoryBranch;
 use App\Http\Controllers\Controller;
 use App\Models\POS\Branch;
 use App\Models\POS\Category;
 use App\Models\POS\Product;
+use App\Services\Inventory\InventoryService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class InventoryDashboardController extends Controller
 {
+    use ResolvesInventoryBranch;
+
+    public function __construct(
+        protected InventoryService $inventory,
+    ) {}
+
     public function index(Request $request)
     {
-        $branchId = $request->input('branch_id', auth()->user()->branch_id ?? 1);
+        $branchId = $this->resolveInventoryBranchId($request);
+        $this->authorizeInventoryBranch($branchId);
 
-        $query = Product::select('products.id', 'products.name', 'products.sku', 'products.barcode', 'products.category_id')
-            ->leftJoin('stock_movements', function ($join) use ($branchId) {
-                $join->on('stock_movements.product_id', '=', 'products.id')
-                    ->where('stock_movements.branch_id', $branchId);
-            })
-            ->where('products.active', true)
-            ->groupBy('products.id', 'products.name', 'products.sku', 'products.barcode', 'products.category_id')
-            ->selectRaw('COALESCE(SUM(stock_movements.qty), 0) as stock_on_hand');
+        $query = Product::where('active', true);
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
-                $q->where('products.name', 'like', "%{$search}%")
-                  ->orWhere('products.sku', 'like', "%{$search}%")
-                  ->orWhere('products.barcode', 'like', "%{$search}%");
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('sku', 'like', "%{$search}%")
+                  ->orWhere('barcode', 'like', "%{$search}%");
             });
         }
 
         if ($categoryId = $request->input('category')) {
-            $query->where('products.category_id', $categoryId);
+            $query->where('category_id', $categoryId);
         }
 
-        $stockFilter = $request->input('stock_filter');
-        if ($stockFilter === 'low') {
-            $query->havingRaw('COALESCE(SUM(stock_movements.qty), 0) > 0 AND COALESCE(SUM(stock_movements.qty), 0) <= 10');
-        } elseif ($stockFilter === 'out') {
-            $query->havingRaw('COALESCE(SUM(stock_movements.qty), 0) <= 0');
+        $products = $query->orderBy('name')->paginate(50)->withQueryString();
+        $ids = $products->pluck('id')->all();
+        $stockMap = $this->inventory->stockTotalsForProducts($branchId, $ids);
+        $expiryMap = $this->inventory->earliestExpiryForProducts($branchId, $ids);
+
+        $products->getCollection()->transform(function ($p) use ($stockMap, $expiryMap) {
+            $p->stock_on_hand = $stockMap[$p->id] ?? 0;
+            $p->earliest_expiry = $expiryMap[$p->id] ?? null;
+
+            return $p;
+        });
+
+        if ($stockFilter = $request->input('stock_filter')) {
+            $filtered = $products->getCollection()->filter(function ($p) use ($stockFilter) {
+                $stock = (float) $p->stock_on_hand;
+                if ($stockFilter === 'low') {
+                    return $stock > 0 && $stock <= InventoryService::LOW_STOCK_THRESHOLD;
+                }
+                if ($stockFilter === 'out') {
+                    return $stock <= 0;
+                }
+
+                return true;
+            });
+            $products->setCollection($filtered->values());
         }
 
-        $products = $query->orderBy('products.name')->paginate(50)->withQueryString();
-        $branches = Branch::orderBy('name')->get();
+        $branches = auth()->user()->isBranchScoped()
+            ? collect()
+            : Branch::orderBy('name')->get();
         $categories = Category::orderBy('name')->get();
 
-        $summary = DB::table('products')
-            ->where('products.active', true)
-            ->leftJoin('stock_movements', function ($join) use ($branchId) {
-                $join->on('stock_movements.product_id', '=', 'products.id')
-                    ->where('stock_movements.branch_id', $branchId);
-            })
-            ->selectRaw('COUNT(DISTINCT products.id) as total_products')
-            ->selectRaw("SUM(CASE WHEN (SELECT COALESCE(SUM(sm2.qty),0) FROM stock_movements sm2 WHERE sm2.product_id = products.id AND sm2.branch_id = ?) <= 0 THEN 1 ELSE 0 END) as out_of_stock", [$branchId])
-            ->selectRaw("SUM(CASE WHEN (SELECT COALESCE(SUM(sm3.qty),0) FROM stock_movements sm3 WHERE sm3.product_id = products.id AND sm3.branch_id = ?) > 0 AND (SELECT COALESCE(SUM(sm3.qty),0) FROM stock_movements sm3 WHERE sm3.product_id = products.id AND sm3.branch_id = ?) <= 10 THEN 1 ELSE 0 END) as low_stock", [$branchId, $branchId])
-            ->first();
+        $allIds = Product::where('active', true)->pluck('id')->all();
+        $allStock = $this->inventory->stockTotalsForProducts($branchId, $allIds);
+        $summary = (object) [
+            'total_products' => count($allIds),
+            'out_of_stock'   => collect($allStock)->filter(fn ($s) => $s <= 0)->count(),
+            'low_stock'      => collect($allStock)->filter(fn ($s) => $s > 0 && $s <= InventoryService::LOW_STOCK_THRESHOLD)->count(),
+        ];
 
         return view('admin.inventory.dashboard', compact('products', 'branches', 'categories', 'branchId', 'summary'));
     }

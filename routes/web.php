@@ -9,6 +9,11 @@ use App\Http\Controllers\Admin\ProductImportExportController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Backoffice\AnalyticsController;
+use App\Http\Controllers\Backoffice\ExpiryDashboardController;
+use App\Http\Controllers\Backoffice\InventoryAdjustmentController;
+use App\Http\Controllers\Backoffice\InventoryBatchController;
+use App\Http\Controllers\Backoffice\InventoryMovementController;
+use App\Http\Controllers\Backoffice\InventoryReportController;
 use App\Http\Controllers\Backoffice\ShiftAuditController;
 use App\Http\Controllers\Backoffice\ShiftDashboardController;
 use App\Http\Controllers\Backoffice\ShiftExportController;
@@ -44,6 +49,8 @@ Route::middleware(['auth', 'role:cashier,manager,admin,owner'])->group(function 
 // ── Stockman (stockman, manager, admin, owner) ───
 Route::middleware(['auth', 'role:stockman,manager,admin,owner'])->prefix('stockman')->group(function () {
     Route::get('/inventory', [StockmanController::class, 'inventory'])->name('stockman.inventory');
+    Route::get('/audit', [StockmanController::class, 'audit'])->name('stockman.audit');
+    Route::post('/audit', [StockmanController::class, 'auditUpdate'])->name('stockman.audit.update');
     Route::get('/stock-in', [StockmanController::class, 'stockInForm'])->name('stockman.stock-in');
     Route::post('/stock-in', [StockmanController::class, 'stockInStore'])->name('stockman.stock-in.store');
 });
@@ -96,6 +103,25 @@ Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
         ->name('readings.x.export.csv');
     Route::get('/backoffice/readings/z/export/csv', [ReadingController::class, 'exportZReadingCsv'])
         ->name('readings.z.export.csv');
+
+    Route::prefix('backoffice/inventory')->name('backoffice.inventory.')->group(function () {
+        Route::get('batches', [InventoryBatchController::class, 'index'])->name('batches');
+        Route::get('batches/{batch}/edit', [InventoryBatchController::class, 'edit'])->name('batches.edit');
+        Route::put('batches/{batch}', [InventoryBatchController::class, 'update'])->name('batches.update');
+        Route::post('batches/{batch}/adjust', [InventoryBatchController::class, 'adjust'])->name('batches.adjust');
+
+        Route::get('adjustment', [InventoryAdjustmentController::class, 'create'])->name('adjustment');
+        Route::post('adjustment', [InventoryAdjustmentController::class, 'store'])->name('adjustment.store');
+
+        Route::get('movements', [InventoryMovementController::class, 'index'])->name('movements');
+
+        Route::get('expiry', [ExpiryDashboardController::class, 'index'])->name('expiry');
+        Route::post('expiry/{alert}/handle', [ExpiryDashboardController::class, 'handle'])->name('expiry.handle');
+        Route::post('expiry/{alert}/snooze', [ExpiryDashboardController::class, 'snooze'])->name('expiry.snooze');
+
+        Route::get('report', [InventoryReportController::class, 'inventory'])->name('report');
+        Route::get('forecast', [InventoryReportController::class, 'forecast'])->name('forecast');
+    });
 });
 
 Route::middleware(['auth', 'role:owner,admin,manager'])->prefix('admin')->group(function () {

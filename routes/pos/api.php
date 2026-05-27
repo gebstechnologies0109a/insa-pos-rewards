@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\POS\CustomerLookupController;
+use App\Http\Controllers\POS\InventoryApiController;
 use App\Http\Controllers\POS\PosSaleController;
 use App\Http\Controllers\POS\PosSettingsController;
 use App\Http\Controllers\POS\ProductLookupController;
@@ -8,7 +9,6 @@ use App\Http\Controllers\POS\ReadingController;
 use App\Http\Controllers\POS\ShiftController;
 use App\Http\Controllers\POS\StockInController;
 use App\Http\Controllers\POS\SyncController;
-use App\Models\Inventory\StockMovement;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -51,11 +51,16 @@ Route::get('/sales/recent', [PosSaleController::class, 'recent'])
 Route::post('/stock-in', [StockInController::class, 'store'])
     ->name('pos.stock-in.store');
 
-Route::get('/stock-movements/{product}', function (int $product) {
-    return StockMovement::where('product_id', $product)
-        ->orderByDesc('created_at')
-        ->get();
-})->name('pos.stock-movements.index');
+Route::get('/stock-movements/{product}', [InventoryApiController::class, 'movements'])
+    ->name('pos.stock-movements.index');
+
+Route::prefix('inventory')
+    ->middleware('role:cashier,manager,admin,owner,super_admin,stockman')
+    ->group(function () {
+        Route::get('/batches', [InventoryApiController::class, 'batches'])->name('pos.inventory.batches');
+        Route::get('/expiry', [InventoryApiController::class, 'expiry'])->name('pos.inventory.expiry');
+        Route::post('/adjustments', [InventoryApiController::class, 'adjustments'])->name('pos.inventory.adjustments');
+    });
 
 Route::get('/products/search', [ProductLookupController::class, 'search'])
     ->name('pos.products.search');

@@ -4,14 +4,19 @@ namespace App\Http\Controllers\POS;
 
 use App\Http\Controllers\Controller;
 use App\Models\POS\Product;
+use App\Services\Inventory\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProductLookupController extends Controller
 {
+    public function __construct(
+        protected InventoryService $inventory,
+    ) {}
+
     public function all(Request $request): JsonResponse
     {
-        $branchId = $request->input('branch_id', auth()->user()?->branch_id);
+        $branchId = (int) $request->input('branch_id', auth()->user()?->branch_id ?? 1);
         $categoryId = $request->input('category_id');
 
         $query = Product::where('active', true);
@@ -20,29 +25,13 @@ class ProductLookupController extends Controller
             $query->where('category_id', $categoryId);
         }
 
-        $stockSub = \App\Models\Inventory\StockMovement::selectRaw('product_id, SUM(qty) as total_stock')
-            ->where('branch_id', $branchId)
-            ->groupBy('product_id');
-
-        $products = $query
-            ->leftJoinSub($stockSub, 'stock_agg', 'products.id', '=', 'stock_agg.product_id')
-            ->select(
-                'products.id',
-                'products.name',
-                'products.sku',
-                'products.barcode',
-                'products.price',
-                'products.category_id',
-                'products.active',
-                \DB::raw('COALESCE(stock_agg.total_stock, 0) as stock')
-            )
-            ->orderBy('products.name')
-            ->get();
+        $products = $query->orderBy('products.name')->get();
+        $enriched = $this->inventory->enrichProductsWithStock($products, $branchId);
 
         $categories = \App\Models\POS\Category::select('id', 'name')->orderBy('name')->get();
 
         return response()->json([
-            'products'   => $products,
+            'products'   => $enriched,
             'categories' => $categories,
         ])->header('Cache-Control', 'private, max-age=60');
     }
@@ -50,6 +39,7 @@ class ProductLookupController extends Controller
     public function search(Request $request): JsonResponse
     {
         $query = $request->input('q', '');
+        $branchId = (int) $request->input('branch_id', auth()->user()?->branch_id ?? 1);
 
         if (strlen($query) < 1) {
             return response()->json([]);
@@ -63,7 +53,9 @@ class ProductLookupController extends Controller
             ->first();
 
         if ($exact) {
-            return response()->json([$exact]);
+            $enriched = $this->inventory->enrichProductsWithStock([$exact], $branchId);
+
+            return response()->json($enriched);
         }
 
         $products = Product::where('active', true)
@@ -71,6 +63,6 @@ class ProductLookupController extends Controller
             ->limit(20)
             ->get();
 
-        return response()->json($products);
+        return response()->json($this->inventory->enrichProductsWithStock($products, $branchId));
     }
 }

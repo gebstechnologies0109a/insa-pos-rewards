@@ -2,15 +2,19 @@
 
 namespace App\Services\POS;
 
-use App\Models\Inventory\StockMovement;
 use App\Models\POS\StockIn;
 use App\Models\POS\StockInItem;
+use App\Services\Inventory\InventoryService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class StockInService
 {
+    public function __construct(
+        protected InventoryService $inventory,
+    ) {}
+
     public function create(array $data): StockIn
     {
         return DB::transaction(function () use ($data) {
@@ -43,16 +47,23 @@ class StockInService
                     'cost'         => $item['cost'],
                     'line_total'   => $lineTotal,
                 ]);
-
-                StockMovement::create([
-                    'branch_id'        => $data['branch_id'],
-                    'product_id'       => $item['product_id'],
-                    'type'             => 'stock_in',
-                    'qty'              => $item['qty'],
-                    'reference_id'     => $stockIn->id,
-                    'reference_number' => $stockIn->stock_in_number,
-                ]);
             }
+
+            $this->inventory->stockIn(
+                branchId: (int) $data['branch_id'],
+                items: collect($items)->map(fn ($item) => [
+                    'product_id'  => $item['product_id'],
+                    'qty'         => $item['qty'],
+                    'cost'        => $item['cost'],
+                    'expiry_date' => $item['expiry_date'] ?? null,
+                    'batch_code'  => $item['batch_code'] ?? null,
+                ])->all(),
+                type: 'stock_in',
+                referenceId: $stockIn->id,
+                referenceNumber: $stockIn->stock_in_number,
+                userId: $data['user_id'] ?? null,
+                supplierName: $data['supplier_name'] ?? null,
+            );
 
             return $stockIn->load('items');
         });

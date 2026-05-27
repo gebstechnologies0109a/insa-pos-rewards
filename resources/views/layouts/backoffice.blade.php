@@ -32,6 +32,11 @@
 
                 <div class="px-4 pt-3 pb-1 text-xs uppercase text-gray-600 tracking-wider">Inventory</div>
                 <a href="{{ route('admin.inventory.dashboard') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('admin.inventory.*') ? 'bg-gray-800 text-white' : '' }}">Inventory Dashboard</a>
+                <a href="{{ route('backoffice.inventory.batches') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('backoffice.inventory.batches*') ? 'bg-gray-800 text-white' : '' }}">Batches</a>
+                <a href="{{ route('backoffice.inventory.movements') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('backoffice.inventory.movements') ? 'bg-gray-800 text-white' : '' }}">Movements</a>
+                <a href="{{ route('backoffice.inventory.adjustment') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('backoffice.inventory.adjustment*') ? 'bg-gray-800 text-white' : '' }}">Adjustments</a>
+                <a href="{{ route('backoffice.inventory.expiry') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('backoffice.inventory.expiry*') ? 'bg-gray-800 text-white' : '' }}">Expiry Alerts</a>
+                <a href="{{ route('backoffice.inventory.forecast') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('backoffice.inventory.forecast') ? 'bg-gray-800 text-white' : '' }}">Reorder Forecast</a>
                 <a href="{{ route('stockman.stock-in') }}" class="block px-4 py-2 hover:bg-gray-800 hover:text-white {{ request()->routeIs('stockman.stock-in*') ? 'bg-gray-800 text-white' : '' }}">Stock In</a>
 
                 <div class="px-4 pt-3 pb-1 text-xs uppercase text-gray-600 tracking-wider">Operations</div>

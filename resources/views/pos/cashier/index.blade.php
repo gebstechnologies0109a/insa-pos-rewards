@@ -290,8 +290,8 @@
                         <div class="mt-auto pt-1.5 lg:pt-2 flex items-end justify-between">
                             <span class="font-bold text-blue-700 text-[11px] lg:text-sm" x-text="'₱' + parseFloat(product.price).toFixed(2)"></span>
                             <span class="text-[9px] lg:text-xs px-1 lg:px-1.5 py-0.5 rounded"
-                                  :class="product.stock > 10 ? 'bg-green-100 text-green-700' : (product.stock > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700')"
-                                  x-text="product.stock > 0 ? product.stock + ' in stock' : 'Out'"></span>
+                                  :class="stockBadgeClass(product)"
+                                  x-text="stockBadgeText(product)"></span>
                         </div>
                     </button>
                 </template>
@@ -344,8 +344,8 @@
                         <div class="flex items-center gap-3 mt-3">
                             <span class="text-2xl lg:text-3xl font-extrabold text-blue-700" x-text="'₱' + parseFloat(retailScanResult.price).toFixed(2)"></span>
                             <span class="text-sm lg:text-base px-2 py-1 rounded-lg"
-                                  :class="retailScanResult.stock > 10 ? 'bg-green-100 text-green-700' : (retailScanResult.stock > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700')"
-                                  x-text="retailScanResult.stock > 0 ? retailScanResult.stock + ' in stock' : 'Out of stock'"></span>
+                                  :class="stockBadgeClass(retailScanResult)"
+                                  x-text="stockBadgeText(retailScanResult)"></span>
                         </div>
                     </div>
                     <div class="flex flex-col gap-2">
@@ -1718,6 +1718,20 @@ function posApp() {
             for (const [m, a] of Object.entries(pb)) { if (parseFloat(a) > 0) { const l = m.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()); lines.push(l.padEnd(18) + parseFloat(a).toFixed(2).padStart(14)); } }
             lines.push(div); if (r.type === 'z') lines.push('*** TOTALS RESET ***'); lines.push(''); lines.push('');
             try { await INSABuddy.printText(lines.join('\n')); this.showToast('Reading printed', 'success'); } catch { this.showToast('Print failed', 'error'); }
+        },
+
+        stockBadgeClass(product) {
+            if (!product || product.stock <= 0) return 'bg-red-100 text-red-700';
+            if (product.low_stock || product.stock <= 10) return 'bg-yellow-100 text-yellow-700';
+            return 'bg-green-100 text-green-700';
+        },
+
+        stockBadgeText(product) {
+            if (!product || product.stock <= 0) return 'Out';
+            let label = product.stock + ' in stock';
+            if (product.near_expiry) label += ' · Exp soon';
+            else if (product.low_stock) label += ' · Low';
+            return label;
         },
     };
 }

@@ -5,17 +5,25 @@ namespace Tests\Feature\POS;
 use App\Models\Inventory\StockMovement;
 use App\Services\Inventory\InventoryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AuthenticatesPosApi;
 use Tests\TestCase;
 
 class InventoryTest extends TestCase
 {
+    use AuthenticatesPosApi;
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->authenticatePosApi();
+    }
 
     protected function stockInPayload(): array
     {
         return [
             'branch_id'     => 1,
-            'user_id'       => 1,
+            'user_id'       => $this->posUser->id,
             'supplier_name' => 'Test Supplier',
             'items'         => [
                 ['product_id' => 1, 'product_name' => 'Coke Mismo', 'qty' => 50, 'cost' => 15],

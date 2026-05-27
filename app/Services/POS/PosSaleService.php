@@ -3,7 +3,6 @@
 namespace App\Services\POS;
 
 use App\Events\POS\SaleCompleted;
-use App\Models\Inventory\StockMovement;
 use App\Models\POS\PosSale;
 use App\Models\POS\PosSaleItem;
 use App\Services\Inventory\InventoryService;
@@ -77,15 +76,16 @@ class PosSaleService
                     'line_total'   => $lineTotal,
                 ]);
 
-                StockMovement::create([
-                    'branch_id'        => $data['branch_id'],
-                    'shift_id'         => $data['shift_id'] ?? null,
-                    'product_id'       => $item['product_id'],
-                    'type'             => 'sale',
-                    'qty'              => -1 * $item['qty'],
-                    'reference_id'     => $sale->id,
-                    'reference_number' => $sale->sale_number,
-                ]);
+                $this->inventory->stockOut(
+                    branchId: (int) $data['branch_id'],
+                    productId: (int) $item['product_id'],
+                    qty: (float) $item['qty'],
+                    type: 'sale',
+                    referenceId: $sale->id,
+                    referenceNumber: $sale->sale_number,
+                    userId: isset($data['cashier_id']) ? (int) $data['cashier_id'] : null,
+                    shiftId: isset($data['shift_id']) ? (int) $data['shift_id'] : null,
+                );
             }
 
             $sale->load('items');

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\POS;
 
 use App\Http\Controllers\Controller;
-use App\Models\Inventory\StockMovement;
 use App\Models\POS\Category;
+use App\Services\Inventory\InventoryService;
 use App\Models\POS\Customer;
 use App\Models\POS\PosSale;
 use App\Models\POS\Product;
@@ -16,6 +16,7 @@ class SyncController extends Controller
 {
     public function __construct(
         protected PosSaleService $saleService,
+        protected InventoryService $inventory,
     ) {}
 
     /**
@@ -147,18 +148,12 @@ class SyncController extends Controller
             $query->where('updated_at', '>', $since);
         }
 
-        if ($branchId) {
-            $stockSub = StockMovement::selectRaw('product_id, SUM(qty) as total_stock')
-                ->where('branch_id', $branchId)
-                ->groupBy('product_id');
-            $query->leftJoinSub($stockSub, 'stock_agg', 'products.id', '=', 'stock_agg.product_id')
-                ->select('products.*', \DB::raw('COALESCE(stock_agg.total_stock, 0) as stock'));
-        } else {
-            $query->select('products.*', \DB::raw('0 as stock'));
-        }
+        $productModels = $query->get();
 
-        $products = $query->get()->map(function ($p) {
-            return [
+        if ($branchId) {
+            $enriched = $this->inventory->enrichProductsWithStock($productModels, (int) $branchId);
+        } else {
+            $enriched = $productModels->map(fn ($p) => [
                 'id'          => $p->id,
                 'name'        => $p->name,
                 'sku'         => $p->sku,
@@ -166,8 +161,27 @@ class SyncController extends Controller
                 'price'       => $p->price,
                 'category_id' => $p->category_id,
                 'category'    => $p->category?->name,
-                'stock'       => (float) $p->stock,
+                'stock'       => 0,
                 'updated_at'  => $p->updated_at?->toIso8601String(),
+            ])->all();
+        }
+
+        $products = collect($enriched)->map(function ($p) {
+            $row = is_array($p) ? $p : (array) $p;
+
+            return [
+                'id'              => $row['id'],
+                'name'            => $row['name'],
+                'sku'             => $row['sku'] ?? null,
+                'barcode'         => $row['barcode'] ?? null,
+                'price'           => $row['price'],
+                'category_id'     => $row['category_id'] ?? null,
+                'category'        => $row['category'] ?? null,
+                'stock'           => (float) ($row['stock'] ?? 0),
+                'earliest_expiry' => $row['earliest_expiry'] ?? null,
+                'near_expiry'     => (bool) ($row['near_expiry'] ?? false),
+                'low_stock'       => (bool) ($row['low_stock'] ?? false),
+                'updated_at'      => $row['updated_at'] ?? null,
             ];
         });
 

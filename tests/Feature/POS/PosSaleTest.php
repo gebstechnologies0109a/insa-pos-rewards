@@ -4,17 +4,25 @@ namespace Tests\Feature\POS;
 
 use App\Models\Inventory\StockMovement;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\AuthenticatesPosApi;
 use Tests\TestCase;
 
 class PosSaleTest extends TestCase
 {
+    use AuthenticatesPosApi;
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->authenticatePosApi();
+    }
 
     protected function seedStock(): void
     {
         $this->postJson('/api/pos/stock-in', [
             'branch_id'     => 1,
-            'user_id'       => 1,
+            'user_id'       => $this->posUser->id,
             'supplier_name' => 'Test Supplier',
             'items'         => [
                 ['product_id' => 1, 'product_name' => 'Coke Mismo 300ml', 'qty' => 100, 'cost' => 15],
