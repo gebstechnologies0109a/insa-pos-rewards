@@ -18,15 +18,26 @@ class MayaBillerIntegrationController extends Controller
         $enabled = config('maya_biller.enabled')
             || filter_var(EPaySetting::getValue('maya_biller_enabled', 'false'), FILTER_VALIDATE_BOOLEAN);
 
-        $baseUrl = config('app.url');
-        $validateUrl = rtrim($baseUrl, '/').'/api/maya-biller/v1/validate';
+        $publicBase = rtrim(
+            (string) config('maya_biller.public_base_url', config('app.url')),
+            '/'
+        );
+
+        $endpointUrls = [
+            'validate' => $publicBase.'/api/maya-biller/v1/validate',
+            'post' => $publicBase.'/api/maya-biller/v1/post',
+            'inquire' => $publicBase.'/api/maya-biller/v1/inquire',
+            'fee' => $publicBase.'/api/maya-biller/v1/fee',
+        ];
 
         $endpoints = [
-            'POST '.$validateUrl => 'Step 1 — Validate Bills Payment (Maya → Partner)',
-            'POST '.rtrim($baseUrl, '/').'/api/maya-biller/v1/post' => 'Step 2 — Post Bills Payment (Maya → Partner)',
-            'POST '.rtrim($baseUrl, '/').'/api/maya-biller/v1/inquire' => 'Step 3 support — Inquire Transaction',
-            'POST '.rtrim($baseUrl, '/').'/api/maya-biller/v1/fee' => 'Get Fee (optional)',
+            ['method' => 'POST', 'url' => $endpointUrls['validate'], 'label' => 'Step 1 — Validate Bills Payment (Maya → Partner)'],
+            ['method' => 'POST', 'url' => $endpointUrls['post'], 'label' => 'Step 2 — Post Bills Payment (Maya → Partner)'],
+            ['method' => 'POST', 'url' => $endpointUrls['inquire'], 'label' => 'Inquire Transaction'],
+            ['method' => 'POST', 'url' => $endpointUrls['fee'], 'label' => 'Get Fee (optional)'],
         ];
+
+        $validateUrl = $endpointUrls['validate'];
 
         $stateFilter = $request->query('state');
         $transactionsQuery = MayaBillerTransaction::query()->latest();
@@ -50,11 +61,25 @@ class MayaBillerIntegrationController extends Controller
         $defaultFees = config('maya_biller.fees.default', []);
         $feeOverrides = config('maya_biller.fees.biller_overrides', []);
 
+        $onboardingSteps = [
+            ['id' => 'review_docs', 'phase' => 'Create & Develop', 'label' => 'Review integration guide + API reference'],
+            ['id' => 'endpoints_live', 'phase' => 'Create & Develop', 'label' => 'Deploy four inbound HTTPS endpoints'],
+            ['id' => 'local_mock', 'phase' => 'Create & Develop', 'label' => 'Pass local mock tests (Postman + PHPUnit)'],
+            ['id' => 'submit_form', 'phase' => 'Create & Develop', 'label' => 'Submit integration form to Maya RM'],
+            ['id' => 'gpg_keys', 'phase' => 'Sandbox', 'label' => 'Exchange GPG keys; load sandbox secrets'],
+            ['id' => 'sandbox_postman', 'phase' => 'Sandbox', 'label' => 'Complete Maya sandbox Postman sign-off'],
+            ['id' => 'uat', 'phase' => 'UAT', 'label' => 'UAT with Maya RM'],
+            ['id' => 'go_live', 'phase' => 'Go-live', 'label' => 'MAYA_BILLER_ENABLED=true on production'],
+        ];
+
         return view('epayplus.integrations.maya', [
             'enabled' => $enabled,
             'environment' => config('maya_biller.environment'),
+            'publicBase' => $publicBase,
             'endpoints' => $endpoints,
+            'endpointUrls' => $endpointUrls,
             'validateUrl' => $validateUrl,
+            'onboardingSteps' => $onboardingSteps,
             'transactions' => $transactions,
             'stateFilter' => $stateFilter,
             'stateLegend' => $stateLegend,

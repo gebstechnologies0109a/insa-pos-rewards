@@ -26,6 +26,8 @@
             </div>
             <div class="card-body">
                 <p class="mb-2"><strong>Environment:</strong> {{ $environment }}</p>
+                <p class="mb-2"><strong>Maya form base URL:</strong>
+                    <code class="small">{{ $publicBase }}</code></p>
                 <p class="text-muted small mb-0">
                     Enable via <code>MAYA_BILLER_ENABLED=true</code> and configure
                     <code>MAYA_BILLER_SECRET_KEY</code>, <code>MAYA_BILLER_CALLBACK_API_KEY</code>.
@@ -99,30 +101,53 @@
         </div>
     </div>
 
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-transparent border-0">
-                <h6 class="fw-bold mb-0"><i class="bi bi-arrow-left-right"></i> Inbound endpoints</h6>
+                <h6 class="fw-bold mb-0"><i class="bi bi-list-check"></i> Onboarding progress</h6>
             </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Method &amp; URL</th>
-                                <th>Description</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($endpoints as $url => $label)
-                            <tr>
-                                <td class="font-monospace small">{{ $url }}</td>
-                                <td>{{ $label }}</td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+            <div class="card-body">
+                <p class="text-muted small">Saved in this browser (localStorage).</p>
+                @php $lastPhase = null; @endphp
+                @foreach($onboardingSteps as $step)
+                    @if($lastPhase !== $step['phase'])
+                        @php $lastPhase = $step['phase']; @endphp
+                        <div class="small fw-bold text-uppercase text-muted mt-2 mb-1">{{ $step['phase'] }}</div>
+                    @endif
+                    <div class="form-check mb-2">
+                        <input class="form-check-input maya-onboard-check" type="checkbox"
+                               id="onboard-{{ $step['id'] }}" data-step-id="{{ $step['id'] }}">
+                        <label class="form-check-label small" for="onboard-{{ $step['id'] }}">{{ $step['label'] }}</label>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent border-0">
+                <h6 class="fw-bold mb-0"><i class="bi bi-arrow-left-right"></i> Partner URLs (copy for Maya form)</h6>
+            </div>
+            <div class="card-body">
+                @foreach($endpoints as $ep)
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold mb-1">{{ $ep['label'] }}</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text font-monospace">{{ $ep['method'] }}</span>
+                        <input type="text" class="form-control font-monospace" readonly
+                               value="{{ $ep['url'] }}" id="maya-ep-{{ $loop->index }}">
+                        <button class="btn btn-outline-primary" type="button"
+                                onclick="navigator.clipboard.writeText(document.getElementById('maya-ep-{{ $loop->index }}').value)">
+                            Copy
+                        </button>
+                    </div>
                 </div>
+                @endforeach
+                <p class="small text-muted mb-0">
+                    Docs: <code>docs/MAYA_BILLER_INTEGRATION_GUIDE.md</code>,
+                    <code>docs/MAYA_BILLER_ONBOARDING_CHECKLIST.md</code>
+                </p>
             </div>
         </div>
     </div>
@@ -184,4 +209,25 @@
         </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+(function () {
+    const key = 'epayplus_maya_biller_onboarding';
+    document.querySelectorAll('.maya-onboard-check').forEach(function (el) {
+        try {
+            const saved = JSON.parse(localStorage.getItem(key) || '{}');
+            if (saved[el.dataset.stepId]) el.checked = true;
+        } catch (e) {}
+        el.addEventListener('change', function () {
+            const data = {};
+            document.querySelectorAll('.maya-onboard-check').forEach(function (box) {
+                data[box.dataset.stepId] = box.checked;
+            });
+            localStorage.setItem(key, JSON.stringify(data));
+        });
+    });
+})();
+</script>
+@endpush
 @endsection
