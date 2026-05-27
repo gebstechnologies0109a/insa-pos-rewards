@@ -57,6 +57,11 @@
                             <i class="bi bi-box-seam"></i> Products
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('epayplus.integrations.maya') ? 'active' : '' }}" href="{{ route('epayplus.integrations.maya') }}">
+                            <i class="bi bi-plug"></i> Maya Biller
+                        </a>
+                    </li>
 
                     <li class="nav-item">
                         <a class="nav-link {{ request()->routeIs('epayplus.licenses*') ? 'active' : '' }}" href="{{ route('epayplus.licenses') }}">

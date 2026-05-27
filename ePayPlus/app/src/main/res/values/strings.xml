@@ -2,4 +2,6 @@
 <resources>
     <string name="app_name">ePayPlus</string>
     <string name="app_name_short">ePayPlus</string>
+    <!-- Admin/docs only: Maya Partner Biller is server-side (Laravel), not in-app -->
+    <string name="maya_biller_integration_coming_soon">Maya bill pay via Maya app is handled on the server. Retailer bills flow unchanged.</string>
 </resources>

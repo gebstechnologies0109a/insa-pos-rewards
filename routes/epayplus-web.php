@@ -14,6 +14,7 @@ use App\Http\Controllers\EPayAdmin\DeviceFleetController;
 use App\Http\Controllers\EPayAdmin\EPayProductController;
 use App\Http\Controllers\EPayAdmin\KioskController;
 use App\Http\Controllers\EPayAdmin\LicenseController;
+use App\Http\Controllers\EPayAdmin\MayaBillerIntegrationController;
 use App\Http\Controllers\EPayAdmin\PricingController;
 use App\Http\Controllers\EPayAdmin\ProviderController;
 use App\Http\Controllers\EPayAdmin\ReportController;
@@ -60,6 +61,10 @@ Route::middleware(['auth', 'role:owner,admin,super_admin'])->prefix('epayplus')-
     Route::post('/retailers/{retailer}/toggle-status', [RetailerController::class, 'toggleStatus'])->name('epayplus.retailers.toggle-status');
     Route::post('/retailers/{retailer}/adjust-balance', [RetailerController::class, 'adjustBalance'])->name('epayplus.retailers.adjust-balance');
     Route::post('/retailers/{retailer}/reset-pin', [RetailerController::class, 'resetPin'])->name('epayplus.retailers.reset-pin');
+
+    // ── Integrations ──
+    Route::get('/integrations/maya', [MayaBillerIntegrationController::class, 'index'])
+        ->name('epayplus.integrations.maya');
 
     // ── Providers ──
     Route::get('/providers', [ProviderController::class, 'index'])->name('epayplus.providers');

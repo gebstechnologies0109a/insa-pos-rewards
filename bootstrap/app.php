@@ -18,6 +18,9 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::prefix('api')
                 ->group(base_path('routes/epayplus-api.php'));
 
+            Route::prefix('api')
+                ->group(base_path('routes/maya-biller.php'));
+
             Route::middleware(['web'])
                 ->group(base_path('routes/epayplus-web.php'));
         },
@@ -35,6 +38,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/pos/ping',
             'api/pos/sync/*',
             'api/v2/*',
+            'api/maya-biller',
+            'api/maya-biller/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

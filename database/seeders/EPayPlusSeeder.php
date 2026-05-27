@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\EPayPlus\EPaySetting;
 use App\Models\EPayPlus\Provider;
 use App\Models\EPayPlus\Product;
 use App\Models\EPayPlus\Retailer;
@@ -12,9 +13,18 @@ class EPayPlusSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->seedSettings();
         $this->seedProviders();
         $this->seedProducts();
         $this->seedDemoRetailer();
+    }
+
+    private function seedSettings(): void
+    {
+        EPaySetting::updateOrCreate(
+            ['key' => 'maya_biller_enabled'],
+            ['value' => 'false']
+        );
     }
 
     private function seedProviders(): void
@@ -45,6 +55,14 @@ class EPayPlusSeeder extends Seeder
             ['type' => 'ECASH', 'code' => 'COINS', 'name' => 'Coins.ph', 'category' => 'E-Wallet'],
             ['type' => 'ECASH', 'code' => 'GRABPAY', 'name' => 'GrabPay', 'category' => 'E-Wallet'],
             ['type' => 'ECASH', 'code' => 'SHOPEEPAY', 'name' => 'ShopeePay', 'category' => 'E-Wallet'],
+
+            // RFID / Toll
+            ['type' => 'RFID', 'code' => 'EASYTRIP', 'name' => 'EasyTrip', 'category' => 'RFID Services'],
+            ['type' => 'RFID', 'code' => 'AUTOSWEEP', 'name' => 'Autosweep', 'category' => 'RFID Services'],
+            ['type' => 'RFID', 'code' => 'TAPNGO', 'name' => 'Tap&Go', 'category' => 'RFID Services'],
+            ['type' => 'RFID', 'code' => 'CONNECT', 'name' => 'Connect RFID', 'category' => 'RFID Services'],
+            ['type' => 'RFID', 'code' => 'ETC', 'name' => 'ETC RFID', 'category' => 'RFID Services'],
+            ['type' => 'RFID', 'code' => 'OTHER', 'name' => 'Other Toll RFID', 'category' => 'RFID Services'],
         ];
 
         foreach ($providers as $i => $provider) {
@@ -115,6 +133,24 @@ class EPayPlusSeeder extends Seeder
                     'fee' => 0,
                     'commission' => 0,
                     'description' => "{$wallet->name} wallet top-up",
+                ]
+            );
+        }
+
+        // RFID reload products
+        $rfidProviders = Provider::where('type', 'RFID')->get();
+        foreach ($rfidProviders as $rfid) {
+            Product::updateOrCreate(
+                ['code' => "{$rfid->code}_RELOAD"],
+                [
+                    'provider_id' => $rfid->id,
+                    'type' => 'RFID',
+                    'name' => "{$rfid->name} Reload",
+                    'amount' => 0,
+                    'retailer_price' => 0,
+                    'fee' => 0,
+                    'commission' => 0,
+                    'description' => "{$rfid->name} RFID wallet reload",
                 ]
             );
         }
