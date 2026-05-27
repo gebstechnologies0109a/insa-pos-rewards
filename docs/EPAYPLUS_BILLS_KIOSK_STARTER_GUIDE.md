@@ -43,9 +43,10 @@ Terms you will hear in the field and in this repo. Every jargon word is defined 
 | **Pulse** | A short electrical signal from a coin or bill acceptor — usually one pulse = one denomination (e.g. one pulse = ₱20). The ESP bridge counts pulses and sends totals to the tablet over Bluetooth. |
 | **SPP (Serial Port Profile)** | Classic Bluetooth mode that behaves like a serial cable. DaFox and Fox bridges use SPP UUID `00001101-0000-1000-8000-00805f9b34fb`. |
 | **Inhibit** | A command to **stop** the acceptor from taking more money (e.g. after payment completes or on error). Prevents over-collection. |
-| **TP70** | Common **thermal receipt printer** model in PH kiosks (often Bluetooth, name like `PT-210_*`). ePay Plus already has `BluetoothPrinter` / `BluetoothPrinterService`. |
-| **Fox bridge** | DafoxTech **ESP32 Bluetooth module** (e.g. `Fox-B068B8`) that sits between the tablet and the bill/coin acceptor. Firmware banner: **TOP BA** (bill acceptor path). |
-| **TOP BA** | Firmware variant on the Fox module wired to a **bill acceptor** (vs coin-only variants). UART at **9600 8N1** when probed via CP2102. |
+| **TP70** | Common **pulse bill acceptor** in PH kiosks (TOP / industry). **High-level anti-fake (counterfeit) detection** — optical, UV, magnetic, and related checks per manufacturer spec. Outputs **pulses** (one pulse per accepted denomination) into the Fox ESP bridge on the **TOP BA** path; the tablet never talks to the acceptor directly. |
+| **PT-210** | Common **Bluetooth thermal receipt printer** in PH kiosks (paired name like `PT-210_*`). ePay Plus already has `BluetoothPrinter` / `BluetoothPrinterService`. |
+| **Fox bridge** | DafoxTech **ESP32 Bluetooth module** (e.g. `Fox-B068B8`) that sits between the tablet and the bill/coin acceptor. Counts pulses from acceptors such as **TP70** and forwards totals over SPP Bluetooth. Firmware banner: **TOP BA** (bill acceptor path). |
+| **TOP BA** | Firmware variant on the Fox module wired to a **bill acceptor** (e.g. TP70) vs coin-only variants. UART at **9600 8N1** when probed via CP2102. |
 | **Kiosk mode** | Android **lock task** + fullscreen app (`KioskActivity`) so customers cannot leave the payment app. ePay Plus uses `KioskManager`, `KioskService`, and optional device admin. |
 | **Maya Biller** | Maya’s **Partner Biller API** — Validate → Post → Callback. ePay Plus hosts inbound routes at `/api/maya-biller/v1/*`. See [MAYA_BILLER_API.md](./MAYA_BILLER_API.md). |
 | **Wallet vs cash** | **Wallet:** retailer’s prepaid balance on the server is debited when a txn posts (`paymentMethod = WALLET` today). **Cash:** customer physically inserts money; retailer wallet may still fund the biller backend, but the **customer paid cash** — must be tracked separately for collection and audit. |
@@ -77,14 +78,14 @@ Terms you will hear in the field and in this repo. Every jargon word is defined 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         TARGET (ePay Plus — you build)                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  Tablet (ePayPlus APK)  ──SPP BT──►  Fox-* bridge  ──►  Bill + coin acceptor │
-│       │                         ▲                                            │
+│  Tablet (ePayPlus APK)  ──SPP BT──►  Fox-* bridge  ──►  TP70 bill acceptor   │
+│       │                         │         (pulse, high anti-fake detection)  │
 │       │                         └── CashAcceptorService (NEW)                │
 │       ├── KioskPaymentScreen (exists, wire navigation)                       │
 │       └── HTTPS ──► epayplus.diybizrewards.com /api/v2/*                   │
 │                     Maya Biller /api/maya-biller/v1/* (partner)            │
 │  Optional: USB coin path via UsbCoinAcceptorService                          │
-│  Printer: BluetoothPrinterService → TP70 / PT-210                            │
+│  Printer: BluetoothPrinterService → PT-210 (Bluetooth thermal)             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -199,10 +200,10 @@ Typical Philippine bills kiosk BOM (verify with your supplier):
 |-----------|-----------------|
 | **Android tablet** | Portrait ~800×1280, USB OTG, Bluetooth classic. Scan device: `Smart_9` (`JH2404230714`). |
 | **Fox ESP bridge** | `Fox-B068B8` — ESP32-D0WD, MAC matches BT name suffix. TOP BA v40.1.2 firmware. |
-| **Bill acceptor** | Pulses into Fox module (TOP BA path). Brands vary; protocol via pulse or serial — **capture before coding**. |
+| **Bill acceptor (TP70)** | **Pulse** output into Fox module (**TOP BA** path). TP70 class units offer **high-level anti-fake (counterfeit) bill detection** (optical / UV / magnetic per manufacturer). Denomination map comes from pulse counts — **capture before coding**. |
 | **Coin acceptor** | Optional separate mech; may be USB (`UsbCoinAcceptorService`) or wired through Fox. |
 | **CP2102 USB cable** | Debug/probe only — Windows COM port for sniffing UART at 9600. Not required in production. |
-| **Thermal printer** | TP70 / PT-210 class, Bluetooth paired (`86:67:7A:A4:CB:E8` on scan unit). |
+| **Thermal printer (PT-210)** | Bluetooth paired (`86:67:7A:A4:CB:E8` on scan unit). Separate from TP70 bill path — uses `BluetoothPrinterService`. |
 | **Cash box** | Physical security; keyed access for collection. |
 | **Signage** | “Bills payment”, accepted billers, support number (see §12). |
 
@@ -239,7 +240,7 @@ Build in layers so you can test without full hardware on day one.
 - [ ] Add `NavRoutes.KioskPayment`; redirect from `BillsProcessScreen`.  
 - [ ] `FakeCashAcceptor` implementing same interface as real service.  
 - [ ] POST with `payment_method=CASH` to staging API.  
-- [ ] Print test receipt on TP70.
+- [ ] Print test receipt on PT-210 (Bluetooth printer).
 
 ### Layer 3 — Bluetooth bench (5–10 days)
 
@@ -472,7 +473,7 @@ Schema exists (migration `2026_05_27_000000_create_epay_v3_device_management_tab
 
 | Symptom | Customer message | Staff action |
 |---------|------------------|--------------|
-| Bill rejected | “Hindi tanggap ang papel. Subukan ulit.” | Check acceptor clean path |
+| Bill rejected (counterfeit / unreadable) | “Hindi tanggap ang papel. Subukan ulit.” | TP70 anti-fake rejected the note — try another bill; clean acceptor path if repeated |
 | BT disconnected | “Panandaliang abala. Sandali lang.” | Reboot Fox power, re-pair if needed |
 | POST failed after cash | “Naitala ang bayad — hanapin ang staff.” | Manual reconcile, refund if duplicate |
 | Printer out of paper | Payment may still succeed; show ref on screen | Replace paper |
