@@ -42,9 +42,9 @@ class PrinterManager(private val context: Context) {
         return printer.send(data)
     }
 
-    fun printText(text: String): Boolean {
+    fun printText(text: String, layout: PrinterConfig.Layout = PrinterConfig.resolve(null, null)): Boolean {
         val printer = currentPrinter ?: return false
-        return printer.printText(text)
+        return printer.printText(text, layout)
     }
 
     fun openDrawer() {

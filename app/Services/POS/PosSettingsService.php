@@ -20,6 +20,8 @@ class PosSettingsService
         'receipt_footer'         => ['label' => 'Receipt Footer',           'default' => 'Thank you!', 'group' => 'receipt', 'type' => 'text'],
         'vat_rate'               => ['label' => 'VAT Rate (%)',             'default' => '12',     'group' => 'receipt', 'type' => 'decimal'],
         'vat_inclusive'          => ['label' => 'Prices VAT Inclusive',     'default' => '1',      'group' => 'receipt', 'type' => 'boolean'],
+        'printer_paper_size'     => ['label' => 'Paper Size',               'default' => '57mm',   'group' => 'printer', 'type' => 'select'],
+        'printer_font_mode'      => ['label' => 'Font Mode',                'default' => 'paper_size', 'group' => 'printer', 'type' => 'select'],
     ];
 
     public function get(string $key): string

@@ -17,8 +17,9 @@ class PosSettingsController extends Controller
     {
         $rewards = $this->settings->all('rewards');
         $overrides = $this->settings->all('overrides');
+        $printer = $this->settings->all('printer');
 
-        return view('pos.settings.index', compact('rewards', 'overrides'));
+        return view('pos.settings.index', compact('rewards', 'overrides', 'printer'));
     }
 
     public function update(Request $request): JsonResponse
@@ -30,7 +31,15 @@ class PosSettingsController extends Controller
         ]);
 
         foreach ($validated['settings'] as $setting) {
-            $this->settings->set($setting['key'], $setting['value']);
+            $key = $setting['key'];
+            $value = $setting['value'];
+            if ($key === 'printer_paper_size' && ! in_array($value, ['57mm', '87mm'], true)) {
+                continue;
+            }
+            if ($key === 'printer_font_mode' && ! in_array($value, ['fine_print', 'paper_size'], true)) {
+                continue;
+            }
+            $this->settings->set($key, $value);
         }
 
         return response()->json([

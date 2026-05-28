@@ -1,5 +1,7 @@
 package com.insapos.v2.posengine
 
+import com.insapos.v2.printers.PrinterConfig
+
 data class ReceiptItem(
     val name: String,
     val qty: Double,
@@ -23,28 +25,37 @@ data class ReceiptTemplate(
     val paymentMethod: String,
     val soldAt: String,
 ) {
-    fun toPlainText(): String {
-        val div = "================================"
+    fun toPlainText(layout: PrinterConfig.Layout = PrinterConfig.resolve(null, null)): String {
+        val w = layout.charWidth
+        val div = PrinterConfig.divider(w)
         val lines = mutableListOf<String>()
         lines.add(div)
-        lines.add(storeName.centered(32))
-        if (branchName.isNotBlank()) lines.add(branchName.centered(32))
-        lines.add(div)
-        if (cashierName.isNotBlank()) lines.add("Cashier: $cashierName")
-        lines.add("Date: $soldAt")
-        lines.add("Sale: $localId")
-        lines.add(div)
-        for (item in items) {
-            lines.add(item.name.take(32))
-            lines.add("  ${item.qty} x ${fmt(item.price)} = ${fmt(item.lineTotal)}")
+        for (line in PrinterConfig.wrapText(storeName, w)) {
+            lines.add(PrinterConfig.centered(line, w))
+        }
+        if (branchName.isNotBlank()) {
+            for (line in PrinterConfig.wrapText(branchName, w)) {
+                lines.add(PrinterConfig.centered(line, w))
+            }
         }
         lines.add(div)
-        lines.add("Subtotal:".padEnd(20) + fmt(subtotal).padStart(12))
-        lines.add("Discount:".padEnd(20) + fmt(discount).padStart(12))
-        lines.add("TOTAL:".padEnd(20) + fmt(total).padStart(12))
-        lines.add("Tendered:".padEnd(20) + fmt(amountTendered).padStart(12))
-        lines.add("Change:".padEnd(20) + fmt(change).padStart(12))
-        lines.add("Pay: $paymentMethod")
+        if (cashierName.isNotBlank()) lines.add("Cashier: $cashierName".take(w))
+        lines.add("Date: $soldAt".take(w))
+        lines.add("Sale: $localId".take(w))
+        lines.add(div)
+        for (item in items) {
+            for (line in PrinterConfig.wrapText(item.name, w)) {
+                lines.add(line)
+            }
+            lines.add("  ${item.qty} x ${fmt(item.price)} = ${fmt(item.lineTotal)}".take(w))
+        }
+        lines.add(div)
+        lines.add(PrinterConfig.moneyLine("Subtotal:", fmt(subtotal), w))
+        lines.add(PrinterConfig.moneyLine("Discount:", fmt(discount), w))
+        lines.add(PrinterConfig.moneyLine("TOTAL:", fmt(total), w))
+        lines.add(PrinterConfig.moneyLine("Tendered:", fmt(amountTendered), w))
+        lines.add(PrinterConfig.moneyLine("Change:", fmt(change), w))
+        lines.add("Pay: $paymentMethod".take(w))
         lines.add(div)
         lines.add("Thank you!")
         lines.add("")
@@ -52,10 +63,4 @@ data class ReceiptTemplate(
     }
 
     private fun fmt(v: Double): String = String.format(java.util.Locale.US, "%.2f", v)
-
-    private fun String.centered(width: Int): String {
-        if (length >= width) return this
-        val pad = (width - length) / 2
-        return " ".repeat(pad) + this
-    }
 }

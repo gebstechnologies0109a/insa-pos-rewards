@@ -103,6 +103,38 @@
                 </div>
             </div>
 
+            <!-- PRINTER SETTINGS -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-lg font-semibold mb-1">Printer Settings</h2>
+                <p class="text-gray-500 text-sm mb-6">Configure thermal receipt paper width and font mode. Syncs to Android POS on next pull.</p>
+
+                <div class="space-y-5">
+                    <div class="flex items-center justify-between border-b pb-4">
+                        <div>
+                            <label for="printer_paper_size" class="font-medium text-gray-800">Paper Size</label>
+                            <p class="text-xs text-gray-400 mt-0.5">57mm (58mm thermal) or 87mm (80mm thermal)</p>
+                        </div>
+                        <select id="printer_paper_size" name="printer_paper_size"
+                                class="p-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="57mm" {{ ($printer['printer_paper_size']['value'] ?? '57mm') === '57mm' ? 'selected' : '' }}>57mm (32 cols / 384 dots)</option>
+                            <option value="87mm" {{ ($printer['printer_paper_size']['value'] ?? '') === '87mm' ? 'selected' : '' }}>87mm (48 cols / 576 dots)</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label for="printer_font_mode" class="font-medium text-gray-800">Font Mode</label>
+                            <p class="text-xs text-gray-400 mt-0.5">Fine print uses smaller font for more characters per line</p>
+                        </div>
+                        <select id="printer_font_mode" name="printer_font_mode"
+                                class="p-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="paper_size" {{ ($printer['printer_font_mode']['value'] ?? 'paper_size') === 'paper_size' ? 'selected' : '' }}>Paper Size (standard font)</option>
+                            <option value="fine_print" {{ ($printer['printer_font_mode']['value'] ?? '') === 'fine_print' ? 'selected' : '' }}>Fine Print (condensed font)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
             <!-- HOW IT WORKS -->
             <div class="bg-white rounded-lg shadow p-6 mb-6">
                 <h2 class="text-lg font-semibold mb-1">How Rewards Work</h2>
@@ -154,6 +186,9 @@ function saveSettings(e) {
     document.querySelectorAll('#settingsForm input[type="number"][name^="rewards_override"]').forEach(input => {
         settings.push({ key: input.name, value: input.value });
     });
+
+    settings.push({ key: 'printer_paper_size', value: document.getElementById('printer_paper_size').value });
+    settings.push({ key: 'printer_font_mode', value: document.getElementById('printer_font_mode').value });
 
     btn.disabled = true;
     btn.textContent = 'Saving...';

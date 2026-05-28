@@ -4,7 +4,9 @@ import android.content.Context
 import android.util.Log
 import com.insapos.v2.db.OfflineDatabase
 import com.insapos.v2.posengine.PosEngine
+import com.insapos.v2.printers.PrinterConfig
 import com.insapos.v2.printers.PrinterManager
+import com.insapos.v2.printers.PrinterSettings
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import com.insapos.v2.sync.SyncEngine
@@ -59,6 +61,8 @@ class PosLocalServer(
                 uri == "/printer/list" -> handlePrinterList()
                 uri == "/printer/select" && method == Method.POST -> handlePrinterSelect(session)
                 uri == "/printer/test" && method == Method.POST -> handlePrinterTest(session)
+                uri == "/printer/settings" && method == Method.GET -> handlePrinterSettingsGet()
+                uri == "/printer/settings" && method == Method.POST -> handlePrinterSettingsSave(session)
                 uri == "/scan" -> handleCameraScan()
                 uri == "/scan/hid" -> handleHidScan()
                 uri == "/device/io/scan" -> handleIoScan()
@@ -140,8 +144,14 @@ class PosLocalServer(
                 val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
                 printer.printRaw(bytes)
             }
-            text.isNotBlank() -> printer.printText(text)
-            data.isNotBlank() -> printer.printText(data)
+            text.isNotBlank() -> {
+                val layout = printerSettings().layout()
+                printer.printText(text, layout)
+            }
+            data.isNotBlank() -> {
+                val layout = printerSettings().layout()
+                printer.printText(data, layout)
+            }
             else -> return jsonError("No print data provided")
         }
 
@@ -249,8 +259,9 @@ class PosLocalServer(
             return jsonError("Printer disconnected — could not reconnect to ${printer.name}")
         }
 
-        val text = buildTestPrintText()
-        val ok = pm.printText(text)
+        val layout = printerSettings().layout()
+        val text = buildTestPrintText(layout)
+        val ok = pm.printText(text, layout)
         return if (ok) {
             jsonOk(JSONObject().apply {
                 put("ok", true)
@@ -264,15 +275,43 @@ class PosLocalServer(
         }
     }
 
-    private fun buildTestPrintText(): String =
-        "================================\n" +
-            "      INSAPOS v${BuildConfig.VERSION_NAME}      \n" +
-            "         Test Print               \n" +
-            "================================\n" +
+    private fun handlePrinterSettingsGet(): Response {
+        return jsonOk(printerSettings().toJson().put("ok", true))
+    }
+
+    private fun handlePrinterSettingsSave(session: IHTTPSession): Response {
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        val paper = json.optString("paper_size", json.optString("printer_paper_size", ""))
+        val font = json.optString("font_mode", json.optString("printer_font_mode", ""))
+        if (paper.isBlank() && font.isBlank()) {
+            return jsonError("paper_size or font_mode required")
+        }
+        val settings = printerSettings()
+        val current = settings.layout()
+        settings.saveLocal(
+            if (paper.isNotBlank()) paper else current.paperSize,
+            if (font.isNotBlank()) font else current.fontMode,
+        )
+        return jsonOk(settings.toJson().put("ok", true).put("saved", true))
+    }
+
+    private fun printerSettings(): PrinterSettings =
+        PrinterSettings(getDatabase())
+
+    private fun buildTestPrintText(layout: PrinterConfig.Layout): String {
+        val div = PrinterConfig.divider(layout.charWidth)
+        val title = PrinterConfig.centered("INSAPOS v${BuildConfig.VERSION_NAME}", layout.charWidth)
+        val subtitle = PrinterConfig.centered("Test Print", layout.charWidth)
+        val paperLine = "Paper: ${layout.paperSize} · Font: ${layout.fontMode}".take(layout.charWidth)
+        val widthLine = "Width: ${layout.charWidth} chars / ${layout.dotWidth} dots".take(layout.charWidth)
+        return "$div\n$title\n$subtitle\n$div\n" +
             "Printer is working correctly!\n" +
+            "$paperLine\n$widthLine\n" +
             "Date: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\n" +
             "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n" +
-            "================================\n"
+            "$div\n"
+    }
 
     /**
      * @return null if not USB / no request needed, true if granted, false if denied.

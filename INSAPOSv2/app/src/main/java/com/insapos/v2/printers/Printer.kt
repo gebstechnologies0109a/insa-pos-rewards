@@ -17,11 +17,11 @@ interface Printer {
     fun send(data: ByteArray): Boolean
     fun getStatus(): PrinterStatus
 
-    fun printText(text: String): Boolean {
-        val escInit = byteArrayOf(0x1B, 0x40)
+    fun printText(text: String, layout: PrinterConfig.Layout = PrinterConfig.resolve(null, null)): Boolean {
         val lineFeed = byteArrayOf(0x0A)
         val cut = byteArrayOf(0x1D, 0x56, 0x00)
-        val payload = escInit + text.toByteArray(Charsets.UTF_8) + lineFeed + lineFeed + lineFeed + cut
+        val payload = PrinterConfig.escPosPrefix(layout) + text.toByteArray(Charsets.UTF_8) +
+            lineFeed + lineFeed + lineFeed + cut
         return send(payload)
     }
 

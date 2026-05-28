@@ -8,6 +8,7 @@ const INSABuddy = {
     _connected: false,
     _pollingInterval: null,
     _isV2: false,
+    _printerLayoutCache: null,
 
     /**
      * Detect INSAPOSv3 native bridge and switch to its local port.
@@ -70,46 +71,98 @@ const INSABuddy = {
     },
 
     /**
+     * Resolve receipt column width from paper size and font mode.
+     */
+    resolvePrinterLayout(paperSize, fontMode) {
+        const paper = (paperSize === '87mm' || paperSize === '80mm') ? '87mm' : '57mm';
+        const font = fontMode === 'fine_print' ? 'fine_print' : 'paper_size';
+        const dotWidth = paper === '87mm' ? 576 : 384;
+        let charWidth = 32;
+        if (paper === '87mm' && font === 'fine_print') charWidth = 64;
+        else if (paper === '87mm') charWidth = 48;
+        else if (font === 'fine_print') charWidth = 42;
+        return { paper_size: paper, font_mode: font, char_width: charWidth, dot_width: dotWidth };
+    },
+
+    /**
+     * Get printer layout settings from the local Android service.
+     */
+    async getPrinterSettings() {
+        try {
+            const data = await this._get('/printer/settings');
+            if (data && data.ok) {
+                const layout = this.resolvePrinterLayout(data.paper_size, data.font_mode);
+                this._printerLayoutCache = layout;
+                return { ...data, ...layout, layout };
+            }
+        } catch {
+            /* local service unavailable */
+        }
+        const layout = this.resolvePrinterLayout('57mm', 'paper_size');
+        this._printerLayoutCache = layout;
+        return { ok: true, ...layout, layout };
+    },
+
+    /**
+     * Save printer layout settings on the Android device (local override).
+     */
+    async savePrinterSettings(paperSize, fontMode) {
+        const data = await this._post('/printer/settings', {
+            paper_size: paperSize,
+            font_mode: fontMode,
+        });
+        if (data && data.ok) {
+            this._printerLayoutCache = this.resolvePrinterLayout(data.paper_size, data.font_mode);
+        }
+        return data;
+    },
+
+    /**
      * Print a receipt from structured data.
      * Generates ESC/POS commands for a formatted receipt.
      */
     async printReceipt(receipt) {
+        const settings = await this.getPrinterSettings();
+        const w = settings.char_width || 32;
+        const labelWidth = Math.max(w - 10, Math.floor(w * 0.65));
+        const valueWidth = w - labelWidth;
+        const itemNameWidth = Math.max(w - 13, Math.floor(w * 0.55));
         const lines = [];
-        const divider = '================================';
+        const divider = '='.repeat(w);
 
         lines.push('\x1B\x61\x01'); // center align
-        lines.push(receipt.storeName || (window.location.hostname.includes('epayplus') ? 'ePay Plus' : 'INSA POS'));
-        lines.push(receipt.branchName || '');
+        lines.push((receipt.storeName || (window.location.hostname.includes('epayplus') ? 'ePay Plus' : 'INSA POS')).substring(0, w));
+        if (receipt.branchName) lines.push(String(receipt.branchName).substring(0, w));
         lines.push(divider);
         lines.push('\x1B\x61\x00'); // left align
 
         if (receipt.saleNumber) {
-            lines.push(`Sale #: ${receipt.saleNumber}`);
+            lines.push(`Sale #: ${receipt.saleNumber}`.substring(0, w));
         }
-        lines.push(`Date: ${receipt.date || new Date().toLocaleString()}`);
-        lines.push(`Cashier: ${receipt.cashier || ''}`);
+        lines.push(`Date: ${receipt.date || new Date().toLocaleString()}`.substring(0, w));
+        lines.push(`Cashier: ${receipt.cashier || ''}`.substring(0, w));
         lines.push(divider);
 
         if (receipt.items && receipt.items.length) {
             for (const item of receipt.items) {
-                const name = item.name.substring(0, 20).padEnd(20);
+                const name = String(item.name).substring(0, itemNameWidth).padEnd(itemNameWidth);
                 const qty = String(item.qty).padStart(3);
-                const total = (item.qty * item.price).toFixed(2).padStart(8);
-                lines.push(`${name} ${qty} ${total}`);
+                const total = (item.qty * item.price).toFixed(2).padStart(Math.min(8, valueWidth));
+                lines.push(`${name} ${qty} ${total}`.substring(0, w));
             }
         }
 
         lines.push(divider);
-        lines.push(`${'Subtotal:'.padEnd(24)}${(receipt.subtotal || 0).toFixed(2).padStart(8)}`);
+        lines.push(`${'Subtotal:'.padEnd(labelWidth)}${(receipt.subtotal || 0).toFixed(2).padStart(valueWidth)}`.substring(0, w));
         if (receipt.discount > 0) {
-            lines.push(`${'Discount:'.padEnd(24)}${receipt.discount.toFixed(2).padStart(8)}`);
+            lines.push(`${'Discount:'.padEnd(labelWidth)}${receipt.discount.toFixed(2).padStart(valueWidth)}`.substring(0, w));
         }
-        lines.push(`${'TOTAL:'.padEnd(24)}${(receipt.total || 0).toFixed(2).padStart(8)}`);
+        lines.push(`${'TOTAL:'.padEnd(labelWidth)}${(receipt.total || 0).toFixed(2).padStart(valueWidth)}`.substring(0, w));
         lines.push(divider);
-        lines.push(`Payment: ${receipt.paymentMethod || 'Cash'}`);
+        lines.push(`Payment: ${receipt.paymentMethod || 'Cash'}`.substring(0, w));
         if (receipt.amountTendered) {
-            lines.push(`${'Tendered:'.padEnd(24)}${receipt.amountTendered.toFixed(2).padStart(8)}`);
-            lines.push(`${'Change:'.padEnd(24)}${(receipt.change || 0).toFixed(2).padStart(8)}`);
+            lines.push(`${'Tendered:'.padEnd(labelWidth)}${receipt.amountTendered.toFixed(2).padStart(valueWidth)}`.substring(0, w));
+            lines.push(`${'Change:'.padEnd(labelWidth)}${(receipt.change || 0).toFixed(2).padStart(valueWidth)}`.substring(0, w));
         }
         lines.push('');
         lines.push('\x1B\x61\x01'); // center
@@ -355,6 +408,7 @@ const INSABuddy = {
     // --- Internal helpers ---
 
     async _get(path) {
+        this.detectV2();
         try {
             const res = await fetch(`${this.BASE_URL}${path}`, {
                 signal: AbortSignal.timeout(5000),
@@ -366,6 +420,7 @@ const INSABuddy = {
     },
 
     async _post(path, body) {
+        this.detectV2();
         try {
             const res = await fetch(`${this.BASE_URL}${path}`, {
                 method: 'POST',
