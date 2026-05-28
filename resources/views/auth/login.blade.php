@@ -6,7 +6,7 @@
     $accentBtn = $isEpayPlus ? 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500' : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500';
     $accentRing = $isEpayPlus ? 'focus:ring-emerald-500' : 'focus:ring-blue-500';
     $accentLogo = $isEpayPlus ? 'bg-emerald-600' : 'bg-blue-600';
-    $hasViteAssets = file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot'));
+    $hasViteAssets = vite_manifest_has(['resources/css/auth-login.css']);
 @endphp
 <!DOCTYPE html>
 <html lang="en">

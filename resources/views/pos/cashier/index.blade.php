@@ -9,7 +9,7 @@
     <script>
         window.INSA_IS_SUPER_ADMIN = @json(auth()->check() && auth()->user()->isSuperAdmin());
     </script>
-    @if (file_exists(public_path('build/manifest.json')))
+    @if (vite_manifest_has(['resources/css/pos-cashier.css']))
         @vite(['resources/css/pos-cashier.css'])
     @else
         <script src="https://cdn.tailwindcss.com" defer></script>

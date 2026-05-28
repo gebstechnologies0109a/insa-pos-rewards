@@ -53,6 +53,38 @@ if (! function_exists('is_insa_android_app')) {
     }
 }
 
+if (! function_exists('vite_manifest_has')) {
+    /**
+     * True when every Vite entry exists in the production manifest (or Vite dev server is running).
+     *
+     * @param  list<string>  $entries
+     */
+    function vite_manifest_has(array $entries): bool
+    {
+        if (file_exists(public_path('hot'))) {
+            return true;
+        }
+
+        $manifestPath = public_path('build/manifest.json');
+        if (! file_exists($manifestPath)) {
+            return false;
+        }
+
+        $manifest = json_decode((string) file_get_contents($manifestPath), true);
+        if (! is_array($manifest)) {
+            return false;
+        }
+
+        foreach ($entries as $entry) {
+            if (! isset($manifest[$entry])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
+
 if (! function_exists('login_error_message')) {
     /**
      * Human-readable login page message for ?error= codes (WebView-friendly).
