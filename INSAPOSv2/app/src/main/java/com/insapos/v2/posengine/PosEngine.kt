@@ -13,12 +13,25 @@ class PosEngine(private val db: OfflineDatabase) {
     val shifts = PosShiftManager(db)
     private val sales = PosSaleProcessor(db, inventory)
 
-    fun getProducts(query: String? = null): JSONObject {
-        val products = if (!query.isNullOrBlank()) db.searchProducts(query) else db.getProducts()
+    fun getProducts(
+        query: String? = null,
+        limit: Int = OfflineDatabase.DEFAULT_PRODUCT_PAGE_SIZE,
+        offset: Int = 0,
+    ): JSONObject {
+        val total = db.getProductCount()
+        val products = if (!query.isNullOrBlank()) {
+            db.searchProducts(query)
+        } else {
+            db.getProductsPage(offset, limit)
+        }
         return JSONObject().apply {
             put("ok", true)
             put("products", products)
             put("count", products.length())
+            put("total", total)
+            put("offset", offset)
+            put("limit", limit)
+            put("has_more", offset + products.length() < total)
         }
     }
 
@@ -64,7 +77,7 @@ class PosEngine(private val db: OfflineDatabase) {
             put("status", engineStatus)
             put("unsynced_count", unsynced)
             put("sync_queue_count", queueCount)
-            put("products", db.getProducts().length())
+            put("products", db.getProductCount())
             put("customers", db.getCustomers().length())
         }
 

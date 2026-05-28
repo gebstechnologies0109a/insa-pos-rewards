@@ -16,7 +16,14 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         private const val TAG = "OfflineDB"
         private const val DB_NAME = "insapos_offline.db"
         private const val DB_VERSION = 3
+        const val DEFAULT_PRODUCT_PAGE_SIZE = 500
+        const val MAX_PRODUCT_PAGE_SIZE = 2000
+        const val MAX_SEARCH_RESULTS = 500
     }
+
+    private val dbLock = Any()
+
+    private inline fun <T> dbOp(block: () -> T): T = synchronized(dbLock) { block() }
 
     override fun onCreate(db: SQLiteDatabase) {
         createV1Tables(db)
@@ -354,7 +361,7 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     // --- Products ---
 
-    fun upsertProducts(products: JSONArray): Int {
+    fun upsertProducts(products: JSONArray): Int = dbOp {
         val db = writableDatabase
         var count = 0
         db.beginTransaction()
@@ -381,44 +388,71 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
                     "SELECT id FROM products WHERE server_id = ?",
                     arrayOf(p.optInt("id").toString())
                 )
-                if (existing.moveToFirst()) {
-                    db.update("products", cv, "server_id = ?", arrayOf(p.optInt("id").toString()))
-                } else {
-                    db.insert("products", null, cv)
+                try {
+                    if (existing.moveToFirst()) {
+                        db.update("products", cv, "server_id = ?", arrayOf(p.optInt("id").toString()))
+                    } else {
+                        db.insert("products", null, cv)
+                    }
+                    count++
+                } finally {
+                    existing.close()
                 }
-                existing.close()
-                count++
             }
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
         }
-        return count
+        count
     }
 
-    fun getProducts(): JSONArray {
-        val arr = JSONArray()
+    fun getProductCount(): Int = dbOp {
         val cursor = readableDatabase.rawQuery(
-            "SELECT * FROM products WHERE is_active = 1 ORDER BY name", null
+            "SELECT COUNT(*) FROM products WHERE is_active = 1", null
         )
-        while (cursor.moveToNext()) {
-            arr.put(cursorToJson(cursor))
+        try {
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        return arr
     }
 
-    fun searchProducts(query: String): JSONArray {
+    fun getProductsPage(offset: Int, limit: Int): JSONArray = dbOp {
+        val safeLimit = limit.coerceIn(1, MAX_PRODUCT_PAGE_SIZE)
+        val safeOffset = offset.coerceAtLeast(0)
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
-            "SELECT * FROM products WHERE is_active = 1 AND (name LIKE ? OR barcode LIKE ?) ORDER BY name",
-            arrayOf("%$query%", "%$query%")
+            "SELECT * FROM products WHERE is_active = 1 ORDER BY name LIMIT ? OFFSET ?",
+            arrayOf(safeLimit.toString(), safeOffset.toString())
         )
-        while (cursor.moveToNext()) {
-            arr.put(cursorToJson(cursor))
+        try {
+            while (cursor.moveToNext()) {
+                arr.put(cursorToJson(cursor))
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        return arr
+        arr
+    }
+
+    /** Full catalog — prefer [getProductsPage] for API/bridge responses to avoid OOM. */
+    fun getProducts(): JSONArray = getProductsPage(0, MAX_PRODUCT_PAGE_SIZE)
+
+    fun searchProducts(query: String, limit: Int = MAX_SEARCH_RESULTS): JSONArray = dbOp {
+        val safeLimit = limit.coerceIn(1, MAX_SEARCH_RESULTS)
+        val arr = JSONArray()
+        val cursor = readableDatabase.rawQuery(
+            "SELECT * FROM products WHERE is_active = 1 AND (name LIKE ? OR barcode LIKE ?) ORDER BY name LIMIT ?",
+            arrayOf("%$query%", "%$query%", safeLimit.toString())
+        )
+        try {
+            while (cursor.moveToNext()) {
+                arr.put(cursorToJson(cursor))
+            }
+        } finally {
+            cursor.close()
+        }
+        arr
     }
 
     fun getProductStock(productId: Int): Double {
@@ -718,13 +752,15 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         return count
     }
 
-    fun getUnsyncedCount(): Int {
+    fun getUnsyncedCount(): Int = dbOp {
         val cursor = readableDatabase.rawQuery(
             "SELECT COUNT(*) FROM transactions_local WHERE synced = 0", null
         )
-        val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
-        cursor.close()
-        return count
+        try {
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        } finally {
+            cursor.close()
+        }
     }
 
     // --- Sync Queue ---
@@ -816,13 +852,15 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             lower.contains("price conflicts detected")
     }
 
-    fun getSyncQueueCount(): Int {
+    fun getSyncQueueCount(): Int = dbOp {
         val cursor = readableDatabase.rawQuery(
             "SELECT COUNT(*) FROM sync_queue WHERE status = 'pending'", null
         )
-        val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
-        cursor.close()
-        return count
+        try {
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        } finally {
+            cursor.close()
+        }
     }
 
     // --- Receipts ---
@@ -873,8 +911,8 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     // --- Stats ---
 
-    fun getOfflineStats(): JSONObject {
-        return JSONObject().apply {
+    fun getOfflineStats(): JSONObject = dbOp {
+        JSONObject().apply {
             put("products", countTable("products"))
             put("customers", countTable("customers"))
             put("transactions", getTransactionCount())

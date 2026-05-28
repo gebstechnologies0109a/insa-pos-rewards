@@ -2,6 +2,7 @@ package com.insapos.v2
 
 import android.util.Log
 import android.webkit.JavascriptInterface
+import com.insapos.v2.db.OfflineDatabase
 import org.json.JSONObject
 
 class AndroidBridge(private val activity: MainActivity) {
@@ -13,40 +14,61 @@ class AndroidBridge(private val activity: MainActivity) {
 
     private val session by lazy { SessionManager(activity) }
 
+    private fun activityAlive(): Boolean =
+        !activity.isFinishing && !activity.isDestroyed
+
+    private fun unavailable(): String =
+        JSONObject().put("ok", false).put("error", "Activity not available").toString()
+
+    private fun safeBridge(block: () -> String): String {
+        return try {
+            if (!activityAlive()) return unavailable()
+            block()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Bridge error", t)
+            JSONObject().put("ok", false).put("error", t.message ?: "error").toString()
+        }
+    }
+
     @JavascriptInterface
-    fun getDeviceInfo(): String {
-        return DeviceInfo.toJsonString(activity)
+    fun getDeviceInfo(): String = safeBridge {
+        DeviceInfo.toJsonString(activity)
     }
 
     @JavascriptInterface
     fun notifySuperAdminStatus(isSuperAdmin: Boolean) {
-        activity.runOnUiThread { activity.setSuperAdminFromWeb(isSuperAdmin) }
+        if (!activityAlive()) return
+        activity.runOnUiThread {
+            if (activityAlive()) activity.setSuperAdminFromWeb(isSuperAdmin)
+        }
     }
 
     @JavascriptInterface
     fun openPosMode() {
-        activity.runOnUiThread { activity.openPosMode() }
+        if (!activityAlive()) return
+        activity.runOnUiThread {
+            if (activityAlive()) activity.openPosMode()
+        }
     }
 
     @JavascriptInterface
     fun openSuperAdminPanel() {
-        activity.runOnUiThread { activity.openSuperAdminPanel() }
+        if (!activityAlive()) return
+        activity.runOnUiThread {
+            if (activityAlive()) activity.openSuperAdminPanel()
+        }
     }
 
     @JavascriptInterface
-    fun getAppVersion(): String {
-        return BuildConfig.VERSION_NAME
+    fun getAppVersion(): String = BuildConfig.VERSION_NAME
+
+    @JavascriptInterface
+    fun getDeviceFingerprint(): String = safeBridge {
+        DeviceFingerprint.get(activity)
     }
 
     @JavascriptInterface
-    fun getDeviceFingerprint(): String {
-        return DeviceFingerprint.get(activity)
-    }
-
-    @JavascriptInterface
-    fun getTerminalId(): String {
-        return session.terminalSessionId ?: ""
-    }
+    fun getTerminalId(): String = session.terminalSessionId ?: ""
 
     @JavascriptInterface
     fun setTerminalSessionId(sessionId: String?) {
@@ -57,82 +79,27 @@ class AndroidBridge(private val activity: MainActivity) {
     fun setBranchId(branchId: Int) {
         if (branchId > 0) {
             session.branchId = branchId
-            activity.runOnUiThread { activity.onBranchIdSetFromWeb(branchId) }
+            if (!activityAlive()) return
+            activity.runOnUiThread {
+                if (activityAlive()) activity.onBranchIdSetFromWeb(branchId)
+            }
         }
     }
 
     @JavascriptInterface
-    fun isDebug(): Boolean {
-        return BuildConfig.DEBUG
-    }
+    fun isDebug(): Boolean = BuildConfig.DEBUG
 
     @JavascriptInterface
-    fun printReceipt(data: String): String {
-        return try {
-            val url = "http://127.0.0.1:${PosLocalServer.PORT}/print"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-            conn.connectTimeout = 5000
-            conn.readTimeout = 10000
-            conn.outputStream.bufferedWriter().use { it.write(data) }
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            response
-        } catch (e: Exception) {
-            Log.e(TAG, "printReceipt failed", e)
-            JSONObject().put("ok", false).put("error", e.message).toString()
-        }
-    }
+    fun printReceipt(data: String): String = safeBridge { httpPostJson("/print", data) }
 
     @JavascriptInterface
-    fun openDrawer(): String {
-        return try {
-            val url = "http://127.0.0.1:${PosLocalServer.PORT}/drawer/open"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 3000
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            response
-        } catch (e: Exception) {
-            Log.e(TAG, "openDrawer failed", e)
-            JSONObject().put("ok", false).put("error", e.message).toString()
-        }
-    }
+    fun openDrawer(): String = safeBridge { httpPostJson("/drawer/open", null) }
 
     @JavascriptInterface
-    fun scanBarcode(): String {
-        return try {
-            val url = "http://127.0.0.1:${PosLocalServer.PORT}/scan"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 30000
-            conn.readTimeout = 30000
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            response
-        } catch (e: Exception) {
-            Log.e(TAG, "scanBarcode failed", e)
-            JSONObject().put("ok", false).put("error", e.message).toString()
-        }
-    }
+    fun scanBarcode(): String = safeBridge { httpGet("/scan", 30_000, 30_000) }
 
     @JavascriptInterface
-    fun getPrinterStatus(): String {
-        return try {
-            val url = "http://127.0.0.1:${PosLocalServer.PORT}/printer/status"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 3000
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            response
-        } catch (e: Exception) {
-            JSONObject().put("ok", false).put("error", e.message).toString()
-        }
-    }
+    fun getPrinterStatus(): String = safeBridge { httpGet("/printer/status", 3000, 3000) }
 
     @JavascriptInterface
     fun getServicePort(): Int = PosLocalServer.PORT
@@ -141,61 +108,30 @@ class AndroidBridge(private val activity: MainActivity) {
     fun isOfflineCapable(): Boolean = true
 
     @JavascriptInterface
-    fun getOfflineStats(): String {
-        return try {
-            val url = "http://127.0.0.1:${PosLocalServer.PORT}/offline/stats"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = 3000
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            response
-        } catch (e: Exception) {
-            JSONObject().put("ok", false).put("error", e.message).toString()
-        }
-    }
+    fun getOfflineStats(): String = safeBridge { httpGet("/offline/stats", 3000, 3000) }
 
     @JavascriptInterface
-    fun getSyncStatus(): String {
-        return try {
-            val url = "http://127.0.0.1:${PosLocalServer.PORT}/offline/sync/status"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = 3000
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            response
-        } catch (e: Exception) {
-            JSONObject().put("ok", false).put("error", e.message).toString()
-        }
-    }
+    fun getSyncStatus(): String = safeBridge { httpGet("/offline/sync/status", 3000, 3000) }
 
     @JavascriptInterface
     fun triggerSync(): String = prefetchCatalog()
 
-    /** Background sync into native SQLite (catalog only when cache is empty for branch). */
     @JavascriptInterface
-    fun prefetchCatalog(): String {
-        return try {
-            val branchId = session.branchId
-            if (branchId != null && branchId > 0) {
-                activity.runOnUiThread { activity.onBranchIdSetFromWeb(branchId) }
-            } else {
-                val url = "http://127.0.0.1:${PosLocalServer.PORT}/local/sync/now"
-                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.connectTimeout = 3000
-                conn.inputStream.bufferedReader().use { it.readText() }
-                conn.disconnect()
+    fun prefetchCatalog(): String = safeBridge {
+        val branchId = session.branchId
+        if (branchId != null && branchId > 0) {
+            activity.runOnUiThread {
+                if (activityAlive()) activity.onBranchIdSetFromWeb(branchId)
             }
-            JSONObject().put("ok", true).put("triggered", true).toString()
-        } catch (e: Exception) {
-            Log.e(TAG, "prefetchCatalog failed", e)
-            JSONObject().put("ok", false).put("error", e.message).toString()
+        } else {
+            httpPostJson("/local/sync/now", null)
         }
+        JSONObject().put("ok", true).put("triggered", true).toString()
     }
 
     @JavascriptInterface
     fun setScanInputFocused(focused: Boolean) {
-        activity.notifyScanInputFocused(focused)
+        if (activityAlive()) activity.notifyScanInputFocused(focused)
     }
 
     @JavascriptInterface
@@ -204,78 +140,45 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
-    fun getLocalProducts(query: String?): String = localGet("/local/products" + if (!query.isNullOrBlank()) "?q=${java.net.URLEncoder.encode(query, "UTF-8")}" else "")
-
-    @JavascriptInterface
-    fun getLocalInventory(): String = localGet("/local/inventory")
-
-    @JavascriptInterface
-    fun getLocalCustomers(): String = localGet("/local/customers")
-
-    @JavascriptInterface
-    fun createLocalSale(jsonPayload: String): String = localPost("/local/sale", jsonPayload)
-
-    @JavascriptInterface
-    fun openLocalShift(jsonPayload: String): String = localPost("/local/shift/open", jsonPayload)
-
-    @JavascriptInterface
-    fun closeLocalShift(jsonPayload: String): String = localPost("/local/shift/close", jsonPayload)
-
-    @JavascriptInterface
-    fun getLocalShiftStatus(): String = localGet("/local/shift/status")
-
-    @JavascriptInterface
-    fun getLocalReceipt(localId: String): String = localGet("/local/receipt?local_id=${java.net.URLEncoder.encode(localId, "UTF-8")}")
-
-    @JavascriptInterface
-    fun triggerLocalSync(): String {
-        return try {
-            val url = "http://127.0.0.1:${PosLocalServer.PORT}/local/sync/now"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 5000
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            response
-        } catch (e: Exception) {
-            JSONObject().put("ok", false).put("error", e.message).toString()
+    fun getLocalProducts(query: String?): String = safeBridge {
+        val base = "/local/products?limit=${OfflineDatabase.DEFAULT_PRODUCT_PAGE_SIZE}&offset=0"
+        val path = if (!query.isNullOrBlank()) {
+            "$base&q=${java.net.URLEncoder.encode(query, "UTF-8")}"
+        } else {
+            base
         }
+        httpGet(path, 5000, 15_000)
     }
 
-    private fun localGet(path: String): String {
-        return try {
-            val url = "http://127.0.0.1:${PosLocalServer.PORT}$path"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 5000
-            conn.readTimeout = 15000
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            response
-        } catch (e: Exception) {
-            Log.e(TAG, "localGet $path failed", e)
-            JSONObject().put("ok", false).put("error", e.message).toString()
-        }
+    @JavascriptInterface
+    fun getLocalInventory(): String = safeBridge { httpGet("/local/inventory", 5000, 15_000) }
+
+    @JavascriptInterface
+    fun getLocalCustomers(): String = safeBridge { httpGet("/local/customers", 5000, 15_000) }
+
+    @JavascriptInterface
+    fun createLocalSale(jsonPayload: String): String = safeBridge { httpPostJson("/local/sale", jsonPayload) }
+
+    @JavascriptInterface
+    fun openLocalShift(jsonPayload: String): String = safeBridge { httpPostJson("/local/shift/open", jsonPayload) }
+
+    @JavascriptInterface
+    fun closeLocalShift(jsonPayload: String): String = safeBridge { httpPostJson("/local/shift/close", jsonPayload) }
+
+    @JavascriptInterface
+    fun getLocalShiftStatus(): String = safeBridge { httpGet("/local/shift/status", 5000, 15_000) }
+
+    @JavascriptInterface
+    fun getLocalReceipt(localId: String): String = safeBridge {
+        httpGet(
+            "/local/receipt?local_id=${java.net.URLEncoder.encode(localId, "UTF-8")}",
+            5000,
+            15_000
+        )
     }
 
-    private fun localPost(path: String, body: String): String {
-        return try {
-            val url = "http://127.0.0.1:${PosLocalServer.PORT}$path"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-            conn.connectTimeout = 5000
-            conn.readTimeout = 15000
-            conn.outputStream.bufferedWriter().use { it.write(body) }
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            response
-        } catch (e: Exception) {
-            Log.e(TAG, "localPost $path failed", e)
-            JSONObject().put("ok", false).put("error", e.message).toString()
-        }
-    }
+    @JavascriptInterface
+    fun triggerLocalSync(): String = safeBridge { httpPostJson("/local/sync/now", null) }
 
     @JavascriptInterface
     fun log(level: String, message: String) {
@@ -285,5 +188,28 @@ class AndroidBridge(private val activity: MainActivity) {
             "debug" -> Log.d(TAG, message)
             else -> Log.i(TAG, message)
         }
+    }
+
+    private fun httpGet(path: String, connectMs: Int, readMs: Int): String {
+        val url = "http://127.0.0.1:${PosLocalServer.PORT}$path"
+        val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.connectTimeout = connectMs
+        conn.readTimeout = readMs
+        return conn.inputStream.bufferedReader().use { it.readText() }.also { conn.disconnect() }
+    }
+
+    private fun httpPostJson(path: String, body: String?): String {
+        val url = "http://127.0.0.1:${PosLocalServer.PORT}$path"
+        val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.connectTimeout = 5000
+        conn.readTimeout = 15_000
+        if (body != null) {
+            conn.doOutput = true
+            conn.outputStream.bufferedWriter().use { it.write(body) }
+        }
+        return conn.inputStream.bufferedReader().use { it.readText() }.also { conn.disconnect() }
     }
 }

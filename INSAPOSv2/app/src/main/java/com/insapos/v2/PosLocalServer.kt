@@ -92,9 +92,9 @@ class PosLocalServer(
                 else -> json404("Unknown endpoint: $uri")
             }
             cors(resp, headers)
-        } catch (e: Exception) {
-            Log.e(TAG, "Server error on $uri", e)
-            cors(jsonError(e.message ?: "Unknown error"), headers)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Server error on $uri", t)
+            cors(jsonError(t.message ?: "Unknown error"), headers)
         }
     }
 
@@ -447,8 +447,25 @@ class PosLocalServer(
     private fun handleGetProducts(session: IHTTPSession): Response {
         val db = getDatabase() ?: return jsonError("Database not ready")
         val query = session.parms?.get("q")
-        val products = if (!query.isNullOrBlank()) db.searchProducts(query) else db.getProducts()
-        return jsonOk(JSONObject().put("ok", true).put("products", products).put("count", products.length()))
+        val limit = session.parms?.get("limit")?.toIntOrNull()
+            ?.coerceIn(1, OfflineDatabase.MAX_PRODUCT_PAGE_SIZE)
+            ?: OfflineDatabase.DEFAULT_PRODUCT_PAGE_SIZE
+        val offset = session.parms?.get("offset")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val total = db.getProductCount()
+        val products = if (!query.isNullOrBlank()) {
+            db.searchProducts(query)
+        } else {
+            db.getProductsPage(offset, limit)
+        }
+        return jsonOk(JSONObject().apply {
+            put("ok", true)
+            put("products", products)
+            put("count", products.length())
+            put("total", total)
+            put("offset", offset)
+            put("limit", limit)
+            put("has_more", offset + products.length() < total)
+        })
     }
 
     private fun handleProductByBarcode(session: IHTTPSession): Response {
@@ -518,7 +535,11 @@ class PosLocalServer(
     private fun handleLocalProducts(session: IHTTPSession): Response {
         val engine = getPosEngine() ?: return jsonError("POS engine not ready")
         val query = session.parms?.get("q")
-        return jsonOk(engine.getProducts(query))
+        val limit = session.parms?.get("limit")?.toIntOrNull()
+            ?.coerceIn(1, OfflineDatabase.MAX_PRODUCT_PAGE_SIZE)
+            ?: OfflineDatabase.DEFAULT_PRODUCT_PAGE_SIZE
+        val offset = session.parms?.get("offset")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        return jsonOk(engine.getProducts(query, limit, offset))
     }
 
     private fun handleLocalInventory(): Response {

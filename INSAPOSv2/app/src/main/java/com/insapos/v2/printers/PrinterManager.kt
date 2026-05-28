@@ -29,9 +29,11 @@ class PrinterManager(private val context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    private val initLock = Any()
+
     val onPrinterChanged: MutableList<(PrinterStatus?) -> Unit> = mutableListOf()
 
-    fun initialize() {
+    fun initialize() = synchronized(initLock) {
         restoreSavedPrinter()
     }
 
@@ -149,7 +151,11 @@ class PrinterManager(private val context: Context) {
         try {
             val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
             val adapter = btManager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
-            if (adapter == null || !adapter.isEnabled) return printers
+            if (adapter == null) return printers
+            if (!adapter.isEnabled) {
+                Log.w(TAG, "Bluetooth disabled — skipping printer scan")
+                return printers
+            }
 
             adapter.bondedDevices?.forEach { device ->
                 printers.add(BluetoothPrinter(device))

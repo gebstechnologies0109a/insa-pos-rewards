@@ -455,7 +455,7 @@ class SyncEngine(
 
     /** True when catalog was never synced for this branch (first login / branch change). */
     private fun isCatalogStale(branchId: Int): Boolean {
-        if (db.getProducts().length() == 0) return true
+        if (db.getProductCount() == 0) return true
         val readyBranch = db.getSetting("cache_ready_branch_id")?.toIntOrNull()
         if (readyBranch != branchId) return true
         val syncedAt = db.getSetting(KEY_CATALOG_SYNCED_AT)
@@ -465,7 +465,7 @@ class SyncEngine(
     }
 
     private fun markCacheReady(branchId: Int) {
-        val count = db.getProducts().length()
+        val count = db.getProductCount()
         if (count > 0) {
             db.setSetting("cache_ready", "1")
             db.setSetting("cache_ready_branch_id", branchId.toString())

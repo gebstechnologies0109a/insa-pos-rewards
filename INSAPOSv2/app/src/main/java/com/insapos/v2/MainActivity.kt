@@ -149,7 +149,7 @@ class MainActivity : AppCompatActivity() {
     private fun needsFullCatalogPull(service: PosService, branchId: Int): Boolean {
         if (branchId <= 0) return true
         val db = service.offlineDb ?: return true
-        if (db.getProducts().length() == 0) return true
+        if (db.getProductCount() == 0) return true
         val readyBranch = db.getSetting("cache_ready_branch_id")?.toIntOrNull()
         if (readyBranch != branchId) return true
         val syncedAt = db.getSetting("catalog_synced_at")
@@ -272,11 +272,40 @@ class MainActivity : AppCompatActivity() {
             unregisterReceiver(usbPermissionReceiver)
         } catch (_: Exception) { }
         if (serviceBound) {
-            unbindService(serviceConnection)
+            try {
+                unbindService(serviceConnection)
+            } catch (_: Exception) { }
             serviceBound = false
         }
+        posService = null
         connectivity.stop()
+        destroyWebView()
         super.onDestroy()
+    }
+
+    private fun shouldUseSoftwareWebViewLayer(): Boolean {
+        val m = Build.MANUFACTURER.lowercase()
+        val h = Build.HARDWARE.lowercase()
+        val b = Build.BRAND.lowercase()
+        return m.contains("mediatek") || m.contains("mtk") || h.contains("mt") ||
+            b.contains("yqh") || b.contains("tab")
+    }
+
+    private fun destroyWebView() {
+        if (!::webView.isInitialized) return
+        try {
+            webView.stopLoading()
+            webView.removeJavascriptInterface(AndroidBridge.BRIDGE_NAME)
+            webView.webChromeClient = null
+            webView.webViewClient = object : WebViewClient() {}
+            webView.destroy()
+        } catch (e: Exception) {
+            Log.w(TAG, "WebView destroy: ${e.message}")
+        }
+    }
+
+    private fun isWebViewUsable(): Boolean {
+        return !isFinishing && !isDestroyed && ::webView.isInitialized
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -459,7 +488,12 @@ class MainActivity : AppCompatActivity() {
             userAgentString = "$userAgentString $appUa"
         }
 
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        if (shouldUseSoftwareWebViewLayer()) {
+            webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            Log.i(TAG, "WebView using software layer (MTK/low-GPU stability)")
+        } else {
+            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        }
 
         webView.isFocusable = true
         webView.isFocusableInTouchMode = true
@@ -690,11 +724,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun dispatchBarcodeToWeb(barcode: String) {
+        if (!isWebViewUsable()) return
         val quoted = org.json.JSONObject.quote(barcode)
-        webView.evaluateJavascript(
-            "if(window.onINSAPOSBarcode) window.onINSAPOSBarcode($quoted);",
-            null
-        )
+        runOnUiThread {
+            if (!isWebViewUsable()) return@runOnUiThread
+            webView.evaluateJavascript(
+                "if(window.onINSAPOSBarcode) window.onINSAPOSBarcode($quoted);",
+                null
+            )
+        }
     }
 
     private fun onPageReadyForService(service: PosService) {
@@ -852,20 +890,26 @@ class MainActivity : AppCompatActivity() {
         connectivity = ConnectivityMonitor(
             context = this,
             onOnline = {
-                Log.i(TAG, "Network online")
-                updateSyncBadge()
-                posService?.syncEngine?.syncNowIncremental()
-                if (isOfflineShown) hideOffline()
-                webView.evaluateJavascript(
-                    "if(window.onINSAPOSConnectivity) window.onINSAPOSConnectivity(true);", null
-                )
+                runOnUiThread {
+                    if (!isWebViewUsable()) return@runOnUiThread
+                    Log.i(TAG, "Network online")
+                    updateSyncBadge()
+                    posService?.syncEngine?.syncNowIncremental()
+                    if (isOfflineShown) hideOffline()
+                    webView.evaluateJavascript(
+                        "if(window.onINSAPOSConnectivity) window.onINSAPOSConnectivity(true);", null
+                    )
+                }
             },
             onOffline = {
-                Log.w(TAG, "Network offline — cashier continues on local cache")
-                updateSyncBadge()
-                webView.evaluateJavascript(
-                    "if(window.onINSAPOSConnectivity) window.onINSAPOSConnectivity(false);", null
-                )
+                runOnUiThread {
+                    if (!isWebViewUsable()) return@runOnUiThread
+                    Log.w(TAG, "Network offline — cashier continues on local cache")
+                    updateSyncBadge()
+                    webView.evaluateJavascript(
+                        "if(window.onINSAPOSConnectivity) window.onINSAPOSConnectivity(false);", null
+                    )
+                }
             }
         )
         connectivity.start()
@@ -915,7 +959,10 @@ class MainActivity : AppCompatActivity() {
                 }
             })();
         """.trimIndent()
-        webView.post { webView.evaluateJavascript(js, null) }
+        if (!isWebViewUsable()) return
+        webView.post {
+            if (isWebViewUsable()) webView.evaluateJavascript(js, null)
+        }
     }
 
     private fun updateSyncBadge() {
@@ -990,7 +1037,9 @@ class MainActivity : AppCompatActivity() {
             })();
         """.trimIndent()
 
-        webView.evaluateJavascript(js, null)
+        if (isWebViewUsable()) {
+            webView.evaluateJavascript(js, null)
+        }
         updateSyncBadge()
     }
 

@@ -24,8 +24,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 class PosService : Service() {
 
@@ -92,14 +90,11 @@ class PosService : Service() {
         synchronized(printerInitLock) {
             printerManager?.let { return it }
             if (Looper.myLooper() == Looper.getMainLooper()) {
-                val latch = CountDownLatch(1)
-                var ready: PrinterManager? = null
-                scope.launch {
-                    ready = initPrinterBlocking()
-                    latch.countDown()
+                if (!printerInitScheduled) {
+                    printerInitScheduled = true
+                    scope.launch { initPrinterBlocking() }
                 }
-                latch.await(12, TimeUnit.SECONDS)
-                return ready
+                return printerManager
             }
             return initPrinterBlocking()
         }
