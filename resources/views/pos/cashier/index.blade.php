@@ -3163,6 +3163,22 @@ function posApp() {
         async doCloseShift() {
             const amount = parseFloat(this.shiftCashInput);
             if (isNaN(amount) || amount < 0) { this.showToast('Invalid amount.', 'error'); return; }
+            if (window.INSAPOS && typeof window.INSAPOS.closeLocalShift === 'function') {
+                try {
+                    const raw = window.INSAPOS.closeLocalShift(JSON.stringify({ closing_cash: amount }));
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (data.ok) {
+                        this.shiftResultData = data.shift || { closing_cash: amount };
+                        this.showShiftCloseModal = false;
+                        this.shiftCashInput = 0;
+                        this.showShiftResult = true;
+                        this.activeShift = null;
+                        this.cart = [];
+                        this.orderDiscountApplied = 0;
+                        return;
+                    }
+                } catch (e) { console.warn('[pos] native shift close failed:', e); }
+            }
             try {
                 const res = await fetch('/api/pos/shift/close', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({ closing_cash: amount }) });
                 const data = await res.json();

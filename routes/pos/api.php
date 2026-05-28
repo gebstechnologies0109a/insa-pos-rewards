@@ -10,6 +10,7 @@ use App\Http\Controllers\POS\ProductLookupController;
 use App\Http\Controllers\POS\ReadingController;
 use App\Http\Controllers\POS\ShiftController;
 use App\Http\Controllers\POS\StockInController;
+use App\Http\Controllers\POS\LoyaltyController;
 use App\Http\Controllers\POS\SyncController;
 use Illuminate\Support\Facades\Route;
 
@@ -92,6 +93,9 @@ Route::get('/products/all', [ProductLookupController::class, 'all'])
 
 Route::get('/settings', [PosSettingsController::class, 'apiIndex'])
     ->name('pos.settings.api');
+
+Route::post('/loyalty/update', [LoyaltyController::class, 'update'])
+    ->name('pos.loyalty.update');
 
 Route::prefix('shift')->group(function () {
     Route::get('/current', [ShiftController::class, 'current'])->name('pos.shift.current');
