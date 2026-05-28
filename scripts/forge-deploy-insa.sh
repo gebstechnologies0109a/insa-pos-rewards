@@ -6,11 +6,22 @@
 # Recommended in Forge → Site → Environment: APP_PRODUCT=insa
 # Enable "Make .env variables available to deployment script" so APP_PRODUCT is visible here.
 
-export APP_PRODUCT=insa
+# MUST be first executable logic — Forge runs the dashboard script before git pull.
+_insactx="$(printf '%s' "${FORGE_SITE_PATH:-}${FORGE_SITE_ROOT:-}${FORGE_SITE_NAME:-}${FORGE_SITE_DIRECTORY:-}" | tr '[:upper:]' '[:lower:]')"
+case "${_insactx}" in
+  *insapos*|*insa-pos-rewards*|*insa_pos_rewards*|*insa-pos*|*insa*)
+    export APP_PRODUCT=insa
+    ;;
+esac
+if [ -z "${APP_PRODUCT:-}" ] || [ "${APP_PRODUCT}" = "auto" ]; then
+  case "${_insactx}" in
+    *insapos*|*insa-pos-rewards*|*insa_pos_rewards*|*insa-pos*|*insa*)
+      export APP_PRODUCT=insa
+      ;;
+  esac
+fi
 
 set -euo pipefail
-
-_insactx="$(printf '%s' "${FORGE_SITE_PATH:-}${FORGE_SITE_ROOT:-}${FORGE_SITE_NAME:-}${FORGE_SITE_DIRECTORY:-}" | tr '[:upper:]' '[:lower:]')"
 
 is_insa_forge_site() {
   case "${_insactx}" in
@@ -22,14 +33,17 @@ is_insa_forge_site() {
 }
 
 sync_insa_app_product_to_env() {
-  if [ ! -f .env ]; then
+  if ! is_insa_forge_site; then
     return 0
   fi
-  if grep -qE '^APP_PRODUCT=' .env; then
-    sed -i.bak 's/^APP_PRODUCT=.*/APP_PRODUCT=insa/' .env
-    rm -f .env.bak
-  else
-    printf '\n# Set by forge-deploy-insa.sh — prefer Forge → Site → Environment\nAPP_PRODUCT=insa\n' >> .env
+  export APP_PRODUCT=insa
+  if [ -f .env ]; then
+    if grep -qE '^APP_PRODUCT=' .env; then
+      sed -i.bak 's/^APP_PRODUCT=.*/APP_PRODUCT=insa/' .env
+      rm -f .env.bak
+    else
+      printf '\n# Set by forge-deploy-insa.sh — prefer Forge → Site → Environment\nAPP_PRODUCT=insa\n' >> .env
+    fi
   fi
 }
 
@@ -53,13 +67,18 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-export APP_PRODUCT=insa
-sync_insa_app_product_to_env
+# INSA Forge sites: default to insa; only abort when explicitly misconfigured.
+if is_insa_forge_site; then
+  export APP_PRODUCT=insa
+fi
 
 PRODUCT="$(read_app_product)"
 if [ -z "${PRODUCT}" ] || [ "${PRODUCT}" = "auto" ]; then
-  PRODUCT=insa
-  export APP_PRODUCT=insa
+  if is_insa_forge_site; then
+    PRODUCT=insa
+    export APP_PRODUCT=insa
+    sync_insa_app_product_to_env
+  fi
 fi
 
 if [ "${PRODUCT}" = "epayplus" ]; then
@@ -68,16 +87,20 @@ if [ "${PRODUCT}" = "epayplus" ]; then
 fi
 
 if [ -n "${PRODUCT}" ] && [ "${PRODUCT}" != "insa" ]; then
+  echo "ERROR: APP_PRODUCT must be 'insa' on this site (found: '${PRODUCT}')"
+  echo "Fix: Forge → Site → Environment → add APP_PRODUCT=insa (then redeploy)"
+  exit 1
+fi
+
+if [ "${PRODUCT}" != "insa" ]; then
   if is_insa_forge_site; then
-    echo "WARN: APP_PRODUCT was '${PRODUCT}' on INSA site — forcing APP_PRODUCT=insa"
     PRODUCT=insa
     export APP_PRODUCT=insa
     sync_insa_app_product_to_env
   else
-    echo "WARN: APP_PRODUCT was '${PRODUCT}' — continuing as insa (this script is INSA-only)"
-    PRODUCT=insa
+    echo "WARN: APP_PRODUCT unset on non-INSA-named site — continuing with APP_PRODUCT=insa for this script"
     export APP_PRODUCT=insa
-    sync_insa_app_product_to_env
+    PRODUCT=insa
   fi
 fi
 

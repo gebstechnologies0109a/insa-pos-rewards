@@ -2,8 +2,8 @@
 # Legacy Forge entry point — delegates to product deploy scripts when possible.
 # Prefer pasting scripts/forge-deploy-insa.sh or scripts/forge-deploy-epayplus.sh in Forge → Deployment.
 
+# MUST run before set -e and before sourcing product scripts (Forge dashboard ≠ git pull).
 _ctx="$(printf '%s' "${FORGE_SITE_PATH:-}${FORGE_SITE_ROOT:-}${FORGE_SITE_NAME:-}${FORGE_SITE_DIRECTORY:-}" | tr '[:upper:]' '[:lower:]')"
-
 case "${_ctx}" in
   *insapos*|*insa-pos-rewards*|*insa_pos_rewards*|*insa-pos*|*insa*)
     export APP_PRODUCT=insa
@@ -12,6 +12,16 @@ case "${_ctx}" in
     export APP_PRODUCT=epayplus
     ;;
 esac
+if [ -z "${APP_PRODUCT:-}" ] || [ "${APP_PRODUCT}" = "auto" ]; then
+  case "${_ctx}" in
+    *insapos*|*insa-pos-rewards*|*insa_pos_rewards*|*insa-pos*|*insa*)
+      export APP_PRODUCT=insa
+      ;;
+    *epayplus*)
+      export APP_PRODUCT=epayplus
+      ;;
+  esac
+fi
 
 set -euo pipefail
 
