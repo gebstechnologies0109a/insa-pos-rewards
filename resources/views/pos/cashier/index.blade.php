@@ -938,7 +938,7 @@
         </div>
         <h2 class="text-lg lg:text-2xl font-bold text-green-700 mb-1 lg:mb-2">Sale Complete!</h2>
         <div class="text-gray-600 mb-3 lg:mb-4">
-            <div class="text-xs lg:text-base">Sale #: <span class="font-mono font-bold" x-text="lastSale?.sale_number || lastSale?.local_id?.substring(0,8)"></span></div>
+            <div class="text-xs lg:text-base">Sale #: <span class="font-mono font-bold" x-text="saleDisplayNumber(lastSale)"></span></div>
             <div class="text-xl lg:text-2xl font-bold mt-1 lg:mt-2">Total: <span x-text="'₱' + parseFloat(lastSale?.total || 0).toFixed(2)"></span></div>
             <div x-show="lastSale?.payment_method === 'cash' || paymentMethod === 'cash'" class="text-base lg:text-xl mt-0.5 lg:mt-1">
                 Change: <span class="text-green-600 font-bold" x-text="'₱' + parseFloat(lastSale?.change_due || 0).toFixed(2)"></span>
@@ -997,11 +997,11 @@
             </button>
         </div>
         <div class="max-h-60 lg:max-h-80 overflow-y-auto space-y-1.5 lg:space-y-2">
-            <template x-for="sale in recentSales" :key="sale.id || sale.local_id">
+            <template x-for="sale in recentSales" :key="saleRowKey(sale)">
                 <div class="bg-gray-50 rounded-lg p-2 lg:p-3 flex items-center justify-between gap-2">
                     <div class="min-w-0 flex-1">
-                        <div class="font-medium text-[11px] lg:text-sm">
-                            #<span x-text="sale.sale_number || sale.local_id?.substring(0,8) || 'N/A'"></span>
+                        <div class="font-medium text-[11px] lg:text-sm font-mono">
+                            <span x-text="saleDisplayNumber(sale)"></span>
                             <span x-show="sale.status === 'pending' || sale.sync_status === 'pending'" class="ml-1 text-[9px] lg:text-xs bg-yellow-100 text-yellow-700 px-1 lg:px-1.5 py-0.5 rounded">Offline</span>
                         </div>
                         <div class="text-[10px] lg:text-xs text-gray-400" x-text="new Date(sale.created_at).toLocaleString()"></div>
@@ -1014,13 +1014,13 @@
                     </div>
                     <button type="button"
                             @click.stop="reprintSale(sale)"
-                            :disabled="!canUsePrinter() || reprintingSaleKey === (sale.id || sale.local_id)"
+                            :disabled="!canUsePrinter() || reprintingSaleKey === saleRowKey(sale)"
                             class="shrink-0 min-h-[40px] min-w-[72px] px-2.5 py-2 rounded-lg text-[10px] lg:text-xs font-semibold flex items-center justify-center gap-1 transition-colors"
                             :class="canUsePrinter() ? 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
                             :title="canUsePrinter() ? 'Reprint receipt' : 'Printer requires INSABuddy or Android app'">
-                        <svg x-show="reprintingSaleKey !== (sale.id || sale.local_id)" class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                        <svg x-show="reprintingSaleKey === (sale.id || sale.local_id)" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                        <span x-text="reprintingSaleKey === (sale.id || sale.local_id) ? '...' : 'Reprint'"></span>
+                        <svg x-show="reprintingSaleKey !== saleRowKey(sale)" class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                        <svg x-show="reprintingSaleKey === saleRowKey(sale)" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        <span x-text="reprintingSaleKey === saleRowKey(sale) ? '...' : 'Reprint'"></span>
                     </button>
                 </div>
             </template>
@@ -2638,6 +2638,20 @@ function posApp() {
             return this.buddyConnected || this.hasNativeBridge;
         },
 
+        /** Prefer server sale_number (e.g. S20260528140256VWFS); never show raw local_id in UI. */
+        saleDisplayNumber(sale) {
+            if (!sale) return '—';
+            if (sale.sale_number) return sale.sale_number;
+            if (sale.offline || sale.status === 'pending' || sale.sync_status === 'pending') {
+                return 'Pending sync';
+            }
+            return '—';
+        },
+
+        saleRowKey(sale) {
+            return sale?.id || sale?.sale_number || sale?.local_id || '';
+        },
+
         receiptPrintPayloadFromData(data) {
             const items = (data.items || []).map(i => ({
                 name: i.product_name || i.name,
@@ -2654,7 +2668,7 @@ function posApp() {
             return {
                 storeName: data.store_name || '{{ $brandName }}',
                 branchName: data.branch_name || '{{ auth()->user()->branch?->name ?? "" }}',
-                saleNumber: data.sale_number || data.local_id?.substring(0, 8) || '',
+                saleNumber: data.sale_number || '',
                 date: data.created_at ? new Date(data.created_at).toLocaleString() : new Date().toLocaleString(),
                 cashier: data.cashier || '{{ auth()->user()->name }}',
                 items,
@@ -2750,7 +2764,7 @@ function posApp() {
                 this.showToast('Printer requires INSABuddy or the Android app', 'warning');
                 return;
             }
-            const key = sale.id || sale.local_id;
+            const key = this.saleRowKey(sale);
             this.reprintingSaleKey = key;
             try {
                 const raw = await this.buildReceiptDataForSale(sale);
@@ -3083,6 +3097,7 @@ function posApp() {
                         items: txData.items,
                         subtotal: txData.subtotal,
                         discount_total: txData.discount_total,
+                        order_discount: txData.order_discount,
                         total: txData.total,
                         change_due: txData.change_due,
                         cashier_name: '{{ auth()->user()->name }}',
@@ -3111,7 +3126,11 @@ function posApp() {
                 const res = await fetch('/api/pos/sales', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({
                     branch_id: txData.branch_id, shift_id: txData.shift_id, cashier_id: txData.cashier_id, member_id: txData.member_id,
                     payment_method: txData.payment_method, payment_ref: txData.payment_ref, amount_tendered: txData.amount_tendered,
-                    items: txData.items, discount_total: txData.discount_total, order_discount: txData.order_discount,
+                    items: txData.items,
+                    subtotal: txData.subtotal,
+                    discount_total: txData.discount_total,
+                    order_discount: txData.order_discount,
+                    total: txData.total,
                 }) });
                 const data = await res.json();
                 if (data.success) {
