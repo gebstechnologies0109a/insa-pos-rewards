@@ -148,10 +148,7 @@ class SyncController extends Controller
             'customers'         => $customers,
             'inventory_batches' => $inventoryBatches,
             'expiry_alerts'     => $expiryAlerts,
-            'settings'          => array_merge(
-                $this->settings->all('rewards'),
-                $this->settings->all('overrides'),
-            ),
+            'settings'          => $this->settings->syncMapForBranch($branchId),
             'server_timestamp'  => $serverTimestamp->toIso8601String(),
             'pulled_at'         => $serverTimestamp->toIso8601String(),
         ]);

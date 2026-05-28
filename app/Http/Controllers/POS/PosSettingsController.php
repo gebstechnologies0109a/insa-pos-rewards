@@ -41,12 +41,17 @@ class PosSettingsController extends Controller
 
     public function apiIndex(): JsonResponse
     {
+        $branchId = (int) (auth()->user()->branch_id ?? request()->integer('branch_id', 0));
+
         return response()->json([
             'success'  => true,
-            'settings' => array_merge(
-                $this->settings->all('rewards'),
-                $this->settings->all('overrides'),
-            ),
+            'settings' => $branchId > 0
+                ? $this->settings->syncMapForBranch($branchId)
+                : array_merge(
+                    $this->settings->all('rewards'),
+                    $this->settings->all('overrides'),
+                    $this->settings->all('receipt'),
+                ),
         ]);
     }
 }

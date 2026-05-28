@@ -14,6 +14,8 @@ use App\Http\Controllers\Backoffice\InventoryAdjustmentController;
 use App\Http\Controllers\Backoffice\InventoryBatchController;
 use App\Http\Controllers\Backoffice\InventoryMovementController;
 use App\Http\Controllers\Backoffice\InventoryReportController;
+use App\Http\Controllers\Backoffice\ReportController as BackofficeReportController;
+use App\Http\Controllers\Owner\OwnerController;
 use App\Http\Controllers\Backoffice\ShiftAuditController;
 use App\Http\Controllers\Backoffice\ShiftDashboardController;
 use App\Http\Controllers\Backoffice\ShiftExportController;
@@ -59,8 +61,14 @@ Route::middleware(['auth', 'role:stockman,manager,admin,owner,super_admin'])->pr
     Route::get('/products/search', [StockmanController::class, 'productSearch'])->name('stockman.products.search');
 });
 
+// ── Owner console (owner, super_admin) ───────────
+Route::middleware(['auth', 'role:owner,super_admin', 'audit:owner'])->prefix('owner')->name('owner.')->group(function () {
+    Route::get('/', [OwnerController::class, 'dashboard'])->name('dashboard');
+    Route::get('/dashboard', [OwnerController::class, 'dashboard']);
+});
+
 // ── Back-Office (manager, admin, owner) ──────────
-Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
+Route::middleware(['auth', 'role:owner,admin,manager', 'audit:backoffice'])->group(function () {
     Route::get('/backoffice', [DashboardController::class, 'index'])
         ->name('backoffice.dashboard');
 
@@ -70,6 +78,11 @@ Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
         ->name('backoffice.analytics.data');
     Route::get('/backoffice/analytics/product/{product}', [AnalyticsController::class, 'productDetail'])
         ->name('backoffice.analytics.product');
+
+    Route::prefix('backoffice/reports')->name('backoffice.reports.')->group(function () {
+        Route::get('daily-sales', [BackofficeReportController::class, 'dailySales'])->name('daily-sales');
+        Route::get('product-performance', [BackofficeReportController::class, 'productPerformance'])->name('product-performance');
+    });
 
     Route::get('/backoffice/shifts', [ShiftManagementController::class, 'index'])
         ->name('backoffice.shifts');
@@ -182,7 +195,7 @@ Route::middleware(['auth', 'role:owner,admin'])->group(function () {
 });
 
 // ── Super Admin ──────────────────────────────────
-Route::middleware(['auth', 'role:super_admin'])->prefix('super-admin')->group(function () {
+Route::middleware(['auth', 'role:super_admin', 'audit:super-admin'])->prefix('super-admin')->group(function () {
     Route::get('/', [SuperAdminDashboardController::class, 'index'])
         ->name('super-admin.dashboard');
 

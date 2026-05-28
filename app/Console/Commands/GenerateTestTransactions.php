@@ -8,15 +8,24 @@ use Illuminate\Support\Facades\DB;
 
 class GenerateTestTransactions extends Command
 {
-    protected $signature = 'test:generate-transactions {--tag=TEST-001} {--batch=200}';
-    protected $description = 'Generate test transactions for test customers that don\'t have one yet (batch-safe for Forge 2-min timeout)';
+    protected $signature = 'test:generate-transactions {--tag=TEST-001} {--batch=200} {--branch=}';
+    protected $description = 'Generate test POS sales for branch testing (batch-safe)';
 
     public function handle(): int
     {
         $tag   = $this->option('tag');
         $batch = (int) $this->option('batch');
 
-        $branch = DB::table('branches')->first();
+        $branchQuery = DB::table('branches');
+        if ($branchId = $this->option('branch')) {
+            $branchQuery->where('id', (int) $branchId);
+        }
+        $branch = $branchQuery->first();
+        if (! $branch) {
+            $this->error('Branch not found.');
+
+            return 1;
+        }
         $user   = DB::table('users')->where('branch_id', $branch->id)->first();
 
         $existingSaleCustomers = DB::table('pos_sales')

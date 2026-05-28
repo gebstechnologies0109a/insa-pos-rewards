@@ -201,6 +201,14 @@
 <header class="bg-white shadow px-2 py-1 lg:px-4 lg:py-2 flex items-center justify-between flex-shrink-0">
     <h1 class="text-sm lg:text-lg font-bold text-gray-800 whitespace-nowrap">{{ $brandName }}</h1>
     <div class="flex items-center gap-1.5 lg:gap-3 text-[11px] lg:text-sm text-gray-600 flex-wrap justify-end">
+        <!-- Native dashboard strip -->
+        <div x-show="hasNativeBridge && dashboardData" class="hidden lg:flex items-center gap-2 px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-[10px] text-slate-600"
+             :title="'Cached products: ' + (dashboardData?.products_cached || 0)">
+            <span x-text="'Today: ' + (dashboardData?.sales_today ?? '—') + ' sales'"></span>
+            <span class="text-slate-300">|</span>
+            <span x-text="'₱' + parseFloat(dashboardData?.revenue_today || 0).toFixed(0)"></span>
+        </div>
+
         <!-- Sync Status -->
         <div id="sync-status" class="flex items-center gap-1 lg:gap-1.5 px-1.5 py-0.5 lg:px-2 lg:py-1 rounded-full border cursor-pointer"
              :class="{
@@ -1417,6 +1425,7 @@ function posApp() {
         gridCanLoadMore: false,
         browserOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
         nativeSyncDetail: null,
+        dashboardData: null,
         productsLoading: true,
         _syncEngineReady: false,
         _scanInputTimer: null,
@@ -1787,6 +1796,7 @@ function posApp() {
             window.addEventListener('online', () => { this.browserOnline = true; this.updateOfflineBanner(); });
             window.addEventListener('offline', () => { this.browserOnline = false; this.updateOfflineBanner(); });
             document.addEventListener('insapos:syncStatus', (e) => this.applyNativeSyncStatus(e.detail || {}));
+            document.addEventListener('insapos:dashboardData', (e) => this.applyDashboardData(e.detail || {}));
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
             if (this.hasNativeBridge) {
                 if (typeof INSABuddy !== 'undefined') INSABuddy.detectV2();
@@ -1883,6 +1893,10 @@ function posApp() {
                 typeof window.INSAPOS !== 'undefined' &&
                 typeof window.INSAPOS.getLocalProducts === 'function' &&
                 typeof window.INSAPOS.createLocalSale === 'function';
+        },
+
+        applyDashboardData(detail) {
+            this.dashboardData = detail;
         },
 
         applyNativeSyncStatus(detail) {

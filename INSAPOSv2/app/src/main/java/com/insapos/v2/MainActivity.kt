@@ -47,6 +47,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.insapos.v2.sync.SyncEngine
+import com.insapos.v2.ui.DashboardScreen
 
 class MainActivity : AppCompatActivity() {
 
@@ -858,6 +859,8 @@ class MainActivity : AppCompatActivity() {
                 val unsynced = db.getUnsyncedCount()
                 val queueCount = db.getSyncQueueCount()
                 val total = unsynced + queueCount
+                val stats = db.getOfflineStats()
+                val products = stats.optInt("products", 0)
                 runOnUiThread {
                     if (total > 0) {
                         syncBadge.visibility = View.VISIBLE
@@ -869,9 +872,19 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         syncBadge.visibility = View.GONE
                     }
+                    dispatchDashboardToWeb(products, total)
                 }
             }.start()
         }, 1500)
+    }
+
+    private fun dispatchDashboardToWeb(productsCached: Int, pendingSync: Int) {
+        if (!pageLoaded) return
+        val payload = DashboardScreen.buildPayload(
+            pendingSync = pendingSync,
+            productsCached = productsCached,
+        )
+        DashboardScreen.dispatchDashboardData(this, webView, payload)
     }
 
     private fun showStatus(text: String) {
