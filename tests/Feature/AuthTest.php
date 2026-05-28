@@ -107,13 +107,21 @@ class AuthTest extends TestCase
     {
         $this->withHeader('User-Agent', 'INSAPOSv3/1.0 Android/14')
             ->get(route('pos.cashier'))
-            ->assertRedirect(route('login', ['error' => 'session_required']));
+            ->assertRedirect(route('login', ['error' => 'auth_required']));
     }
 
-    public function test_login_page_shows_android_session_error_message(): void
+    public function test_login_page_shows_android_auth_required_message(): void
     {
         $this->withHeader('User-Agent', 'INSAPOSv3/1.0 Android/14')
-            ->get(route('login', ['error' => 'session_required']))
+            ->get(route('login', ['error' => 'auth_required']))
+            ->assertOk()
+            ->assertSee('Please sign in to continue', false);
+    }
+
+    public function test_login_page_shows_android_session_lost_message(): void
+    {
+        $this->withHeader('User-Agent', 'INSAPOSv3/1.0 Android/14')
+            ->get(route('login', ['error' => 'session_lost']))
             ->assertOk()
             ->assertSee('session was not kept', false);
     }

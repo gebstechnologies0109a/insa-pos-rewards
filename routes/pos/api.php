@@ -39,6 +39,12 @@ Route::prefix('terminal')->group(function () {
 Route::prefix('sync')->group(function () {
     Route::post('/push', [SyncController::class, 'push'])->name('pos.sync.push');
     Route::get('/pull', [SyncController::class, 'pull'])->name('pos.sync.pull');
+    Route::post('/pull', [SyncController::class, 'pull'])->name('pos.sync.pull.post');
+});
+
+Route::prefix('session')->group(function () {
+    Route::post('/start', [PosTerminalSessionController::class, 'register'])->name('pos.session.start');
+    Route::post('/end', [PosTerminalSessionController::class, 'end'])->name('pos.session.end');
 });
 
 Route::post('/license/validate', [LicenseValidateController::class, 'validate'])

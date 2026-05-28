@@ -156,7 +156,7 @@ class SyncEngine(
                     db.markTransactionSynced(txn.getString("local_id"), serverId)
                     synced++
                     Log.i(TAG, "Synced transaction: ${txn.getString("local_id")} -> server #$serverId")
-                } else if (response != null && response.has("conflict")) {
+                } else if (response != null && SyncConflictResolver.hasBlockingConflicts(response)) {
                     lastConflict = response
                     onConflict?.invoke(response)
                     failures++
@@ -284,19 +284,9 @@ class SyncEngine(
 
         val productsJson = httpGet("${session.getBaseUrl()}/api/pos/sync/pull$params")
         if (productsJson != null && productsJson.optBoolean("success", true)) {
-            val products = productsJson.optJSONArray("products") ?: JSONArray()
-            if (products.length() > 0) {
-                val count = db.upsertProducts(products)
-                db.logSync("pull", "inventory", count, "completed")
-                Log.i(TAG, "Pulled $count products (batch stock)")
-            }
-            val pulledAt = productsJson.optString("pulled_at", "")
-            if (pulledAt.isNotBlank()) {
-                db.setSetting("inventory_last_sync", pulledAt)
-                db.setSetting("last_pull_at", pulledAt)
-            } else {
-                db.setSetting("last_pull_at", now())
-            }
+            val result = merger.mergeJson(productsJson)
+            db.logSync("pull", "inventory", result.products + result.batches, "completed")
+            Log.i(TAG, "Merged pull: products=${result.products} batches=${result.batches}")
         }
     }
 
@@ -312,35 +302,11 @@ class SyncEngine(
         }
     }
 
-    private fun buildPushPayload(txn: JSONObject): JSONObject? {
-        val localId = txn.optString("local_id", "")
-        if (localId.isBlank()) return null
+    private val payloadBuilder by lazy { SyncPayloadBuilder(db, session) }
+    private val merger by lazy { LocalSyncMerger(db) }
 
-        val branchId = session.branchId ?: txn.optInt("branch_id", 0).takeIf { it > 0 }
-        if (branchId == null || branchId == 0) return null
-
-        val items = mapItemsForPush(parseItems(txn))
-        if (items.length() == 0) return null
-
-        return JSONObject().apply {
-            put("local_id", localId)
-            put("branch_id", branchId)
-            if (txn.has("shift_id") && !txn.isNull("shift_id")) {
-                put("shift_id", txn.optInt("shift_id"))
-            }
-            val cashierId = txn.optInt("cashier_id", 0).takeIf { it > 0 }
-                ?: session.cashierId
-                ?: db.getSetting("cashier_id")?.toIntOrNull()
-            if (cashierId != null && cashierId > 0) put("cashier_id", cashierId)
-            if (txn.has("member_id") && !txn.isNull("member_id")) {
-                put("member_id", txn.optInt("member_id"))
-            }
-            put("payment_method", txn.optString("payment_method", "cash"))
-            put("amount_tendered", txn.optDouble("amount_tendered", txn.optDouble("total", 0.0)))
-            put("items", items)
-            put("created_at", txn.optString("created_at", now()))
-        }
-    }
+    private fun buildPushPayload(txn: JSONObject): JSONObject? =
+        payloadBuilder.buildFromTransaction(txn)?.toJson()
 
     private fun parseItems(txn: JSONObject): JSONArray {
         val raw = txn.optString("items_json", "")

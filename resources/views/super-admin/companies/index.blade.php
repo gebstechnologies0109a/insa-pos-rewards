@@ -36,7 +36,8 @@
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Inactive</span>
                         @endif
                     </td>
-                    <td class="px-6 py-3 text-right">
+                    <td class="px-6 py-3 text-right space-x-2">
+                        <a href="{{ route('super-admin.companies.show', $company) }}" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Details</a>
                         <a href="{{ route('super-admin.companies.edit', $company) }}" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Edit</a>
                     </td>
                 </tr>

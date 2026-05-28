@@ -199,6 +199,7 @@ Route::middleware(['auth', 'role:super_admin'])->prefix('super-admin')->group(fu
         ->name('super-admin.sessions.end');
 
     Route::get('/companies', [CompanyController::class, 'index'])->name('super-admin.companies.index');
+    Route::get('/companies/{company}', [CompanyController::class, 'show'])->name('super-admin.companies.show');
     Route::get('/companies/create', [CompanyController::class, 'create'])->name('super-admin.companies.create');
     Route::post('/companies', [CompanyController::class, 'store'])->name('super-admin.companies.store');
     Route::get('/companies/{company}/edit', [CompanyController::class, 'edit'])->name('super-admin.companies.edit');

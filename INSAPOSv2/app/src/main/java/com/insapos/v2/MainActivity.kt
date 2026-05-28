@@ -46,6 +46,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import com.insapos.v2.sync.SyncEngine
 
 class MainActivity : AppCompatActivity() {
 
@@ -107,7 +108,12 @@ class MainActivity : AppCompatActivity() {
                 CookieManager.getInstance().getCookie(session.getBaseUrl())
             }
             syncEngineStarted = true
-            service.syncEngine?.onSyncStatusChanged = { runOnUiThread { updateSyncBadge() } }
+            service.syncEngine?.onSyncStatusChanged = { status ->
+                runOnUiThread {
+                    updateSyncBadge()
+                    dispatchSyncStatusToWeb(status)
+                }
+            }
             service.syncEngine?.onDownloadProgress = { progress ->
                 runOnUiThread {
                     statusText.text = progress.message
@@ -157,7 +163,10 @@ class MainActivity : AppCompatActivity() {
 
             service.ensureLocalServerStarted()
             service.syncEngine?.onSyncStatusChanged = { status ->
-                runOnUiThread { updateSyncBadge() }
+                runOnUiThread {
+                    updateSyncBadge()
+                    dispatchSyncStatusToWeb(status)
+                }
             }
 
             if (pageLoaded) {
@@ -632,7 +641,12 @@ class MainActivity : AppCompatActivity() {
                 CookieManager.getInstance().getCookie(session.getBaseUrl())
             }
             syncEngineStarted = true
-            service.syncEngine?.onSyncStatusChanged = { runOnUiThread { updateSyncBadge() } }
+            service.syncEngine?.onSyncStatusChanged = { status ->
+                runOnUiThread {
+                    updateSyncBadge()
+                    dispatchSyncStatusToWeb(status)
+                }
+            }
             service.syncEngine?.onDownloadProgress = { progress ->
                 runOnUiThread {
                     statusText.text = progress.message
@@ -814,6 +828,24 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }.start()
+    }
+
+    private fun dispatchSyncStatusToWeb(status: SyncEngine.SyncStatus) {
+        val engine = posService?.syncEngine ?: return
+        val json = engine.getStatusJson().toString()
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+        val js = """
+            (function() {
+                var detail = JSON.parse('$json');
+                detail.engine_status = '${status.name}';
+                document.dispatchEvent(new CustomEvent('insapos:syncStatus', { detail: detail }));
+                if (window.posAppInstance && window.posAppInstance.applyNativeSyncStatus) {
+                    window.posAppInstance.applyNativeSyncStatus(detail);
+                }
+            })();
+        """.trimIndent()
+        webView.post { webView.evaluateJavascript(js, null) }
     }
 
     private fun updateSyncBadge() {

@@ -1,5 +1,6 @@
 package com.insapos.v2.posengine
 
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -8,57 +9,59 @@ import java.util.Locale
 object PosReceiptGenerator {
 
     fun generate(sale: JSONObject, storeName: String = "INSA POS", branchName: String = "", cashier: String = ""): JSONObject {
-        val items = sale.optJSONArray("items") ?: sale.optJSONArray("items_json")?.let {
-            try { org.json.JSONArray(it.toString()) } catch (_: Exception) { null }
-        } ?: org.json.JSONArray()
-
-        val lines = mutableListOf<String>()
-        val div = "================================"
-        lines.add(div)
-        lines.add(storeName.centered(32))
-        if (branchName.isNotBlank()) lines.add(branchName.centered(32))
-        lines.add(div)
-        if (cashier.isNotBlank()) lines.add("Cashier: $cashier")
-        lines.add("Date: ${formatNow()}")
-        lines.add("Sale: ${sale.optString("local_id", "LOCAL")}")
-        lines.add(div)
-
+        val items = parseItems(sale)
+        val receiptItems = mutableListOf<ReceiptItem>()
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i)
-            val name = item.optString("product_name", item.optString("name", "Item"))
-            val qty = item.optDouble("qty", item.optDouble("quantity", 1.0))
-            val price = item.optDouble("price", 0.0)
-            val lineTotal = qty * price
-            lines.add(name.take(32))
-            lines.add("  ${qty} x ${fmt(price)} = ${fmt(lineTotal)}")
+            receiptItems.add(
+                ReceiptItem(
+                    name = item.optString("product_name", item.optString("name", "Item")),
+                    qty = item.optDouble("qty", item.optDouble("quantity", 1.0)),
+                    price = item.optDouble("price", 0.0),
+                    discount = item.optDouble("discount", 0.0),
+                )
+            )
         }
 
-        lines.add(div)
-        lines.add("Subtotal:".padEnd(20) + fmt(sale.optDouble("subtotal", 0.0)).padStart(12))
-        lines.add("Discount:".padEnd(20) + fmt(sale.optDouble("discount", sale.optDouble("discount_total", 0.0))).padStart(12))
-        lines.add("TOTAL:".padEnd(20) + fmt(sale.optDouble("total", 0.0)).padStart(12))
-        lines.add("Tendered:".padEnd(20) + fmt(sale.optDouble("amount_tendered", 0.0)).padStart(12))
-        lines.add("Change:".padEnd(20) + fmt(sale.optDouble("change_amount", sale.optDouble("change_due", 0.0))).padStart(12))
-        lines.add(div)
-        lines.add("Thank you!")
-        lines.add("")
+        val subtotal = sale.optDouble("subtotal", receiptItems.sumOf { it.lineTotal })
+        val discount = sale.optDouble("discount", sale.optDouble("discount_total", 0.0))
+        val total = sale.optDouble("total", subtotal - discount)
+        val tendered = sale.optDouble("amount_tendered", total)
+        val change = sale.optDouble("change_amount", sale.optDouble("change_due", (tendered - total).coerceAtLeast(0.0)))
 
-        val text = lines.joinToString("\n")
+        val template = ReceiptTemplate(
+            storeName = storeName,
+            branchName = branchName,
+            cashierName = cashier,
+            localId = sale.optString("local_id", "LOCAL"),
+            items = receiptItems,
+            subtotal = subtotal,
+            discount = discount,
+            total = total,
+            amountTendered = tendered,
+            change = change,
+            paymentMethod = sale.optString("payment_method", "cash"),
+            soldAt = sale.optString("created_at", formatNow()),
+        )
+
+        val text = template.toPlainText()
         return JSONObject().apply {
             put("text", text)
             put("json", sale.toString())
             put("html", "<pre>$text</pre>")
+            put("template", JSONObject().put("local_id", template.localId))
         }
     }
 
-    private fun fmt(v: Double): String = String.format(Locale.US, "%.2f", v)
+    private fun parseItems(sale: JSONObject): JSONArray {
+        sale.optJSONArray("items")?.let { if (it.length() > 0) return it }
+        val raw = sale.optString("items_json", "")
+        if (raw.isNotBlank()) {
+            try { return JSONArray(raw) } catch (_: Exception) { }
+        }
+        return JSONArray()
+    }
 
     private fun formatNow(): String =
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-
-    private fun String.centered(width: Int): String {
-        if (length >= width) return this
-        val pad = (width - length) / 2
-        return " ".repeat(pad) + this
-    }
 }

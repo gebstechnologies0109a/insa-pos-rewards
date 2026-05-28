@@ -115,7 +115,7 @@
                     $slots = $branch->license?->pos_slots ?? 1;
                     $open = $branch->open_shifts_count;
                     $pct = $slots > 0 ? round(($open / $slots) * 100) : 0;
-                    $licenseActive = $branch->license?->active ?? false;
+                    $licenseActive = $branch->license?->isCurrentlyActive() ?? false;
                 @endphp
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-3 font-medium text-gray-900">{{ $branch->name }}</td>

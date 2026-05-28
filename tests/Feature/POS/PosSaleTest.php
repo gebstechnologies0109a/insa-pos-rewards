@@ -286,4 +286,35 @@ class PosSaleTest extends TestCase
         // 100 stocked in - 2 sold = 98
         $this->assertEquals(98, (float) $stockProduct1);
     }
+
+    public function test_sale_receipt_endpoint_returns_line_items(): void
+    {
+        $this->seedStock();
+
+        $saleId = $this->postJson('/api/pos/sales', $this->validPayload())
+            ->assertCreated()
+            ->json('sale.id');
+
+        $response = $this->getJson('/api/pos/sales/' . $saleId . '/receipt');
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(2, 'receipt.items')
+            ->assertJsonPath('receipt.total', 65);
+    }
+
+    public function test_sale_receipt_endpoint_denies_other_branch(): void
+    {
+        $this->seedStock();
+
+        $saleId = $this->postJson('/api/pos/sales', $this->validPayload())
+            ->assertCreated()
+            ->json('sale.id');
+
+        $this->posUser->update(['branch_id' => 2]);
+
+        $this->getJson('/api/pos/sales/' . $saleId . '/receipt')
+            ->assertNotFound()
+            ->assertJsonPath('success', false);
+    }
 }

@@ -33,7 +33,7 @@
                 @forelse($branches as $branch)
                 @php
                     $slots = $branch->license?->pos_slots ?? 1;
-                    $licenseActive = $branch->license?->active ?? false;
+                    $licenseActive = $branch->license?->isCurrentlyActive() ?? false;
                 @endphp
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-3 text-gray-600">{{ $branch->company?->name ?? '—' }}</td>

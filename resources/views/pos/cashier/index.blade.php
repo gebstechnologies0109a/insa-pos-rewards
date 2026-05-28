@@ -24,6 +24,18 @@
     <style>
         [x-cloak] { display: none !important; }
         .product-tile:active { transform: scale(0.95); }
+        .product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.375rem; }
+        @media (min-width: 640px) { .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; } }
+        @media (min-width: 1280px) { .product-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+        @media (min-width: 1920px) { .product-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+        .product-card { min-height: 4.5rem; }
+        .badge-expiry { font-size: 9px; padding: 0 4px; border-radius: 4px; background: #fef3c7; color: #92400e; }
+        .badge-stock-low { background: #fef3c7; color: #92400e; }
+        .badge-stock-out { background: #fee2e2; color: #991b1b; }
+        .badge-stock-ok { background: #d1fae5; color: #065f46; }
+        #offline-indicator.offline { background: #fef2f2; color: #991b1b; }
+        #offline-indicator.online { background: #ecfdf5; color: #065f46; }
         #posScreen, #checkoutScreen { min-height: 0; }
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -178,8 +190,11 @@
 </div>
 
 <!-- OFFLINE BANNER -->
-<div x-show="offlineBanner" x-cloak class="bg-amber-50 border-b border-amber-200 px-3 py-1.5 text-center text-xs text-amber-900 flex-shrink-0">
-    <span class="font-medium">Offline mode</span> — using cached store data. Sales are saved locally and will sync when connected.
+<div id="offline-indicator" x-show="offlineBanner || !browserOnline" x-cloak
+     class="border-b px-3 py-1.5 text-center text-xs flex-shrink-0"
+     :class="browserOnline && !offlineBanner ? 'online border-emerald-200' : 'offline border-amber-200 bg-amber-50 text-amber-900'">
+    <span class="font-medium" x-text="browserOnline ? 'Offline mode' : 'No network'"></span>
+    <span> — using cached store data. Sales sync when connected.</span>
 </div>
 
 <!-- HEADER -->
@@ -187,7 +202,7 @@
     <h1 class="text-sm lg:text-lg font-bold text-gray-800 whitespace-nowrap">{{ $brandName }}</h1>
     <div class="flex items-center gap-1.5 lg:gap-3 text-[11px] lg:text-sm text-gray-600 flex-wrap justify-end">
         <!-- Sync Status -->
-        <div class="flex items-center gap-1 lg:gap-1.5 px-1.5 py-0.5 lg:px-2 lg:py-1 rounded-full border cursor-pointer"
+        <div id="sync-status" class="flex items-center gap-1 lg:gap-1.5 px-1.5 py-0.5 lg:px-2 lg:py-1 rounded-full border cursor-pointer"
              :class="{
                  'border-green-200 bg-green-50': syncStatus === 'synced',
                  'border-yellow-200 bg-yellow-50': syncStatus === 'syncing' || syncStatus === 'pushing' || syncStatus === 'pulling-products' || syncStatus === 'pulling-customers' || syncStatus === 'pulling-inventory' || syncStatus === 'downloading',
@@ -345,15 +360,18 @@
                     </div>
                 </template>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 3xl:grid-cols-6 gap-1.5 lg:gap-2" x-show="!productsLoading || filteredProducts.length > 0">
-                <template x-for="product in filteredProducts" :key="product.id">
+            <div class="product-grid" x-show="!productsLoading || filteredProducts.length > 0">
+                <template x-for="product in visibleProducts" :key="product.id">
                     <button @click="addToCart(product)"
-                            class="product-tile bg-white rounded-lg shadow hover:shadow-md border border-gray-200 p-2 lg:p-3 text-left transition-all flex flex-col"
+                            class="product-tile product-card bg-white rounded-lg shadow hover:shadow-md border border-gray-200 p-2 lg:p-3 text-left transition-all flex flex-col"
                             :class="product.stock <= 0 && 'opacity-40 cursor-not-allowed'"
                             :disabled="product.stock <= 0">
                         <div class="font-medium text-[11px] lg:text-sm leading-tight truncate" x-text="product.name"></div>
-                        <div class="text-[10px] lg:text-xs text-gray-400 mt-0.5 lg:mt-1" x-text="product.sku"></div>
-                        <div class="mt-auto pt-1.5 lg:pt-2 flex items-end justify-between">
+                        <div class="text-[10px] lg:text-xs text-gray-400 mt-0.5 lg:mt-1 truncate" x-text="product.sku || product.barcode || ''"></div>
+                        <div class="flex flex-wrap gap-0.5 mt-1" x-show="product.near_expiry || product.earliest_expiry">
+                            <span class="badge-expiry" x-show="renderExpiryBadge(product)" x-text="renderExpiryBadge(product)"></span>
+                        </div>
+                        <div class="mt-auto pt-1.5 lg:pt-2 flex items-end justify-between gap-1">
                             <span class="font-bold text-blue-700 text-[11px] lg:text-sm" x-text="'₱' + parseFloat(product.price).toFixed(2)"></span>
                             <span class="text-[9px] lg:text-xs px-1 lg:px-1.5 py-0.5 rounded"
                                   :class="stockBadgeClass(product)"
@@ -1397,6 +1415,8 @@ function posApp() {
         catalogNeedsCategory: false,
         gridDisplayLimit: 48,
         gridCanLoadMore: false,
+        browserOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        nativeSyncDetail: null,
         productsLoading: true,
         _syncEngineReady: false,
         _scanInputTimer: null,
@@ -1757,7 +1777,16 @@ function posApp() {
             this.$nextTick(() => { const el = document.getElementById('retailScanInput'); if (el) el.focus(); });
         },
 
+        get visibleProducts() {
+            return (this.filteredProducts || []).slice(0, this.gridDisplayLimit);
+        },
+
         async init() {
+            window.posAppInstance = this;
+            this.browserOnline = navigator.onLine;
+            window.addEventListener('online', () => { this.browserOnline = true; this.updateOfflineBanner(); });
+            window.addEventListener('offline', () => { this.browserOnline = false; this.updateOfflineBanner(); });
+            document.addEventListener('insapos:syncStatus', (e) => this.applyNativeSyncStatus(e.detail || {}));
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
             if (this.hasNativeBridge) {
                 if (typeof INSABuddy !== 'undefined') INSABuddy.detectV2();
@@ -1846,9 +1875,39 @@ function posApp() {
         },
 
         useNativeEngine() {
+            return this.useLocalPosEngine();
+        },
+
+        useLocalPosEngine() {
             return this.hasNativeBridge && this.androidLocalUp &&
                 typeof window.INSAPOS !== 'undefined' &&
+                typeof window.INSAPOS.getLocalProducts === 'function' &&
                 typeof window.INSAPOS.createLocalSale === 'function';
+        },
+
+        applyNativeSyncStatus(detail) {
+            this.nativeSyncDetail = detail;
+            const st = (detail.engine_status || detail.status || '').toLowerCase();
+            if (st === 'pushing') this.syncStatus = 'pushing';
+            else if (st === 'pulling') this.syncStatus = 'syncing';
+            else if (st === 'partial') this.syncStatus = 'partial';
+            else if (st === 'error') this.syncStatus = 'error';
+            else if (st === 'idle' && detail.unsynced_count > 0) this.syncStatus = 'partial';
+            else if (detail.online === false) this.syncStatus = 'offline';
+            else this.syncStatus = 'synced';
+            if (typeof detail.unsynced_count === 'number') {
+                this.pendingSyncCount = detail.unsynced_count + (detail.sync_queue_count || 0);
+            }
+        },
+
+        renderExpiryBadge(product) {
+            if (!product) return '';
+            if (product.near_expiry) return 'Exp soon';
+            if (product.earliest_expiry) {
+                const d = String(product.earliest_expiry).slice(0, 10);
+                return 'Exp ' + d;
+            }
+            return '';
         },
 
         async loadProductsFromNative() {

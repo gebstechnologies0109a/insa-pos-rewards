@@ -30,7 +30,10 @@ class CompanyBranchDeviceSeeder extends Seeder
             ->update(['company_id' => $company->id]);
 
         $fingerprints = PosTerminalSession::query()
-            ->where('branch_id', $branch->id)
+            ->where(function ($q) use ($branch) {
+                $q->where('branch_id', $branch->id)
+                    ->orWhereNull('branch_id');
+            })
             ->whereNotNull('device_fingerprint')
             ->where('device_fingerprint', '!=', '')
             ->distinct()
@@ -48,10 +51,14 @@ class CompanyBranchDeviceSeeder extends Seeder
             );
 
             PosTerminalSession::query()
-                ->where('branch_id', $branch->id)
                 ->where('device_fingerprint', $fingerprint)
-                ->whereNull('device_id')
-                ->update(['device_id' => $device->id]);
+                ->where(function ($q) use ($branch) {
+                    $q->where('branch_id', $branch->id)->orWhereNull('branch_id');
+                })
+                ->update([
+                    'device_id'  => $device->id,
+                    'branch_id'  => $branch->id,
+                ]);
 
             $deviceIndex++;
         }

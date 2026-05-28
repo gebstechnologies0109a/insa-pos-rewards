@@ -54,4 +54,37 @@ class PosSaleController extends Controller
             'sales'   => $sales,
         ]);
     }
+
+    public function receipt(PosSale $sale): JsonResponse
+    {
+        $user = auth()->user();
+
+        if (! $user || $sale->branch_id !== $user->branch_id) {
+            return response()->json(['success' => false, 'message' => 'Sale not found.'], 404);
+        }
+
+        $sale->load('items');
+
+        return response()->json([
+            'success' => true,
+            'receipt' => [
+                'sale_number'      => $sale->sale_number,
+                'local_id'         => $sale->local_id,
+                'created_at'       => $sale->created_at?->toIso8601String(),
+                'payment_method'   => $sale->payment_method,
+                'subtotal'         => (float) $sale->subtotal,
+                'discount_total'   => (float) $sale->discount_total,
+                'total'            => (float) $sale->total,
+                'amount_tendered'  => (float) $sale->amount_tendered,
+                'change_due'       => (float) $sale->change_due,
+                'items'            => $sale->items->map(fn ($item) => [
+                    'product_id'   => $item->product_id,
+                    'product_name' => $item->product_name,
+                    'qty'          => (int) $item->qty,
+                    'price'        => (float) $item->price,
+                    'discount'     => (float) $item->discount,
+                ])->values(),
+            ],
+        ]);
+    }
 }

@@ -747,6 +747,112 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         }
     }
 
+    fun getFefoBatches(productId: Int): JSONArray {
+        val arr = JSONArray()
+        val cursor = readableDatabase.rawQuery(
+            """SELECT id, product_id, qty, expiry_date, batch_code
+               FROM inventory_batches
+               WHERE product_id = ? AND qty > 0
+               ORDER BY CASE WHEN expiry_date IS NULL OR expiry_date = '' THEN 1 ELSE 0 END,
+                        expiry_date ASC, id ASC""",
+            arrayOf(productId.toString())
+        )
+        while (cursor.moveToNext()) {
+            arr.put(JSONObject().apply {
+                put("id", cursor.getLong(0))
+                put("product_id", cursor.getInt(1))
+                put("qty", cursor.getDouble(2))
+                put("expiry_date", cursor.getString(3))
+                put("batch_code", cursor.getString(4))
+            })
+        }
+        cursor.close()
+        return arr
+    }
+
+    fun deductBatchQty(batchRowId: Long, qty: Double) {
+        writableDatabase.execSQL(
+            "UPDATE inventory_batches SET qty = MAX(0, qty - ?) WHERE id = ?",
+            arrayOf(qty, batchRowId.toString())
+        )
+    }
+
+    fun upsertInventoryBatches(batches: JSONArray): Int {
+        var count = 0
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            for (i in 0 until batches.length()) {
+                val b = batches.getJSONObject(i)
+                val serverId = b.optInt("id", 0)
+                val productId = b.optInt("product_id", 0)
+                if (productId <= 0) continue
+                val cv = ContentValues().apply {
+                    put("server_id", serverId)
+                    put("product_id", productId)
+                    put("branch_id", b.optInt("branch_id", 0))
+                    put("batch_code", b.optString("batch_code", ""))
+                    put("expiry_date", b.optString("expiry_date", ""))
+                    put("qty", b.optDouble("quantity", b.optDouble("qty", 0.0)))
+                    put("cost", b.optDouble("cost_price", 0.0))
+                    put("data_json", b.toString())
+                    put("synced_at", now())
+                }
+                val existing = db.rawQuery(
+                    "SELECT id FROM inventory_batches WHERE server_id = ?",
+                    arrayOf(serverId.toString())
+                )
+                if (existing.moveToFirst()) {
+                    db.update("inventory_batches", cv, "server_id = ?", arrayOf(serverId.toString()))
+                } else {
+                    db.insert("inventory_batches", null, cv)
+                }
+                existing.close()
+                count++
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return count
+    }
+
+    fun upsertExpiryAlerts(alerts: JSONArray): Int {
+        var count = 0
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            for (i in 0 until alerts.length()) {
+                val a = alerts.getJSONObject(i)
+                val serverId = a.optInt("id", 0)
+                val cv = ContentValues().apply {
+                    put("server_id", serverId)
+                    put("product_id", a.optInt("product_id", 0))
+                    put("batch_id", a.optInt("inventory_batch_id", a.optInt("batch_id", 0)))
+                    put("alert_type", a.optString("alert_type", ""))
+                    put("message", a.optString("message", a.optString("alert_type", "")))
+                    put("data_json", a.toString())
+                    put("synced_at", now())
+                }
+                val existing = db.rawQuery(
+                    "SELECT id FROM expiry_alerts WHERE server_id = ?",
+                    arrayOf(serverId.toString())
+                )
+                if (serverId > 0 && existing.moveToFirst()) {
+                    db.update("expiry_alerts", cv, "server_id = ?", arrayOf(serverId.toString()))
+                } else {
+                    db.insert("expiry_alerts", null, cv)
+                }
+                existing.close()
+                count++
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return count
+    }
+
     // --- Helpers ---
 
     private fun countTable(table: String): Int {
