@@ -122,9 +122,30 @@
         localStorage.removeItem(STORAGE_KEY);
     }
 
-    window.addEventListener('beforeunload', () => {
-        endSession();
+    function isNativePosShell() {
+        return typeof window.INSAPOS !== 'undefined';
+    }
+
+    /** Desktop browsers: release seat on tab close. Native WebView must not — reloads drop the session. */
+    window.addEventListener('pagehide', (e) => {
+        if (!e.persisted && !isNativePosShell()) {
+            endSession();
+        }
     });
+
+    function bindLogoutEndSession() {
+        document.querySelectorAll('form[action*="logout"]').forEach((form) => {
+            form.addEventListener('submit', () => {
+                endSession();
+            });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindLogoutEndSession);
+    } else {
+        bindLogoutEndSession();
+    }
 
     window.PosTerminalSession = {
         register,

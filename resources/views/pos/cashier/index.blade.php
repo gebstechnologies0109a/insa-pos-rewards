@@ -298,8 +298,11 @@
     <div x-show="posMode === 'cafe'" class="flex-1 flex flex-col min-w-0">
         <div class="flex gap-1.5 lg:gap-2 mb-2 lg:mb-3">
             <div class="relative flex-1">
-                <input type="text" x-model="searchQuery" data-scan-input
-                       @input.debounce.350ms="filterProducts()" placeholder="Search or scan barcode..."
+                <input type="text" data-scan-input
+                       @input="onScanFieldInput($event, 'cafe')"
+                       @keydown.enter.prevent="commitScanField($event, 'cafe')"
+                       placeholder="Search or scan barcode..."
+                       autocomplete="off" autocorrect="off" spellcheck="false"
                        x-ref="searchInput" id="posSearchInput"
                        class="w-full p-1.5 pl-7 lg:p-2.5 lg:pl-9 border rounded-lg text-xs lg:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                 <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-400 absolute left-2 top-2 lg:left-3 lg:top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -352,14 +355,15 @@
         <div class="mb-3 lg:mb-4">
             <div class="flex gap-2 items-stretch">
                 <div class="relative flex-1">
-                    <input type="text" x-model="retailScanQuery" id="retailScanInput" data-scan-input
-                           @keydown.enter.prevent="retailScan()"
-                           @input.debounce.350ms="retailLiveSearch()"
+                    <input type="text" id="retailScanInput" data-scan-input
+                           @input="onScanFieldInput($event, 'retail')"
+                           @keydown.enter.prevent="commitScanField($event, 'retail')"
                            :placeholder="retailPreviewMode ? 'Preview mode — scan barcode or type product...' : 'Scan barcode or type product name...'"
+                           autocomplete="off" autocorrect="off" spellcheck="false"
                            class="w-full p-3 pl-10 lg:p-4 lg:pl-12 border-2 rounded-xl text-sm lg:text-lg focus:ring-2 focus:outline-none font-medium"
                            :class="retailPreviewMode ? 'border-amber-400 bg-amber-50/50 focus:ring-amber-500 focus:border-amber-500' : 'border-green-400 bg-green-50/50 focus:ring-green-500 focus:border-green-500'">
                     <svg class="w-5 h-5 lg:w-6 lg:h-6 absolute left-3 top-3.5 lg:left-4 lg:top-4" :class="retailPreviewMode ? 'text-amber-500' : 'text-green-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-                    <button x-show="retailScanQuery.length > 0" @click="retailCancel()"
+                    <button hidden data-scan-clear @click="retailCancel()"
                             class="absolute right-3 top-3 lg:right-4 lg:top-3.5 text-gray-400 hover:text-red-500 p-0.5">
                         <svg class="w-5 h-5 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
@@ -1366,7 +1370,10 @@ function posApp() {
         filteredProductsTotal: 0,
         productsLoading: true,
         _syncEngineReady: false,
-        _filterDebounce: null,
+        _scanInputTimer: null,
+        _filterRaf: null,
+        _searchCache: {},
+        _scanSearchDelay: 400,
         searchQuery: '',
         selectedCategory: '',
         cart: [],
@@ -1514,11 +1521,88 @@ function posApp() {
             this.posMode = mode;
             this.showModeSelect = false;
             localStorage.setItem('insapos_mode', mode);
-            if (mode === 'retail') { this.filteredProducts = []; this.searchQuery = ''; this.selectedCategory = ''; }
-            else { this.filterProducts(); }
+            if (mode === 'retail') {
+                this.filteredProducts = [];
+                this.setScanFieldValue('cafe', '');
+                this.setScanFieldValue('retail', '');
+                this.selectedCategory = '';
+            } else {
+                this.setScanFieldValue('retail', '');
+                this.filterProducts();
+            }
             this.$nextTick(() => {
                 if (mode === 'retail') { const el = document.getElementById('retailScanInput'); if (el) el.focus(); }
             });
+        },
+
+        syncScanClearButton(inputEl) {
+            if (!inputEl) return;
+            const clearBtn = inputEl.parentElement?.querySelector('[data-scan-clear]');
+            if (clearBtn) clearBtn.hidden = !inputEl.value.length;
+        },
+
+        /** Typing path: DOM-only until debounce — avoids Alpine re-render per keystroke. */
+        onScanFieldInput(event, mode) {
+            this.syncScanClearButton(event.target);
+            clearTimeout(this._scanInputTimer);
+            this._scanInputTimer = setTimeout(() => {
+                this.commitScanFieldValue(event.target.value, mode, false);
+            }, this._scanSearchDelay);
+        },
+
+        /** Enter / scanner wedge: commit immediately. */
+        commitScanField(event, mode) {
+            clearTimeout(this._scanInputTimer);
+            this.commitScanFieldValue(event.target.value, mode, true);
+        },
+
+        commitScanFieldValue(val, mode, enterPressed) {
+            if (mode === 'retail') {
+                this.retailScanQuery = val;
+                if (enterPressed) this.retailScan();
+                else this.scheduleRetailLiveSearch();
+                return;
+            }
+            this.searchQuery = val;
+            if (enterPressed) this.scheduleFilterProducts();
+            else this.scheduleFilterProducts();
+        },
+
+        setScanFieldValue(mode, val) {
+            const id = mode === 'retail' ? 'retailScanInput' : 'posSearchInput';
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = val;
+                this.syncScanClearButton(el);
+            }
+            if (mode === 'retail') this.retailScanQuery = val;
+            else this.searchQuery = val;
+        },
+
+        scheduleRetailLiveSearch() {
+            if (this._filterRaf) cancelAnimationFrame(this._filterRaf);
+            this._filterRaf = requestAnimationFrame(() => {
+                this._filterRaf = null;
+                this.retailLiveSearch();
+            });
+        },
+
+        scheduleFilterProducts() {
+            if (this._filterRaf) cancelAnimationFrame(this._filterRaf);
+            this._filterRaf = requestAnimationFrame(() => {
+                this._filterRaf = null;
+                this.filterProducts();
+            });
+        },
+
+        rememberSearchCache(key, value) {
+            this._searchCache[key] = value;
+            const keys = Object.keys(this._searchCache);
+            if (keys.length > 48) delete this._searchCache[keys[0]];
+        },
+
+        invalidateSearchCache() {
+            this._searchCache = {};
         },
 
         toggleMode() {
@@ -1550,8 +1634,18 @@ function posApp() {
         retailLiveSearch() {
             const q = this.retailScanQuery.trim();
             this.retailScanResult = null;
-            if (q.length < 3) { this.filteredProducts = []; return; }
-            this.filteredProducts = this.searchProductsLocal(q, 30);
+            if (q.length < 3) {
+                if (this.filteredProducts.length) this.filteredProducts = [];
+                return;
+            }
+            const cacheKey = 'r|' + q;
+            if (this._searchCache[cacheKey]) {
+                this.filteredProducts = this._searchCache[cacheKey];
+                return;
+            }
+            const results = this.searchProductsLocal(q, 30);
+            this.rememberSearchCache(cacheKey, results);
+            this.filteredProducts = results;
         },
 
         retailScan() {
@@ -1575,14 +1669,14 @@ function posApp() {
         retailAddToCart(product) {
             if (this.addToCart(product, true)) this.showToast(product.name + ' added', 'success', 1500);
             this.retailScanResult = null;
-            this.retailScanQuery = '';
+            this.setScanFieldValue('retail', '');
             this.filteredProducts = [];
             this.$nextTick(() => { const el = document.getElementById('retailScanInput'); if (el) el.focus(); });
         },
 
         retailCancel() {
             this.retailScanResult = null;
-            this.retailScanQuery = '';
+            this.setScanFieldValue('retail', '');
             this.filteredProducts = [];
             this.$nextTick(() => { const el = document.getElementById('retailScanInput'); if (el) el.focus(); });
         },
@@ -1590,6 +1684,7 @@ function posApp() {
         async init() {
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
             if (this.hasNativeBridge) {
+                if (typeof INSABuddy !== 'undefined') INSABuddy.detectV2();
                 try { this._nativeScanPort = window.INSAPOS.getServicePort() || 18182; } catch { this._nativeScanPort = 18182; }
                 if (this.config.branchId && typeof window.INSAPOS.setBranchId === 'function') {
                     try { window.INSAPOS.setBranchId(this.config.branchId); } catch (e) {}
@@ -1727,13 +1822,13 @@ function posApp() {
             const product = this.findProductExact(barcode);
             if (this.posMode === 'retail') {
                 if (product) {
-                    if (this.retailPreviewMode) { this.retailScanResult = product; this.retailScanQuery = barcode; }
+                    if (this.retailPreviewMode) { this.retailScanResult = product; this.setScanFieldValue('retail', barcode); }
                     else { if (this.addToCart(product, true)) this.showToast(product.name + ' added', 'success', 1500); }
-                } else { this.retailScanQuery = barcode; this.showToast('Product not found: ' + barcode, 'warning'); }
+                } else { this.setScanFieldValue('retail', barcode); this.showToast('Product not found: ' + barcode, 'warning'); }
                 return;
             }
             if (product) { if (this.addToCart(product, true)) this.showToast(product.name + ' added', 'success', 1500); }
-            else { this.searchQuery = barcode; this.filterProducts(); this.showToast('Product not found: ' + barcode, 'warning'); }
+            else { this.setScanFieldValue('cafe', barcode); this.filterProducts(); this.showToast('Product not found: ' + barcode, 'warning'); }
         },
 
         showToast(message, type = 'info', duration = 3000) {
@@ -1744,8 +1839,9 @@ function posApp() {
 
         initBuddy() {
             if (typeof INSABuddy === 'undefined') return;
+            INSABuddy.detectV2();
             const pollMs = this.hasNativeBridge ? 45000 : 20000;
-            const startDelay = this.hasNativeBridge ? 15000 : 0;
+            const startDelay = this.hasNativeBridge ? 3000 : 0;
             setTimeout(() => {
                 INSABuddy.detectV2();
                 INSABuddy.startPolling(pollMs, (c) => { this.buddyConnected = c; });
@@ -2454,6 +2550,7 @@ function posApp() {
                 }
                 if (cached.length > 0) {
                     this.products = cached;
+                    this.invalidateSearchCache();
                     this.filterProducts();
                     this.productsLoading = false;
                     return true;
@@ -2483,6 +2580,7 @@ function posApp() {
                     const cached = await db.products.getAll();
                     if (cached.length > 0) {
                         this.products = cached;
+                        this.invalidateSearchCache();
                         this.showToast('Using cached products (offline)', 'warning');
                     }
                     const cachedCats = await db.categories.getAll();
@@ -2509,7 +2607,7 @@ function posApp() {
             if (db && rawCategories.length > 0) {
                 db.categories.bulkPut(rawCategories).catch(() => {});
             }
-            if (rawProducts.length > 0) this.products = rawProducts;
+            if (rawProducts.length > 0) { this.products = rawProducts; this.invalidateSearchCache(); }
             if (rawCategories.length > 0) this.categories = rawCategories;
             this.filterProducts();
         },
@@ -2521,16 +2619,29 @@ function posApp() {
             if (db.productStock && this.config.branchId) {
                 cached = await db.productStock.mergeIntoProducts(cached, this.config.branchId);
             }
-            if (cached.length > 0) { this.products = cached; this.filterProducts(); }
+            if (cached.length > 0) { this.products = cached; this.invalidateSearchCache(); this.filterProducts(); }
         },
 
         filterProducts() {
-            if (this.posMode === 'retail') { this.filteredProducts = []; this.filteredProductsTotal = 0; return; }
+            if (this.posMode === 'retail') {
+                if (this.filteredProducts.length || this.filteredProductsTotal) {
+                    this.filteredProducts = [];
+                    this.filteredProductsTotal = 0;
+                }
+                return;
+            }
             const GRID_LIMIT = 80;
             const SEARCH_LIMIT = 120;
+            const q = this.searchQuery.trim();
+            const cacheKey = 'c|' + this.selectedCategory + '|' + q;
+            if (this._searchCache[cacheKey]) {
+                const cached = this._searchCache[cacheKey];
+                this.filteredProductsTotal = cached.total;
+                this.filteredProducts = cached.items;
+                return;
+            }
             let result = this.products;
             if (this.selectedCategory) result = result.filter(p => p.category_id == this.selectedCategory);
-            const q = this.searchQuery.trim();
             if (q.length >= 3) {
                 const ql = q.toLowerCase();
                 const filtered = [];
@@ -2544,8 +2655,11 @@ function posApp() {
                 }
                 result = filtered;
             }
-            this.filteredProductsTotal = result.length;
-            this.filteredProducts = result.length > GRID_LIMIT ? result.slice(0, GRID_LIMIT) : result;
+            const total = result.length;
+            const items = total > GRID_LIMIT ? result.slice(0, GRID_LIMIT) : result;
+            this.rememberSearchCache(cacheKey, { total, items });
+            this.filteredProductsTotal = total;
+            this.filteredProducts = items;
         },
 
         async loadRecentSales() {
@@ -2638,7 +2752,7 @@ function posApp() {
         closeReceipt() {
             this.showReceipt = false; this.lastSale = null; this.cart = []; this.amountTendered = 0; this.changeAmount = 0;
             this.orderDiscountApplied = 0; this.orderDiscountValue = 0; this.selectedCustomer = null; this.customerSearch = '';
-            this.retailScanResult = null; this.retailScanQuery = '';
+            this.retailScanResult = null; this.setScanFieldValue('retail', '');
             this.screen = 'pos'; this.loadProducts();
         },
 

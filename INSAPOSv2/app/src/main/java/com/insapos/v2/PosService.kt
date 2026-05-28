@@ -13,6 +13,7 @@ import android.hardware.usb.UsbManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import com.insapos.v2.db.OfflineDatabase
 import com.insapos.v2.printers.PrinterManager
@@ -38,6 +39,7 @@ class PosService : Service() {
         private set
     private val printerInitLock = Any()
     private var printerInitScheduled = false
+    private val serverLock = Any()
     var localServer: PosLocalServer? = null
         private set
     var offlineDb: OfflineDatabase? = null
@@ -56,6 +58,7 @@ class PosService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder {
+        ensureLocalServerStarted()
         scheduleDeferredPrinterInit()
         return binder
     }
@@ -77,58 +80,62 @@ class PosService : Service() {
         }
     }
 
-    fun ensurePrinterManagerReady() {
-        if (printerManager != null) return
+    /** Lazily creates [PrinterManager]. Safe from background HTTP threads; defers on main thread. */
+    fun ensurePrinterManagerReady(): PrinterManager? {
+        printerManager?.let { return it }
         synchronized(printerInitLock) {
-            if (printerManager != null) return
-            scope.launch {
-                try {
-                    printerManager = PrinterManager(this@PosService)
-                    printerManager?.initialize()
+            printerManager?.let { return it }
+            scheduleDeferredPrinterInit()
+            return initPrinterBlocking()
+        }
+    }
+
+    private fun initPrinterBlocking(): PrinterManager? {
+        synchronized(printerInitLock) {
+            printerManager?.let { return it }
+            return try {
+                PrinterManager(this).also {
+                    it.initialize()
+                    printerManager = it
                     Log.i(TAG, "PrinterManager initialized")
-                } catch (e: Exception) {
-                    Log.e(TAG, "PrinterManager init failed", e)
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "PrinterManager init failed", e)
+                null
             }
         }
     }
 
     private fun scheduleDeferredPrinterInit() {
-        if (printerInitScheduled) return
+        if (printerInitScheduled || printerManager != null) return
         printerInitScheduled = true
         scope.launch {
-            delay(30_000)
-            ensurePrinterManagerReady()
+            delay(45_000)
+            initPrinterBlocking()
         }
     }
 
     fun ensureLocalServerStarted() {
-        if (localServer != null) return
-        scope.launch {
-            synchronized(this@PosService) {
-                if (localServer != null) return@launch
-                try {
-                    localServer = PosLocalServer(
-                        context = this@PosService,
-                        getPrinterManager = {
-                            ensurePrinterManagerReady()
-                            printerManager
-                        },
-                        getHidScanner = { hidScannerDriver },
-                        getDatabase = { offlineDb },
-                        getSyncEngine = { syncEngine },
-                        ioPreferences = ioPreferences,
-                        launchCameraScan = { onCameraScanRequested?.invoke() },
-                        requestUsbPermission = { deviceId, onResult ->
-                            onRequestUsbPermission?.invoke(deviceId, onResult)
-                                ?: onResult(false)
-                        }
-                    )
-                    localServer?.start()
-                    Log.i(TAG, "Local server started on port ${PosLocalServer.PORT}")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to start local server", e)
-                }
+        synchronized(serverLock) {
+            if (localServer != null) return
+            try {
+                localServer = PosLocalServer(
+                    context = this,
+                    getPrinterManager = { ensurePrinterManagerReady() },
+                    getHidScanner = { hidScannerDriver },
+                    getDatabase = { offlineDb },
+                    getSyncEngine = { syncEngine },
+                    ioPreferences = ioPreferences,
+                    launchCameraScan = { onCameraScanRequested?.invoke() },
+                    requestUsbPermission = { deviceId, onResult ->
+                        onRequestUsbPermission?.invoke(deviceId, onResult)
+                            ?: onResult(false)
+                    }
+                )
+                localServer?.start()
+                Log.i(TAG, "Local server started on port ${PosLocalServer.PORT}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start local server", e)
             }
         }
     }
