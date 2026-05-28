@@ -23,7 +23,8 @@ class PurgeDeviceTestSales extends Command
         {--local-id-only : Match any sale with local_id set (ignores --since)}
         {--reference-pattern= : Extra filter: sale_number LIKE pattern (e.g. S20260528%)}
         {--limit=0 : Max sales to process (0 = unlimited)}
-        {--chunk=250 : Sales processed per batch}';
+        {--chunk=250 : Sales processed per batch}
+        {--yes : Skip confirmation prompt (use with --force on servers)}';
 
     protected $description = 'Remove device-synced test POS sales and linked stock movements; restore FEFO batch qty where applicable';
 
@@ -89,7 +90,7 @@ class PurgeDeviceTestSales extends Command
             return self::SUCCESS;
         }
 
-        if (! $this->confirm("Permanently delete {$salesCount} sales, {$itemsCount} items, {$movementsCount} movements and restore stock?", false)) {
+        if (! $this->option('yes') && ! $this->confirm("Permanently delete {$salesCount} sales, {$itemsCount} items, {$movementsCount} movements and restore stock?", false)) {
             $this->warn('Aborted.');
 
             return self::SUCCESS;
