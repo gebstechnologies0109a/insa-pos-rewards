@@ -6,12 +6,17 @@
 (function () {
     'use strict';
 
-    const SYNC_INTERVAL_MS = 15000;
+    const SYNC_INTERVAL_IDLE_MS = 90000;
+    const SYNC_INTERVAL_ACTIVE_MS = 30000;
+    const FULL_PULL_INTERVAL_MS = 300000;
     const PING_TIMEOUT_MS = 3000;
 
-    let _intervalId = null;
+    let _scheduleTimer = null;
     let _syncing = false;
     let _online = false;
+    let _initialized = false;
+    let _onlineListenersBound = false;
+    let _lastFullPullAt = 0;
     let _listeners = {};
     let _csrfToken = '';
     let _branchId = null;
@@ -39,6 +44,25 @@
         };
     }
 
+    function scheduleNext(delayMs) {
+        if (_scheduleTimer) clearTimeout(_scheduleTimer);
+        _scheduleTimer = setTimeout(runScheduledSync, delayMs);
+    }
+
+    async function runScheduledSync() {
+        if (document.hidden) {
+            scheduleNext(SYNC_INTERVAL_IDLE_MS);
+            return;
+        }
+        await syncNow(false);
+        const db = window.INSADB;
+        let pending = 0;
+        try {
+            pending = db ? await db.transactions.pendingCount() : 0;
+        } catch (e) { /* ignore */ }
+        scheduleNext(pending > 0 ? SYNC_INTERVAL_ACTIVE_MS : SYNC_INTERVAL_IDLE_MS);
+    }
+
     // ── Connectivity Check ────────────────────────────────────
 
     async function checkOnline() {
@@ -64,10 +88,10 @@
 
     async function pushTransactions() {
         const db = window.INSADB;
-        if (!db) return;
+        if (!db) return false;
 
         const pending = await db.transactions.getPending();
-        if (pending.length === 0) return;
+        if (pending.length === 0) return false;
 
         emit('syncStatus', 'pushing');
 
@@ -84,7 +108,6 @@
                 if (data.success) {
                     await db.transactions.markSynced(tx.local_id, data.server_id || data.sale?.id);
 
-                    // Mark corresponding sync queue jobs done
                     const jobs = await db.syncQueue.getPending();
                     for (const job of jobs) {
                         if (job.type === 'transaction_push' && job.ref === tx.local_id) {
@@ -97,7 +120,6 @@
                     await db.transactions.markConflict(tx.local_id, data.conflict);
                     emit('conflict', { local_id: tx.local_id, conflict: data.conflict });
                 } else if (data.duplicate) {
-                    // Idempotent: already synced
                     await db.transactions.markSynced(tx.local_id, data.server_id);
                 } else {
                     await db.transactions.markFailed(tx.local_id, data.message || 'Unknown error');
@@ -105,9 +127,9 @@
                 }
             } catch (e) {
                 console.error('[sync] push failed for', tx.local_id, e);
-                // Network error — leave as pending for next cycle
             }
         }
+        return true;
     }
 
     // ── Pull Products ─────────────────────────────────────────
@@ -241,9 +263,16 @@
         await pullCustomers();
     }
 
-    // ── Main Sync Cycle ───────────────────────────────────────
+    function shouldRunFullPull(forceFullPull) {
+        if (forceFullPull) return true;
+        return (Date.now() - _lastFullPullAt) >= FULL_PULL_INTERVAL_MS;
+    }
 
-    async function syncNow() {
+    // ── Main Sync Cycle ───────────────────────────────────────
+    // forceFullPull=true: manual / initial sync (always pull catalog)
+    // forceFullPull=false: scheduled idle tick (push + occasional pull)
+
+    async function syncNow(forceFullPull = true) {
         if (_syncing) return;
         _syncing = true;
         emit('syncStatus', 'syncing');
@@ -253,14 +282,16 @@
 
             if (!online) {
                 emit('syncStatus', 'offline');
-                _syncing = false;
                 return;
             }
 
             await pushTransactions();
-            await updateLocalCache();
 
-            // Cleanup old synced data
+            if (shouldRunFullPull(forceFullPull)) {
+                await updateLocalCache();
+                _lastFullPullAt = Date.now();
+            }
+
             const db = window.INSADB;
             if (db) {
                 await db.transactions.clearSynced();
@@ -284,38 +315,41 @@
         if (options.branchId) _branchId = options.branchId;
         if (options.csrfToken) _csrfToken = options.csrfToken;
 
-        // Start periodic sync
-        if (_intervalId) clearInterval(_intervalId);
-        _intervalId = setInterval(syncNow, options.interval || SYNC_INTERVAL_MS);
+        if (_initialized) return;
+        _initialized = true;
 
-        // Listen for browser online/offline events
-        window.addEventListener('online', () => {
-            _online = true;
-            emit('connectivity', true);
-            syncNow();
-        });
+        if (!_onlineListenersBound) {
+            _onlineListenersBound = true;
+            window.addEventListener('online', () => {
+                _online = true;
+                emit('connectivity', true);
+                syncNow(true);
+            });
+            window.addEventListener('offline', () => {
+                _online = false;
+                emit('connectivity', false);
+                emit('syncStatus', 'offline');
+            });
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && _initialized) scheduleNext(1000);
+            });
+        }
 
-        window.addEventListener('offline', () => {
-            _online = false;
-            emit('connectivity', false);
-            emit('syncStatus', 'offline');
-        });
+        const initialDelay = options.deferInitialSync ? 12000 : 3000;
+        setTimeout(() => syncNow(true), initialDelay);
+        scheduleNext(initialDelay + SYNC_INTERVAL_IDLE_MS);
 
-        // Initial sync — defer so POS UI paints first
-        const initialDelay = options.deferInitialSync ? 8000 : 0;
-        setTimeout(() => syncNow(), initialDelay);
-
-        // Try recovering from INSABuddy on startup
-        pullFromBuddy();
+        setTimeout(() => pullFromBuddy(), initialDelay + 2000);
 
         console.log('[sync] engine initialized');
     }
 
     function destroy() {
-        if (_intervalId) {
-            clearInterval(_intervalId);
-            _intervalId = null;
+        if (_scheduleTimer) {
+            clearTimeout(_scheduleTimer);
+            _scheduleTimer = null;
         }
+        _initialized = false;
     }
 
     // ── Public API ────────────────────────────────────────────

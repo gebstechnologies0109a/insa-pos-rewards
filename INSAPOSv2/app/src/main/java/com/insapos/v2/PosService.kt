@@ -97,7 +97,7 @@ class PosService : Service() {
         if (printerInitScheduled) return
         printerInitScheduled = true
         scope.launch {
-            delay(15_000)
+            delay(30_000)
             ensurePrinterManagerReady()
         }
     }

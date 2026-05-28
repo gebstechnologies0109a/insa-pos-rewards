@@ -25,10 +25,10 @@ class SyncEngine(
 ) {
     companion object {
         private const val TAG = "SyncEngine"
-        private const val PUSH_INTERVAL_ACTIVE_MS = 45_000L
-        private const val PUSH_INTERVAL_IDLE_MS = 120_000L
+        private const val PUSH_INTERVAL_ACTIVE_MS = 60_000L
+        private const val PUSH_INTERVAL_IDLE_MS = 180_000L
         private const val PULL_INTERVAL_MS = 300_000L
-        private const val STARTUP_PULL_DELAY_MS = 120_000L
+        private const val STARTUP_PULL_DELAY_MS = 180_000L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

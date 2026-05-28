@@ -298,7 +298,8 @@
     <div x-show="posMode === 'cafe'" class="flex-1 flex flex-col min-w-0">
         <div class="flex gap-1.5 lg:gap-2 mb-2 lg:mb-3">
             <div class="relative flex-1">
-                <input type="text" x-model="searchQuery" @input.debounce.200ms="filterProducts()" placeholder="Search or scan barcode..."
+                <input type="text" x-model="searchQuery" data-scan-input
+                       @input.debounce.350ms="filterProducts()" placeholder="Search or scan barcode..."
                        x-ref="searchInput" id="posSearchInput"
                        class="w-full p-1.5 pl-7 lg:p-2.5 lg:pl-9 border rounded-lg text-xs lg:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                 <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-400 absolute left-2 top-2 lg:left-3 lg:top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -351,9 +352,9 @@
         <div class="mb-3 lg:mb-4">
             <div class="flex gap-2 items-stretch">
                 <div class="relative flex-1">
-                    <input type="text" x-model="retailScanQuery" id="retailScanInput"
+                    <input type="text" x-model="retailScanQuery" id="retailScanInput" data-scan-input
                            @keydown.enter.prevent="retailScan()"
-                           @input.debounce.250ms="retailLiveSearch()"
+                           @input.debounce.350ms="retailLiveSearch()"
                            :placeholder="retailPreviewMode ? 'Preview mode — scan barcode or type product...' : 'Scan barcode or type product name...'"
                            class="w-full p-3 pl-10 lg:p-4 lg:pl-12 border-2 rounded-xl text-sm lg:text-lg focus:ring-2 focus:outline-none font-medium"
                            :class="retailPreviewMode ? 'border-amber-400 bg-amber-50/50 focus:ring-amber-500 focus:border-amber-500' : 'border-green-400 bg-green-50/50 focus:ring-green-500 focus:border-green-500'">
@@ -880,7 +881,7 @@
             </div>
         </div>
         <div class="flex gap-2 lg:gap-3 justify-center">
-            <template x-if="buddyConnected">
+            <template x-if="canUsePrinter()">
                 <button @click="buddyPrintReceipt()" class="px-4 py-2 lg:px-6 lg:py-3 bg-green-600 text-white rounded-lg text-xs lg:text-base font-medium hover:bg-green-700 flex items-center gap-1.5 lg:gap-2">
                     <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                     Print
@@ -930,8 +931,8 @@
         </div>
         <div class="max-h-60 lg:max-h-80 overflow-y-auto space-y-1.5 lg:space-y-2">
             <template x-for="sale in recentSales" :key="sale.id || sale.local_id">
-                <div class="bg-gray-50 rounded-lg p-2 lg:p-3 flex items-center justify-between">
-                    <div>
+                <div class="bg-gray-50 rounded-lg p-2 lg:p-3 flex items-center justify-between gap-2">
+                    <div class="min-w-0 flex-1">
                         <div class="font-medium text-[11px] lg:text-sm">
                             #<span x-text="sale.sale_number || sale.local_id?.substring(0,8) || 'N/A'"></span>
                             <span x-show="sale.status === 'pending' || sale.sync_status === 'pending'" class="ml-1 text-[9px] lg:text-xs bg-yellow-100 text-yellow-700 px-1 lg:px-1.5 py-0.5 rounded">Offline</span>
@@ -939,11 +940,21 @@
                         <div class="text-[10px] lg:text-xs text-gray-400" x-text="new Date(sale.created_at).toLocaleString()"></div>
                         <div class="text-[10px] lg:text-xs text-gray-500 capitalize" x-text="(sale.payment_method || 'cash').replace('_', ' ')"></div>
                     </div>
-                    <div class="text-right">
+                    <div class="text-right shrink-0">
                         <div class="font-bold text-blue-700 text-xs lg:text-base" x-text="'₱' + parseFloat(sale.total || sale.grand_total || 0).toFixed(2)"></div>
                         <div class="text-[10px] lg:text-xs" :class="sale.status === 'completed' || sale.status === 'synced' ? 'text-green-600' : 'text-yellow-600'"
                              x-text="sale.status === 'completed' || sale.status === 'synced' ? 'Synced' : (sale.status || 'Pending')"></div>
                     </div>
+                    <button type="button"
+                            @click.stop="reprintSale(sale)"
+                            :disabled="!canUsePrinter() || reprintingSaleKey === (sale.id || sale.local_id)"
+                            class="shrink-0 min-h-[40px] min-w-[72px] px-2.5 py-2 rounded-lg text-[10px] lg:text-xs font-semibold flex items-center justify-center gap-1 transition-colors"
+                            :class="canUsePrinter() ? 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800' : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
+                            :title="canUsePrinter() ? 'Reprint receipt' : 'Printer requires INSABuddy or Android app'">
+                        <svg x-show="reprintingSaleKey !== (sale.id || sale.local_id)" class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                        <svg x-show="reprintingSaleKey === (sale.id || sale.local_id)" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        <span x-text="reprintingSaleKey === (sale.id || sale.local_id) ? '...' : 'Reprint'"></span>
+                    </button>
                 </div>
             </template>
             <div x-show="recentSales.length === 0" class="text-center py-6 lg:py-8 text-gray-400 text-xs lg:text-sm">No recent transactions.</div>
@@ -1352,7 +1363,10 @@ function posApp() {
         products: [],
         categories: [],
         filteredProducts: [],
+        filteredProductsTotal: 0,
         productsLoading: true,
+        _syncEngineReady: false,
+        _filterDebounce: null,
         searchQuery: '',
         selectedCategory: '',
         cart: [],
@@ -1389,6 +1403,7 @@ function posApp() {
 
         showHistoryModal: false,
         recentSales: [],
+        reprintingSaleKey: null,
 
         showPrinterModal: false,
         printerStep: 1,
@@ -1510,39 +1525,50 @@ function posApp() {
             this.selectMode(this.posMode === 'cafe' ? 'retail' : 'cafe');
         },
 
+        /** Local IndexedDB-backed catalog search (no API per keystroke). */
+        findProductExact(code) {
+            if (!code) return null;
+            return this.products.find(p => (p.barcode && p.barcode === code) || (p.sku && p.sku === code)) || null;
+        },
+
+        searchProductsLocal(query, limit = 30) {
+            const q = query.trim();
+            if (q.length < 3) return [];
+            const ql = q.toLowerCase();
+            const results = [];
+            for (let i = 0; i < this.products.length && results.length < limit; i++) {
+                const p = this.products[i];
+                if (p.name.toLowerCase().includes(ql) ||
+                    (p.sku && p.sku.toLowerCase().includes(ql)) ||
+                    (p.barcode && p.barcode.includes(q))) {
+                    results.push(p);
+                }
+            }
+            return results;
+        },
+
         retailLiveSearch() {
             const q = this.retailScanQuery.trim();
             this.retailScanResult = null;
-            if (!q || q.length < 2) { this.filteredProducts = []; return; }
-            const ql = q.toLowerCase();
-            const results = this.products.filter(p =>
-                p.name.toLowerCase().includes(ql) ||
-                (p.sku && p.sku.toLowerCase().includes(ql)) ||
-                (p.barcode && p.barcode.includes(q))
-            );
-            this.filteredProducts = results;
+            if (q.length < 3) { this.filteredProducts = []; return; }
+            this.filteredProducts = this.searchProductsLocal(q, 30);
         },
 
         retailScan() {
             const q = this.retailScanQuery.trim();
             if (!q) { this.retailScanResult = null; return; }
-            const exact = this.products.find(p => (p.barcode && p.barcode === q) || (p.sku && p.sku === q));
+            const exact = this.findProductExact(q);
             if (exact) {
                 if (this.retailPreviewMode) { this.retailScanResult = exact; this.filteredProducts = []; }
                 else { this.retailAddToCart(exact); }
                 return;
             }
-            const ql = q.toLowerCase();
-            const fuzzy = this.products.filter(p =>
-                p.name.toLowerCase().includes(ql) ||
-                (p.sku && p.sku.toLowerCase().includes(ql)) ||
-                (p.barcode && p.barcode.includes(q))
-            );
+            const fuzzy = q.length >= 3 ? this.searchProductsLocal(q, 31) : [];
             if (fuzzy.length === 1) {
                 if (this.retailPreviewMode) { this.retailScanResult = fuzzy[0]; this.filteredProducts = []; }
                 else { this.retailAddToCart(fuzzy[0]); }
             }
-            else if (fuzzy.length > 1) { this.retailScanResult = null; this.filteredProducts = fuzzy; }
+            else if (fuzzy.length > 1) { this.retailScanResult = null; this.filteredProducts = fuzzy.slice(0, 30); }
             else { this.retailScanResult = null; this.filteredProducts = []; this.showToast('Product not found: ' + q, 'warning'); }
         },
 
@@ -1579,7 +1605,7 @@ function posApp() {
             const seatOk = await this.registerTerminalSession();
             if (!seatOk) {
                 if (this._terminalSessionRedirectLogin) {
-                    window.location.href = '/login?error=session_required';
+                    window.location.href = '/login?error=session_lost';
                 }
                 return;
             }
@@ -1587,7 +1613,25 @@ function posApp() {
             this.loadShift();
             this.initBuddy();
             window.onINSAPOSBarcode = (barcode) => { this._lastNativeScanTime = Date.now(); this._lastNativeScan = barcode; this.handleBarcodeScan(barcode); };
+            this.bindScanInputFocusBridge();
             await this.loadIoPreferences();
+        },
+
+        bindScanInputFocusBridge() {
+            const setScanFocus = (on) => {
+                if (typeof INSAPOS !== 'undefined' && typeof INSAPOS.setScanInputFocused === 'function') {
+                    try { INSAPOS.setScanInputFocused(!!on); } catch (e) {}
+                }
+            };
+            document.addEventListener('focusin', (e) => {
+                if (e.target && e.target.matches && e.target.matches('[data-scan-input]')) setScanFocus(true);
+            });
+            document.addEventListener('focusout', () => {
+                setTimeout(() => {
+                    const active = document.activeElement;
+                    setScanFocus(active && active.matches && active.matches('[data-scan-input]'));
+                }, 0);
+            });
         },
 
         async registerTerminalSession() {
@@ -1606,6 +1650,11 @@ function posApp() {
             }
             if (result.code === 'session_expired' || result.redirectLogin) {
                 this._terminalSessionRedirectLogin = true;
+                return false;
+            }
+            if (result.code === 'license_inactive') {
+                this.licenseActive = false;
+                this.licenseBlocked = false;
                 return false;
             }
             this.licenseBlocked = true;
@@ -1642,7 +1691,8 @@ function posApp() {
                 await this.loadProductsFromCache();
             }
             this.loadProducts();
-            if (window.SyncEngine) {
+            if (window.SyncEngine && !this._syncEngineReady) {
+                this._syncEngineReady = true;
                 SyncEngine.on('syncStatus', (s) => { this.syncStatus = s; });
                 SyncEngine.on('connectivity', (o) => { if (!o) this.syncStatus = 'offline'; });
                 SyncEngine.on('transactionSynced', () => { this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1); this.showToast('Transaction synced', 'success'); });
@@ -1651,7 +1701,7 @@ function posApp() {
                 SyncEngine.on('productsUpdated', (c) => { if (c > 0) this.refreshProductsFromDB(); });
                 SyncEngine.on('buddyRecovered', () => { this.showToast('Recovered offline data from INSABuddy', 'info'); });
                 SyncEngine.on('syncError', (d) => { this.showToast('Sync error: ' + (d.error || 'Unknown'), 'error'); });
-                SyncEngine.init({ branchId: this.config.branchId, interval: 15000, deferInitialSync: true });
+                SyncEngine.init({ branchId: this.config.branchId, deferInitialSync: true });
             }
         },
 
@@ -1674,7 +1724,7 @@ function posApp() {
 
         handleBarcodeScan(barcode) {
             if (!barcode || barcode.length < 2) return;
-            const product = this.products.find(p => (p.barcode && p.barcode === barcode) || (p.sku && p.sku === barcode));
+            const product = this.findProductExact(barcode);
             if (this.posMode === 'retail') {
                 if (product) {
                     if (this.retailPreviewMode) { this.retailScanResult = product; this.retailScanQuery = barcode; }
@@ -1693,10 +1743,13 @@ function posApp() {
         },
 
         initBuddy() {
-            if (typeof INSABuddy !== 'undefined') {
+            if (typeof INSABuddy === 'undefined') return;
+            const pollMs = this.hasNativeBridge ? 45000 : 20000;
+            const startDelay = this.hasNativeBridge ? 15000 : 0;
+            setTimeout(() => {
                 INSABuddy.detectV2();
-                INSABuddy.startPolling(20000, (c) => { this.buddyConnected = c; });
-            }
+                INSABuddy.startPolling(pollMs, (c) => { this.buddyConnected = c; });
+            }, startDelay);
         },
 
         async openPrinterSettings() {
@@ -2194,17 +2247,134 @@ function posApp() {
             this.showToast('Customer tagged: ' + c.name, 'success');
         },
 
+        canUsePrinter() {
+            return this.buddyConnected || this.hasNativeBridge;
+        },
+
+        receiptPrintPayloadFromData(data) {
+            const items = (data.items || []).map(i => ({
+                name: i.product_name || i.name,
+                qty: i.qty,
+                price: parseFloat(i.price),
+                discount: parseFloat(i.discount || 0),
+            }));
+            const subtotal = data.subtotal != null
+                ? parseFloat(data.subtotal)
+                : items.reduce((s, i) => s + i.qty * i.price, 0);
+            const discount = data.discount_total != null
+                ? parseFloat(data.discount_total)
+                : parseFloat(data.discount || 0) + items.reduce((s, i) => s + (i.discount || 0), 0);
+            return {
+                storeName: data.store_name || '{{ $brandName }}',
+                branchName: data.branch_name || '{{ auth()->user()->branch?->name ?? "" }}',
+                saleNumber: data.sale_number || data.local_id?.substring(0, 8) || '',
+                date: data.created_at ? new Date(data.created_at).toLocaleString() : new Date().toLocaleString(),
+                cashier: data.cashier || '{{ auth()->user()->name }}',
+                items,
+                subtotal,
+                discount,
+                total: parseFloat(data.total || 0),
+                paymentMethod: data.payment_method || 'cash',
+                amountTendered: parseFloat(data.amount_tendered || 0),
+                change: parseFloat(data.change_due || 0),
+                customer: data.customer || null,
+            };
+        },
+
+        async sendReceiptToPrinter(payload) {
+            if (typeof INSABuddy === 'undefined') {
+                this.showToast('Printer service unavailable', 'error');
+                return false;
+            }
+            INSABuddy.detectV2();
+            try {
+                const result = await INSABuddy.printReceipt(payload);
+                if (!INSABuddy.isPrintSuccess(result)) {
+                    this.showToast(INSABuddy.parseApiError(result, 'Receipt print failed'), 'error');
+                    return false;
+                }
+                this.showToast('Receipt sent to printer', 'success', 2000);
+                return true;
+            } catch {
+                this.showToast('Receipt print failed — local service unavailable', 'error');
+                return false;
+            }
+        },
+
         async buddyPrintReceipt() {
-            if (!this.buddyConnected || !this.lastSale) return;
-            await INSABuddy.printReceipt({
-                storeName: '{{ $brandName }}', branchName: '{{ auth()->user()->branch?->name ?? "" }}',
-                saleNumber: this.lastSale.sale_number || this.lastSale.local_id?.substring(0, 8),
-                date: new Date().toLocaleString(), cashier: '{{ auth()->user()->name }}',
-                items: (this.lastSale._cart || this.cart).map(i => ({ name: i.product_name, qty: i.qty, price: i.price, discount: i.discount || 0 })),
-                subtotal: this.cartSubtotal, discount: this.cartDiscount, total: parseFloat(this.lastSale.total),
-                paymentMethod: this.paymentMethod, amountTendered: parseFloat(this.lastSale.amount_tendered || 0),
-                change: parseFloat(this.lastSale.change_due || 0), customer: this.selectedCustomer?.name || null,
+            if (!this.canUsePrinter() || !this.lastSale) return;
+            const payload = this.receiptPrintPayloadFromData({
+                sale_number: this.lastSale.sale_number,
+                local_id: this.lastSale.local_id,
+                items: this.lastSale._cart || this.cart,
+                subtotal: this.cartSubtotal,
+                discount_total: this.cartDiscount,
+                total: this.lastSale.total,
+                payment_method: this.lastSale.payment_method || this.paymentMethod,
+                amount_tendered: this.lastSale.amount_tendered,
+                change_due: this.lastSale.change_due,
+                customer: this.selectedCustomer?.name || null,
             });
+            await this.sendReceiptToPrinter(payload);
+        },
+
+        async buildReceiptDataForSale(sale) {
+            const db = window.INSADB;
+            const localId = sale.local_id;
+            if (db && localId) {
+                try {
+                    const stored = await db.receipts.getByTxId(localId);
+                    if (stored) return stored;
+                } catch {}
+                try {
+                    const tx = await db.transactions.getByLocalId(localId);
+                    if (tx && tx.items) {
+                        return {
+                            sale_number: sale.sale_number,
+                            local_id: localId,
+                            created_at: tx.created_at || sale.created_at,
+                            items: tx.items,
+                            subtotal: tx.subtotal,
+                            discount_total: tx.discount_total,
+                            total: tx.total,
+                            payment_method: tx.payment_method,
+                            amount_tendered: tx.amount_tendered,
+                            change_due: tx.change_due,
+                        };
+                    }
+                } catch {}
+            }
+            if (sale.items && sale.items.length) {
+                return sale;
+            }
+            if (sale.id) {
+                try {
+                    const res = await fetch('/api/pos/sales/' + sale.id + '/receipt', { headers: this.csrfHeader() });
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    if (data.success && data.receipt) return data.receipt;
+                } catch {}
+            }
+            return null;
+        },
+
+        async reprintSale(sale) {
+            if (!this.canUsePrinter()) {
+                this.showToast('Printer requires INSABuddy or the Android app', 'warning');
+                return;
+            }
+            const key = sale.id || sale.local_id;
+            this.reprintingSaleKey = key;
+            try {
+                const raw = await this.buildReceiptDataForSale(sale);
+                if (!raw || !(raw.items || []).length) {
+                    this.showToast('Receipt data not available for this sale', 'error');
+                    return;
+                }
+                await this.sendReceiptToPrinter(this.receiptPrintPayloadFromData(raw));
+            } finally {
+                this.reprintingSaleKey = null;
+            }
         },
 
         async searchCustomers() {
@@ -2298,26 +2468,18 @@ function posApp() {
             const db = window.INSADB;
             const hadCache = this.products.length > 0;
             if (!hadCache) this.productsLoading = true;
+            else {
+                this.productsLoading = false;
+                this._refreshProductsFromNetwork().catch((e) => {
+                    console.warn('[pos] background product refresh failed:', e);
+                });
+                return;
+            }
             try {
-                const res = await fetch('/api/pos/products/all?branch_id=' + (this.config.branchId || ''));
-                const data = await res.json();
-                const rawProducts = data.products || [];
-                const rawCategories = data.categories || [];
-                if (db && rawProducts.length > 0) {
-                    db.products.bulkPut(rawProducts).catch(() => {});
-                    if (db.productStock && this.config.branchId) {
-                        db.productStock.bulkPut(rawProducts, this.config.branchId).catch(() => {});
-                    }
-                }
-                if (db && rawCategories.length > 0) {
-                    db.categories.bulkPut(rawCategories).catch(() => {});
-                }
-                this.products = rawProducts;
-                this.categories = rawCategories;
-                this.filterProducts();
+                await this._refreshProductsFromNetwork();
             } catch (e) {
                 console.warn('[pos] loadProducts fetch failed, using cache:', e);
-                if (!hadCache && db) {
+                if (db) {
                     const cached = await db.products.getAll();
                     if (cached.length > 0) {
                         this.products = cached;
@@ -2332,6 +2494,26 @@ function posApp() {
             }
         },
 
+        async _refreshProductsFromNetwork() {
+            const db = window.INSADB;
+            const res = await fetch('/api/pos/products/all?branch_id=' + (this.config.branchId || ''));
+            const data = await res.json();
+            const rawProducts = data.products || [];
+            const rawCategories = data.categories || [];
+            if (db && rawProducts.length > 0) {
+                db.products.bulkPut(rawProducts).catch(() => {});
+                if (db.productStock && this.config.branchId) {
+                    db.productStock.bulkPut(rawProducts, this.config.branchId).catch(() => {});
+                }
+            }
+            if (db && rawCategories.length > 0) {
+                db.categories.bulkPut(rawCategories).catch(() => {});
+            }
+            if (rawProducts.length > 0) this.products = rawProducts;
+            if (rawCategories.length > 0) this.categories = rawCategories;
+            this.filterProducts();
+        },
+
         async refreshProductsFromDB() {
             const db = window.INSADB;
             if (!db) return;
@@ -2343,11 +2525,27 @@ function posApp() {
         },
 
         filterProducts() {
-            if (this.posMode === 'retail') { this.filteredProducts = []; return; }
+            if (this.posMode === 'retail') { this.filteredProducts = []; this.filteredProductsTotal = 0; return; }
+            const GRID_LIMIT = 80;
+            const SEARCH_LIMIT = 120;
             let result = this.products;
             if (this.selectedCategory) result = result.filter(p => p.category_id == this.selectedCategory);
-            if (this.searchQuery.trim()) { const q = this.searchQuery.toLowerCase(); result = result.filter(p => p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.barcode && p.barcode.includes(q))); }
-            this.filteredProducts = result;
+            const q = this.searchQuery.trim();
+            if (q.length >= 3) {
+                const ql = q.toLowerCase();
+                const filtered = [];
+                for (let i = 0; i < result.length && filtered.length < SEARCH_LIMIT; i++) {
+                    const p = result[i];
+                    if (p.name.toLowerCase().includes(ql) ||
+                        (p.sku && p.sku.toLowerCase().includes(ql)) ||
+                        (p.barcode && p.barcode.includes(q))) {
+                        filtered.push(p);
+                    }
+                }
+                result = filtered;
+            }
+            this.filteredProductsTotal = result.length;
+            this.filteredProducts = result.length > GRID_LIMIT ? result.slice(0, GRID_LIMIT) : result;
         },
 
         async loadRecentSales() {
@@ -2434,7 +2632,7 @@ function posApp() {
             } catch {}
             this.lastSale = serverSale || { local_id: localId, sale_number: null, total: txData.total, amount_tendered: txData.amount_tendered, change_due: txData.change_due, payment_method: txData.payment_method, offline: !serverSale, _cart: txData.items };
             this.showReceipt = true;
-            if (this.buddyConnected) { this.buddyPrintReceipt(); if (typeof INSABuddy !== 'undefined' && SyncEngine) SyncEngine.pushToBuddy(txData, receiptData); }
+            if (this.canUsePrinter()) { this.buddyPrintReceipt(); if (typeof INSABuddy !== 'undefined' && SyncEngine) SyncEngine.pushToBuddy(txData, receiptData); }
         },
 
         closeReceipt() {

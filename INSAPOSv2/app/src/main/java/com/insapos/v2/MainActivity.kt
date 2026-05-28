@@ -2,6 +2,7 @@ package com.insapos.v2
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.ComponentName
@@ -22,8 +23,6 @@ import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
-import android.view.WindowInsets
-import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
@@ -42,6 +41,9 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 
@@ -72,6 +74,7 @@ class MainActivity : AppCompatActivity() {
     private var posService: PosService? = null
     private var serviceBound = false
     private var syncEngineStarted = false
+    private var syncEngineSchedulePending = false
     private var pageLoaded = false
     private var isOfflineShown = false
     private var usingHttp = false
@@ -83,7 +86,14 @@ class MainActivity : AppCompatActivity() {
     private var lastProgressUpdate = 0
 
     private var hidScanner: HidScannerDriver? = null
+    /** When true, HID keys go to the WebView scan/search field — do not intercept. */
+    @Volatile
+    private var scanInputFocused: Boolean = false
     private var usbPermissionCallback: ((Boolean) -> Unit)? = null
+
+    fun notifyScanInputFocused(focused: Boolean) {
+        scanInputFocused = focused
+    }
 
     private val usbPermissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -140,9 +150,8 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setupKioskDisplay()
         setContentView(R.layout.activity_main)
-
-        goFullscreen()
 
         session = SessionManager(this)
         usingHttp = session.useHttp
@@ -178,9 +187,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        goFullscreen()
+        applyImmersiveMode()
+        tryEnterLockTaskIfAllowed()
         if (::webView.isInitialized) {
             webView.requestFocus()
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            applyImmersiveMode()
         }
     }
 
@@ -197,22 +214,43 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (hidScanner?.handleKeyEvent(event) == true) return true
+        if (!scanInputFocused && hidScanner?.handleKeyEvent(event) == true) return true
         return super.dispatchKeyEvent(event)
     }
 
-    // --- Fullscreen ---
+    // --- Kiosk / immersive fullscreen ---
 
-    private fun goFullscreen() {
+    private fun setupKioskDisplay() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
+
+        applyImmersiveMode()
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.let {
-                it.hide(WindowInsets.Type.systemBars())
-                it.systemBarsBehavior =
-                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            window.decorView.setOnApplyWindowInsetsListener { view, insets ->
+                applyImmersiveMode()
+                view.onApplyWindowInsets(insets)
             }
         } else {
+            @Suppress("DEPRECATION")
+            window.decorView.setOnSystemUiVisibilityChangeListener {
+                applyImmersiveMode()
+            }
+        }
+    }
+
+    private fun applyImmersiveMode() {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = (
                 View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -222,6 +260,21 @@ class MainActivity : AppCompatActivity() {
                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
             )
+        }
+    }
+
+    /** Uses lock-task when the device allows it (MDM whitelist or active screen pin). */
+    private fun tryEnterLockTaskIfAllowed() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        try {
+            val state = getSystemService(ActivityManager::class.java).lockTaskModeState
+            if (state == ActivityManager.LOCK_TASK_MODE_PINNED ||
+                state == ActivityManager.LOCK_TASK_MODE_LOCKED
+            ) {
+                startLockTask()
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Lock task unavailable — pin INSAPOS from Recents for kiosk lock-down")
         }
     }
 
@@ -490,7 +543,7 @@ class MainActivity : AppCompatActivity() {
             val httpsOk = probeHttpsAvailable()
             if (!httpsOk && !protocolLocked) {
                 runOnUiThread {
-                    if (!usingHttp && !protocolLocked) {
+                    if (!usingHttp && !protocolLocked && !pageLoaded) {
                         Log.i(TAG, "HTTPS unavailable, using HTTP for this device")
                         usingHttp = true
                         session.useHttp = true
@@ -546,14 +599,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onPageReadyForService(service: PosService) {
-        if (!syncEngineStarted) {
+        if (syncEngineStarted || syncEngineSchedulePending) return
+        syncEngineSchedulePending = true
+        handler.postDelayed({
+            syncEngineSchedulePending = false
+            if (syncEngineStarted) return@postDelayed
             service.startSyncEngine(connectivity) {
                 CookieManager.getInstance().getCookie(session.getBaseUrl())
             }
             syncEngineStarted = true
             service.syncEngine?.onSyncStatusChanged = { runOnUiThread { updateSyncBadge() } }
             updateSyncBadge()
-        }
+        }, 10_000)
     }
 
     private fun loadPosUrl() {
