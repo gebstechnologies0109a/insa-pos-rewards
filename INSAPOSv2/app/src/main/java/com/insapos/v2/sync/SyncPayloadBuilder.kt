@@ -13,27 +13,84 @@ class SyncPayloadBuilder(
 ) {
 
     fun buildFromTransaction(txn: JSONObject): SyncPayload? {
-        val localId = txn.optString("local_id", "").ifBlank { return null }
-        val branchId = session.branchId ?: txn.optInt("branch_id", 0).takeIf { it > 0 } ?: return null
-        val items = mapItems(parseItems(txn))
+        val enriched = enrichTransaction(txn)
+        val localId = enriched.optString("local_id", "").ifBlank { return null }
+        val branchId = session.branchId
+            ?: enriched.optInt("branch_id", 0).takeIf { it > 0 }
+            ?: return null
+        val items = mapItems(parseItems(enriched))
         if (items.isEmpty()) return null
 
-        val cashierId = txn.optInt("cashier_id", 0).takeIf { it > 0 }
+        val cashierId = enriched.optInt("cashier_id", 0).takeIf { it > 0 }
             ?: session.cashierId
             ?: db.getSetting("cashier_id")?.toIntOrNull()
-            ?: return null
+            ?: resolveCashierIdFromQueue(localId)
+            ?: 1
 
         return SyncPayload(
             localId = localId,
             branchId = branchId,
             cashierId = cashierId,
-            paymentMethod = txn.optString("payment_method", "cash"),
-            amountTendered = txn.optDouble("amount_tendered", txn.optDouble("total", 0.0)),
+            paymentMethod = enriched.optString("payment_method", "cash"),
+            amountTendered = enriched.optDouble("amount_tendered", enriched.optDouble("total", 0.0)),
             items = items,
-            shiftId = txn.optInt("shift_id", 0).takeIf { it > 0 },
-            memberId = txn.optInt("member_id", 0).takeIf { it > 0 },
-            createdAt = txn.optString("created_at", null),
+            shiftId = enriched.optInt("shift_id", 0).takeIf { it > 0 },
+            memberId = enriched.optInt("member_id", enriched.optInt("customer_id", 0)).takeIf { it > 0 },
+            createdAt = enriched.optString("created_at", null),
         )
+    }
+
+    /** Merge missing branch/cashier/shift from sync_queue or pos_sales for legacy rows. */
+    fun enrichTransaction(txn: JSONObject): JSONObject {
+        val localId = txn.optString("local_id", "")
+        if (localId.isBlank()) return txn
+
+        val out = JSONObject(txn.toString())
+        var needsQueue = out.optInt("branch_id", 0) <= 0 ||
+            out.optInt("cashier_id", 0) <= 0 ||
+            out.optInt("shift_id", 0) <= 0
+
+        if (needsQueue) {
+            db.getSyncQueuePayloadForLocalId(localId)?.let { queue ->
+                mergeContext(out, queue)
+            }
+            needsQueue = out.optInt("branch_id", 0) <= 0 ||
+                out.optInt("cashier_id", 0) <= 0 ||
+                out.optInt("shift_id", 0) <= 0
+        }
+
+        if (needsQueue) {
+            db.getPosSaleContext(localId)?.let { pos ->
+                mergeContext(out, pos)
+            }
+        }
+
+        return out
+    }
+
+    private fun resolveCashierIdFromQueue(localId: String): Int? =
+        db.getSyncQueuePayloadForLocalId(localId)
+            ?.optInt("cashier_id", 0)
+            ?.takeIf { it > 0 }
+
+    private fun mergeContext(target: JSONObject, source: JSONObject) {
+        if (target.optInt("branch_id", 0) <= 0) {
+            source.optInt("branch_id", 0).takeIf { it > 0 }?.let { target.put("branch_id", it) }
+        }
+        if (target.optInt("cashier_id", 0) <= 0) {
+            source.optInt("cashier_id", 0).takeIf { it > 0 }?.let { target.put("cashier_id", it) }
+        }
+        if (target.optInt("shift_id", 0) <= 0) {
+            source.optInt("shift_id", 0).takeIf { it > 0 }?.let { target.put("shift_id", it) }
+        }
+        if (target.optInt("member_id", 0) <= 0) {
+            source.optInt("member_id", 0).takeIf { it > 0 }?.let { target.put("member_id", it) }
+        }
+    }
+
+    /** Queue / legacy rows store line items in `items_json` instead of `items`. */
+    fun normalizeRawPayload(raw: JSONObject): JSONObject? {
+        return buildFromTransaction(raw)?.toJson()
     }
 
     fun buildPushEnvelope(): JSONObject {

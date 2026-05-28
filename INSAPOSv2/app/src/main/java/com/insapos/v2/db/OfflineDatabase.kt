@@ -15,7 +15,7 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
     companion object {
         private const val TAG = "OfflineDB"
         private const val DB_NAME = "insapos_offline.db"
-        private const val DB_VERSION = 2
+        private const val DB_VERSION = 3
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -81,6 +81,10 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
                 cashier_name TEXT,
                 notes TEXT,
                 receipt_json TEXT,
+                branch_id INTEGER DEFAULT 0,
+                cashier_id INTEGER DEFAULT 0,
+                shift_id INTEGER DEFAULT 0,
+                member_id INTEGER DEFAULT 0,
                 synced INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 synced_at TEXT
@@ -268,6 +272,84 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         if (oldVersion < 2) {
             createV2Tables(db)
         }
+        if (oldVersion < 3) {
+            migrateToV3(db)
+        }
+    }
+
+    private fun migrateToV3(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE transactions_local ADD COLUMN branch_id INTEGER DEFAULT 0")
+        db.execSQL("ALTER TABLE transactions_local ADD COLUMN cashier_id INTEGER DEFAULT 0")
+        db.execSQL("ALTER TABLE transactions_local ADD COLUMN shift_id INTEGER DEFAULT 0")
+        db.execSQL("ALTER TABLE transactions_local ADD COLUMN member_id INTEGER DEFAULT 0")
+        backfillTransactionContextFromQueue(db)
+        skipStuckPriceConflictQueueItems(db)
+        Log.i(TAG, "Migrated to v3: transaction context columns + queue cleanup")
+    }
+
+    /** Copy branch/cashier/shift from sync_queue JSON into legacy transaction rows. */
+    private fun backfillTransactionContextFromQueue(db: SQLiteDatabase) {
+        val cursor = db.rawQuery(
+            """SELECT t.local_id, q.payload
+               FROM transactions_local t
+               INNER JOIN sync_queue q ON q.record_id = t.local_id
+               WHERE (t.branch_id IS NULL OR t.branch_id = 0
+                  OR t.cashier_id IS NULL OR t.cashier_id = 0)
+               GROUP BY t.local_id""",
+            null
+        )
+        var updated = 0
+        while (cursor.moveToNext()) {
+            val localId = cursor.getString(0)
+            try {
+                val payload = JSONObject(cursor.getString(1))
+                val cv = ContentValues()
+                payload.optInt("branch_id", 0).takeIf { it > 0 }?.let { cv.put("branch_id", it) }
+                payload.optInt("cashier_id", 0).takeIf { it > 0 }?.let { cv.put("cashier_id", it) }
+                payload.optInt("shift_id", 0).takeIf { it > 0 }?.let { cv.put("shift_id", it) }
+                payload.optInt("member_id", 0).takeIf { it > 0 }?.let { cv.put("member_id", it) }
+                if (cv.size() > 0) {
+                    db.update("transactions_local", cv, "local_id = ?", arrayOf(localId))
+                    updated++
+                }
+            } catch (_: Exception) {
+            }
+        }
+        cursor.close()
+
+        val posCursor = db.rawQuery(
+            """SELECT t.local_id, p.branch_id, p.cashier_id, p.shift_id
+               FROM transactions_local t
+               INNER JOIN pos_sales p ON p.local_id = t.local_id
+               WHERE t.branch_id = 0 OR t.cashier_id = 0""",
+            null
+        )
+        while (posCursor.moveToNext()) {
+            val cv = ContentValues()
+            val branchId = posCursor.getInt(1)
+            val cashierId = posCursor.getInt(2)
+            val shiftId = posCursor.getInt(3)
+            if (branchId > 0) cv.put("branch_id", branchId)
+            if (cashierId > 0) cv.put("cashier_id", cashierId)
+            if (shiftId > 0) cv.put("shift_id", shiftId)
+            if (cv.size() > 0) {
+                db.update("transactions_local", cv, "local_id = ?", arrayOf(posCursor.getString(0)))
+                updated++
+            }
+        }
+        posCursor.close()
+        Log.i(TAG, "Backfilled transaction context for $updated rows")
+    }
+
+    /** Unblock queue tail: permanent price-conflict rows at max attempts. */
+    private fun skipStuckPriceConflictQueueItems(db: SQLiteDatabase) {
+        db.execSQL(
+            """UPDATE sync_queue SET status = 'failed',
+               error = COALESCE(error, 'skipped_price_conflict')
+               WHERE status = 'pending'
+               AND attempts >= 4
+               AND (error LIKE '%Price conflict%' OR error LIKE '%price conflict%' OR error LIKE '%price_mismatch%')"""
+        )
     }
 
     // --- Products ---
@@ -584,7 +666,11 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             put("local_id", txn.getString("local_id"))
             put("type", txn.optString("type", "sale"))
             put("status", txn.optString("status", "completed"))
-            put("customer_id", txn.optInt("customer_id", 0))
+            put("customer_id", txn.optInt("customer_id", txn.optInt("member_id", 0)))
+            put("branch_id", txn.optInt("branch_id", 0))
+            put("cashier_id", txn.optInt("cashier_id", 0))
+            put("shift_id", txn.optInt("shift_id", 0))
+            put("member_id", txn.optInt("member_id", 0))
             put("items_json", txn.optString("items_json", "[]"))
             put("subtotal", txn.optDouble("subtotal", 0.0))
             put("discount", txn.optDouble("discount", 0.0))
@@ -655,10 +741,47 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         writableDatabase.insert("sync_queue", null, cv)
     }
 
+    fun getSyncQueuePayloadForLocalId(localId: String): JSONObject? {
+        val cursor = readableDatabase.rawQuery(
+            """SELECT payload FROM sync_queue
+               WHERE record_id = ? AND status IN ('pending', 'failed')
+               ORDER BY id DESC LIMIT 1""",
+            arrayOf(localId)
+        )
+        val result = if (cursor.moveToFirst()) {
+            try {
+                JSONObject(cursor.getString(cursor.getColumnIndexOrThrow("payload")))
+            } catch (_: Exception) {
+                null
+            }
+        } else null
+        cursor.close()
+        return result
+    }
+
+    fun getPosSaleContext(localId: String): JSONObject? {
+        val cursor = readableDatabase.rawQuery(
+            "SELECT branch_id, cashier_id, shift_id FROM pos_sales WHERE local_id = ? LIMIT 1",
+            arrayOf(localId)
+        )
+        val result = if (cursor.moveToFirst()) {
+            JSONObject().apply {
+                put("branch_id", cursor.getInt(0))
+                put("cashier_id", cursor.getInt(1))
+                put("shift_id", cursor.getInt(2))
+            }
+        } else null
+        cursor.close()
+        return result
+    }
+
     fun getPendingSyncItems(limit: Int = 50): JSONArray {
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
-            "SELECT * FROM sync_queue WHERE status = 'pending' AND attempts < max_attempts ORDER BY created_at LIMIT ?",
+            """SELECT * FROM sync_queue
+               WHERE status = 'pending' AND attempts < max_attempts
+               ORDER BY attempts ASC, created_at ASC
+               LIMIT ?""",
             arrayOf(limit.toString())
         )
         while (cursor.moveToNext()) {
@@ -673,10 +796,24 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
     }
 
     fun markSyncItemFailed(id: Long, error: String) {
-        writableDatabase.execSQL(
-            "UPDATE sync_queue SET attempts = attempts + 1, error = ?, status = CASE WHEN attempts + 1 >= max_attempts THEN 'failed' ELSE 'pending' END WHERE id = ?",
-            arrayOf(error, id.toString())
-        )
+        if (isPermanentPriceConflict(error)) {
+            writableDatabase.execSQL(
+                "UPDATE sync_queue SET attempts = attempts + 1, error = ?, status = 'failed' WHERE id = ?",
+                arrayOf(error, id.toString())
+            )
+        } else {
+            writableDatabase.execSQL(
+                "UPDATE sync_queue SET attempts = attempts + 1, error = ?, status = CASE WHEN attempts + 1 >= max_attempts THEN 'failed' ELSE 'pending' END WHERE id = ?",
+                arrayOf(error, id.toString())
+            )
+        }
+    }
+
+    private fun isPermanentPriceConflict(error: String): Boolean {
+        val lower = error.lowercase()
+        return lower.contains("price conflict") ||
+            lower.contains("price_mismatch") ||
+            lower.contains("price conflicts detected")
     }
 
     fun getSyncQueueCount(): Int {

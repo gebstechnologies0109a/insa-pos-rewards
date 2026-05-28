@@ -29,7 +29,8 @@ class SyncEngine(
         private const val PUSH_INTERVAL_IDLE_MS = 15_000L
         private const val PUSH_FAIL_BACKOFF_BASE_MS = 5_000L
         private const val PUSH_FAIL_BACKOFF_MAX_MS = 300_000L
-        private const val MAX_PUSH_PER_CYCLE = 5
+        private const val MAX_PUSH_PER_CYCLE = 25
+        private const val MAX_BATCH_PUSH = 25
         private const val PULL_INTERVAL_MS = 120_000L
         private const val STARTUP_PULL_DELAY_MS = 2_000L
     }
@@ -145,7 +146,13 @@ class SyncEngine(
         val batchSize = minOf(unsynced.length(), MAX_PUSH_PER_CYCLE)
         for (i in 0 until batchSize) {
             val txn = unsynced.getJSONObject(i)
-            val payload = buildPushPayload(txn) ?: continue
+            val localId = txn.optString("local_id", "")
+            val payload = resolvePushBody(txn)
+                ?: db.getSyncQueuePayloadForLocalId(localId)?.let { resolvePushBody(it) }
+            if (payload == null) {
+                Log.w(TAG, "Skipping push for $localId — could not build payload (missing branch/items?)")
+                continue
+            }
             try {
                 val response = httpPost(
                     "${session.getBaseUrl()}/api/pos/sync/push",
@@ -202,20 +209,40 @@ class SyncEngine(
                 }
 
                 val body = if (action == "push-transaction" || action == "transaction_push") {
-                    buildPushPayload(payload) ?: payload
+                    resolvePushBody(payload)
                 } else {
                     payload
+                }
+                if (body == null) {
+                    val recordId = item.optString("record_id", payload.optString("local_id", ""))
+                    Log.w(TAG, "Skipping sync_queue #${item.getLong("id")} ($recordId) — could not build payload")
+                    continue
                 }
 
                 val response = httpPost(endpoint, body)
                 if (response != null && (response.optBoolean("success") || response.optBoolean("ok"))) {
+                    val localId = body.optString("local_id", item.optString("record_id", ""))
+                    if (localId.isNotBlank()) {
+                        val serverId = response.optInt(
+                            "server_id",
+                            response.optJSONObject("sale")?.optInt("id", 0) ?: 0
+                        )
+                        db.markTransactionSynced(localId, serverId)
+                    }
                     db.markSyncItemDone(item.getLong("id"))
                     processed++
-                } else {
+                } else if (response != null && SyncConflictResolver.hasBlockingConflicts(response)) {
+                    lastConflict = response
+                    onConflict?.invoke(response)
                     db.markSyncItemFailed(
                         item.getLong("id"),
-                        response?.optString("message") ?: response?.optString("error") ?: "Unknown error"
+                        response.optString("message", "Price conflicts detected. Please review.")
                     )
+                } else {
+                    val err = response?.optString("message")
+                        ?: response?.optString("error")
+                        ?: "Unknown error"
+                    db.markSyncItemFailed(item.getLong("id"), err)
                 }
             } catch (e: Exception) {
                 db.markSyncItemFailed(item.getLong("id"), e.message ?: "Exception")
@@ -308,6 +335,11 @@ class SyncEngine(
     private fun buildPushPayload(txn: JSONObject): JSONObject? =
         payloadBuilder.buildFromTransaction(txn)?.toJson()
 
+    private fun resolvePushBody(raw: JSONObject): JSONObject? {
+        val enriched = payloadBuilder.enrichTransaction(raw)
+        return buildPushPayload(enriched) ?: payloadBuilder.normalizeRawPayload(enriched)
+    }
+
     private fun parseItems(txn: JSONObject): JSONArray {
         val raw = txn.optString("items_json", "")
         if (raw.isNotBlank()) {
@@ -359,7 +391,7 @@ class SyncEngine(
 
             readJsonResponse(conn)
         } catch (e: Exception) {
-            Log.e(TAG, "httpPost error: ${e.message}")
+            Log.e(TAG, "httpPost error: ${e.message ?: e.javaClass.simpleName}", e)
             null
         }
     }
@@ -385,10 +417,17 @@ class SyncEngine(
         val responseText = BufferedReader(InputStreamReader(stream)).use { it.readText() }
         conn.disconnect()
 
-        return if (code in 200..299) {
-            JSONObject(responseText)
-        } else {
-            Log.w(TAG, "HTTP $code: $responseText")
+        return try {
+            val json = JSONObject(responseText)
+            if (code in 200..299) {
+                json
+            } else {
+                Log.w(TAG, "HTTP $code: $responseText")
+                json.put("_http_status", code)
+                json
+            }
+        } catch (_: Exception) {
+            Log.w(TAG, "HTTP $code (non-JSON): $responseText")
             null
         }
     }
