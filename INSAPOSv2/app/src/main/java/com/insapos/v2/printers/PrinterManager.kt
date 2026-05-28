@@ -73,13 +73,13 @@ class PrinterManager(private val context: Context) {
     }
 
     fun selectByName(name: String): Boolean {
-        val all = scanAll()
+        val all = scanAll(includeBluetooth = true)
         val match = all.find { it.name == name } ?: return false
         return selectPrinter(match)
     }
 
     fun selectByTypeAndName(type: String, name: String): Boolean {
-        val all = scanAll()
+        val all = scanForSelection(type)
         val match = all.find { it.type == type && it.name == name }
             ?: all.find { it.name == name }
             ?: return false
@@ -91,7 +91,7 @@ class PrinterManager(private val context: Context) {
      */
     fun selectByTypeAndNameWithMessage(type: String, name: String): Pair<Boolean, String?> {
         if (name.isBlank()) return false to "Printer name required"
-        val all = scanAll()
+        val all = scanForSelection(type)
         val match = if (type.isNotBlank()) {
             all.find { it.type == type && it.name == name } ?: all.find { it.name == name }
         } else {
@@ -188,14 +188,36 @@ class PrinterManager(private val context: Context) {
         return if (BuiltInPrinter.isAvailable(context)) BuiltInPrinter(context) else null
     }
 
-    fun scanAll(includeBluetooth: Boolean = false): List<Printer> {
+    fun scanAll(includeBluetooth: Boolean? = null): List<Printer> {
+        val includeBt = includeBluetooth ?: shouldIncludeBluetooth()
         val all = mutableListOf<Printer>()
         scanBuiltInPrinter()?.let { all.add(it) }
         all.addAll(scanUsbPrinters())
-        if (includeBluetooth) {
+        if (includeBt) {
             all.addAll(scanAllBluetoothDevices())
         }
         return all
+    }
+
+    private fun scanForSelection(type: String): List<Printer> {
+        val savedType = prefs.getString(KEY_PRINTER_TYPE, null)
+        val includeBt = PrinterScanPolicy.includeBluetoothForSelection(
+            type,
+            savedType,
+            lastSelectedType,
+            currentPrinter?.type
+        )
+        return scanAll(includeBluetooth = includeBt)
+    }
+
+    private fun shouldIncludeBluetooth(forType: String? = null): Boolean {
+        val savedType = prefs.getString(KEY_PRINTER_TYPE, null)
+        return PrinterScanPolicy.shouldIncludeBluetooth(
+            forType,
+            savedType,
+            lastSelectedType,
+            currentPrinter?.type
+        )
     }
 
     fun reconnect(): Boolean {
@@ -223,14 +245,17 @@ class PrinterManager(private val context: Context) {
         try {
             when (savedType) {
                 "bluetooth" -> {
-                    scanAllBluetoothDevices().find { it.name == savedAddress }?.let {
-                        if (it.connect()) {
-                            currentPrinter = it
-                            lastSelectedType = it.type
-                            lastSelectedName = it.name
-                            notifyChange(it.getStatus())
+                    scanAll(includeBluetooth = true)
+                        .filterIsInstance<BluetoothPrinter>()
+                        .find { it.name == savedAddress }
+                        ?.let {
+                            if (it.connect()) {
+                                currentPrinter = it
+                                lastSelectedType = it.type
+                                lastSelectedName = it.name
+                                notifyChange(it.getStatus())
+                            }
                         }
-                    }
                 }
                 "network" -> {
                     val parts = savedAddress.split(":")

@@ -224,7 +224,9 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "PosService bound")
 
             service.ensureLocalServerStarted()
+            service.requestPrinterManager()
             service.syncEngine?.let { attachSyncEngineCallbacks(it) }
+            injectLocalHardwareReady()
 
             if (pageLoaded) {
                 onPageReadyForService(service)
@@ -270,6 +272,7 @@ class MainActivity : AppCompatActivity() {
         setupCookies()
         setupConnectivity()
         setupWebView()
+        injectLocalHardwareReady()
         warmDns()
         probeAndLoad()
         startPosService()
@@ -279,6 +282,12 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         applyImmersiveMode()
         tryEnterLockTaskIfAllowed()
+        if (!serviceBound) {
+            startPosService()
+        } else {
+            posService?.ensureLocalServerStarted()
+            injectLocalHardwareReady()
+        }
         if (::webView.isInitialized) {
             webView.requestFocus()
         }
@@ -1030,6 +1039,22 @@ class MainActivity : AppCompatActivity() {
 
     // --- JS Bridge ready notification ---
 
+    private fun injectLocalHardwareReady() {
+        if (!::webView.isInitialized) return
+        val js = """
+            (function() {
+                window.INSAPOS_SERVICE_PORT = ${PosLocalServer.PORT};
+                window.INSAPOS_LOCAL_HARDWARE_READY = true;
+                window.INSAPOS_OFFLINE_CAPABLE = true;
+                if (typeof INSABuddy !== 'undefined' && INSABuddy.detectV2) INSABuddy.detectV2();
+                document.dispatchEvent(new CustomEvent('insapos:hardwareReady'));
+            })();
+        """.trimIndent()
+        runOnUiThread {
+            if (isWebViewUsable()) webView.evaluateJavascript(js, null)
+        }
+    }
+
     private fun injectBridgeReady() {
         val isOnline = connectivity.isConnected()
         Thread {
@@ -1040,6 +1065,7 @@ class MainActivity : AppCompatActivity() {
                 (function() {
                     window.INSAPOS_DEVICE = JSON.parse('$deviceInfo');
                     window.INSAPOS_SERVICE_PORT = ${PosLocalServer.PORT};
+                    window.INSAPOS_LOCAL_HARDWARE_READY = true;
                     window.INSAPOS_OFFLINE_CAPABLE = true;
                     window.INSAPOS_ONLINE = $isOnline;
                     try {

@@ -1837,6 +1837,8 @@ function posApp() {
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
             if (this.hasNativeBridge) {
                 if (typeof INSABuddy !== 'undefined') INSABuddy.detectV2();
+                this.buddyConnected = true;
+                this.ioApiAvailable = true;
                 try { this._nativeScanPort = window.INSAPOS.getServicePort() || 18182; } catch { this._nativeScanPort = 18182; }
                 if (this.config.branchId && typeof window.INSAPOS.setBranchId === 'function') {
                     try { window.INSAPOS.setBranchId(this.config.branchId); } catch (e) {}
@@ -2027,13 +2029,21 @@ function posApp() {
 
         async checkAndroidLocalHealth() {
             if (!this.hasNativeBridge) return;
-            try {
+            const ping = async () => {
                 const controller = new AbortController();
-                setTimeout(() => controller.abort(), 2000);
+                setTimeout(() => controller.abort(), 2500);
                 const res = await fetch(`http://127.0.0.1:${this._nativeScanPort}/ping`, { signal: controller.signal });
-                this.androidLocalUp = res.ok;
+                return res.ok;
+            };
+            try {
+                if (await ping()) {
+                    this.androidLocalUp = true;
+                    return;
+                }
+                await new Promise((r) => setTimeout(r, 1500));
+                this.androidLocalUp = (await ping()) || this.hasNativeBridge;
             } catch {
-                this.androidLocalUp = false;
+                this.androidLocalUp = this.hasNativeBridge;
             }
         },
 
@@ -2736,7 +2746,7 @@ function posApp() {
         },
 
         canUsePrinter() {
-            return this.buddyConnected || this.hasNativeBridge;
+            return this.hasNativeBridge || this.buddyConnected;
         },
 
         /** Prefer server sale_number (e.g. S20260528140256VWFS); never show raw local_id in UI. */

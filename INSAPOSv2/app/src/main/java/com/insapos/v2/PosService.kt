@@ -60,10 +60,17 @@ class PosService : Service() {
         fun getService(): PosService = this@PosService
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        ensureOfflineReady()
+        ensureLocalServerStarted()
+        warmUpPrinterStack()
+        return START_STICKY
+    }
+
     override fun onBind(intent: Intent?): IBinder {
         ensureOfflineReady()
         ensureLocalServerStarted()
-        scheduleDeferredPrinterInit()
+        warmUpPrinterStack()
         return binder
     }
 
@@ -90,6 +97,8 @@ class PosService : Service() {
         registerUsbReceiver()
 
         ensureOfflineReady()
+        ensureLocalServerStarted()
+        warmUpPrinterStack()
     }
 
     /** Lazily creates [PrinterManager]. Print paths init on a worker thread so deferred startup does not block receipts. */
@@ -132,9 +141,17 @@ class PosService : Service() {
         }
     }
 
+    /** Start printer stack on service bind/start (not only after a fixed delay). */
+    private fun warmUpPrinterStack() {
+        synchronized(printerInitLock) {
+            printerInitScheduled = true
+        }
+        scope.launch { initPrinterBlocking() }
+        scheduleDeferredPrinterInit()
+    }
+
     private fun scheduleDeferredPrinterInit() {
-        if (printerInitScheduled || printerManager != null) return
-        printerInitScheduled = true
+        if (printerManager != null) return
         scope.launch {
             delay(3_000)
             if (printerManager == null) initPrinterBlocking()
