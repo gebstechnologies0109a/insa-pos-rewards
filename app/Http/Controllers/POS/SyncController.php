@@ -189,6 +189,8 @@ class SyncController extends Controller
 
         $existing = PosSale::where('local_id', $data['local_id'])->first();
         if ($existing) {
+            $existing = $this->saleService->reconcileHeaderTotals($existing, $data);
+
             return response()->json([
                 'success'   => true,
                 'duplicate' => true,

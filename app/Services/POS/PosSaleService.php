@@ -87,6 +87,35 @@ class PosSaleService
         });
     }
 
+    /**
+     * Align header totals on an already-synced sale when the register re-pushes corrected amounts.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function reconcileHeaderTotals(PosSale $sale, array $data): PosSale
+    {
+        $items = $data['items'] ?? [];
+        if ($items === []) {
+            return $sale;
+        }
+
+        $resolved = $this->totals->resolve($items, $data);
+
+        if (abs((float) $sale->total - $resolved['total']) <= PosSaleTotalsResolver::TOLERANCE
+            && abs((float) $sale->subtotal - $resolved['subtotal']) <= PosSaleTotalsResolver::TOLERANCE) {
+            return $sale;
+        }
+
+        $sale->update([
+            'subtotal'       => $resolved['subtotal'],
+            'discount_total' => $resolved['discount_total'],
+            'total'          => $resolved['total'],
+            'change_due'     => max(0, (float) ($data['amount_tendered'] ?? $sale->amount_tendered) - $resolved['total']),
+        ]);
+
+        return $sale->fresh('items');
+    }
+
     protected function generateSaleNumber(): string
     {
         return 'S' . now()->format('YmdHis') . Str::upper(Str::random(4));

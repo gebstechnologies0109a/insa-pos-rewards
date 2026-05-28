@@ -108,6 +108,47 @@ class PosSaleSyncTotalsTest extends TestCase
         $this->assertEquals(3968.14, (float) $sale->discount_total);
     }
 
+    public function test_sync_duplicate_reconciles_corrected_register_total(): void
+    {
+        $localId = 'test-local-duplicate-reconcile';
+
+        $first = [
+            'local_id'        => $localId,
+            'branch_id'       => 1,
+            'cashier_id'      => 10,
+            'payment_method'  => 'cash',
+            'amount_tendered' => 11031.86,
+            'subtotal'        => 15000,
+            'discount_total'  => 3968.14,
+            'order_discount'  => 3968.14,
+            'total'           => 11031.86,
+            'items'           => [
+                [
+                    'product_id'   => 1,
+                    'product_name' => 'Coke Mismo 300ml',
+                    'qty'          => 600,
+                    'price'        => 25,
+                    'discount'     => 0,
+                ],
+            ],
+        ];
+
+        $this->postJson('/api/pos/sync/push', $first)->assertCreated();
+
+        $corrected = $first;
+        $corrected['total'] = 15000;
+        $corrected['amount_tendered'] = 15000;
+        $corrected['discount_total'] = 0;
+        $corrected['order_discount'] = 0;
+
+        $this->postJson('/api/pos/sync/push', $corrected)
+            ->assertOk()
+            ->assertJsonPath('duplicate', true);
+
+        $sale = PosSale::where('local_id', $localId)->first();
+        $this->assertEquals(15000, (float) $sale->total);
+    }
+
     public function test_api_sale_uses_register_total_when_provided(): void
     {
         $response = $this->postJson('/api/pos/sales', [
