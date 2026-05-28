@@ -103,11 +103,24 @@ class MainActivity : AppCompatActivity() {
         posService?.let { ensureSyncEngineAndPullFull(it) }
     }
 
+    /** WebView session cookies are scoped to the cashier URL scheme (usually HTTPS). */
+    private fun syncSessionCookies(): String? {
+        val cm = CookieManager.getInstance()
+        val base = session.getBaseUrl()
+        val httpAlt = if (base.startsWith("https://")) {
+            "http://" + base.removePrefix("https://")
+        } else {
+            "https://" + base.removePrefix("http://")
+        }
+        return listOf(base, httpAlt, "https://${session.serverDomain}", "http://${session.serverDomain}")
+            .distinct()
+            .mapNotNull { cm.getCookie(it)?.takeIf { c -> c.isNotBlank() } }
+            .firstOrNull()
+    }
+
     private fun ensureSyncEngineAndPullFull(service: PosService) {
         if (!syncEngineStarted) {
-            service.startSyncEngine(connectivity) {
-                CookieManager.getInstance().getCookie(session.getBaseUrl())
-            }
+            service.startSyncEngine(connectivity, ::syncSessionCookies)
             syncEngineStarted = true
             service.syncEngine?.onSyncStatusChanged = { status ->
                 runOnUiThread {
@@ -453,6 +466,14 @@ class MainActivity : AppCompatActivity() {
                     }
                     if (isAuthenticatedPosPath(it)) {
                         protocolLocked = true
+                        if (it.startsWith("https://")) {
+                            usingHttp = false
+                            session.lockHttps()
+                        }
+                    }
+                    if (isLoginPath(it) && it.startsWith("https://")) {
+                        usingHttp = false
+                        session.useHttp = false
                     }
                 }
 
@@ -471,8 +492,11 @@ class MainActivity : AppCompatActivity() {
             override fun onReceivedError(
                 view: WebView?, request: WebResourceRequest?, error: WebResourceError?
             ) {
+                val url = request?.url?.toString() ?: ""
+                val code = error?.errorCode ?: -1
+                val desc = error?.description?.toString() ?: "unknown"
                 if (request?.isForMainFrame == true) {
-                    Log.e(TAG, "WebView error: ${error?.description}")
+                    Log.e(TAG, "WebView main-frame error code=$code desc=$desc url=$url")
 
                     if (!usingHttp && !protocolLocked) {
                         Log.w(TAG, "HTTPS failed, falling back to HTTP")
@@ -483,7 +507,20 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     showOffline()
+                } else {
+                    Log.w(TAG, "WebView subresource error code=$code url=$url desc=$desc")
                 }
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: android.webkit.WebResourceResponse?
+            ) {
+                if (request?.isForMainFrame != true) return
+                val url = request.url?.toString() ?: ""
+                val status = errorResponse?.statusCode ?: 0
+                Log.e(TAG, "WebView HTTP error status=$status url=$url")
             }
 
             override fun onReceivedSslError(
@@ -516,7 +553,11 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
                 val domain = session.serverDomain
-                return !(url.contains(domain) || url.contains("127.0.0.1"))
+                val sameOrigin = url.contains(domain) || url.contains("127.0.0.1")
+                if (sameOrigin) {
+                    persistCookies()
+                }
+                return !sameOrigin
             }
         }
 
@@ -638,9 +679,7 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed({
             syncEngineSchedulePending = false
             if (syncEngineStarted) return@postDelayed
-            service.startSyncEngine(connectivity) {
-                CookieManager.getInstance().getCookie(session.getBaseUrl())
-            }
+            service.startSyncEngine(connectivity, ::syncSessionCookies)
             syncEngineStarted = true
             service.syncEngine?.onSyncStatusChanged = { status ->
                 runOnUiThread {
@@ -667,8 +706,13 @@ class MainActivity : AppCompatActivity() {
             loadLoginUrl()
             return
         }
+        if (protocolLocked && session.useHttp) {
+            Log.i(TAG, "Authenticated session — forcing HTTPS for cashier")
+            usingHttp = false
+            session.lockHttps()
+        }
         val url = session.getPosUrl()
-        Log.i(TAG, "Loading: $url")
+        Log.i(TAG, "Loading: $url (useHttp=$usingHttp protocolLocked=$protocolLocked)")
         webView.loadUrl(url)
     }
 

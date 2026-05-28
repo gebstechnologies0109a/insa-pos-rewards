@@ -23,6 +23,17 @@
     @endif
     <style>
         [x-cloak] { display: none !important; }
+        /* Visible shell if Alpine/CDN is slow or blocked (WebView tablets) */
+        body.insapos-alpine-pending { background: #f3f4f6; }
+        body.insapos-alpine-pending::before {
+            content: 'Loading cashier…';
+            display: block;
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #475569;
+            font-family: system-ui, sans-serif;
+            font-size: 1rem;
+        }
         .product-tile:active { transform: scale(0.95); }
         .product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.375rem; }
         @media (min-width: 640px) { .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -80,7 +91,7 @@
     <script src="{{ asset('js/insabuddy.js') }}"></script>
     <script src="{{ asset('js/sync-engine.js') }}?v=3.0.11"></script>
 </head>
-<body class="bg-gray-100 flex flex-col overflow-hidden" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
+<body class="bg-gray-100 flex flex-col overflow-hidden insapos-alpine-pending" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
 
 <!-- LICENSE / SEAT LIMIT -->
@@ -1402,7 +1413,6 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 <script>
 function posApp() {
     return {
@@ -1791,6 +1801,7 @@ function posApp() {
         },
 
         async init() {
+            document.body.classList.remove('insapos-alpine-pending');
             window.posAppInstance = this;
             this.browserOnline = navigator.onLine;
             window.addEventListener('online', () => { this.browserOnline = true; this.updateOfflineBanner(); });
@@ -3237,6 +3248,25 @@ function posApp() {
         },
     };
 }
+</script>
+<script src="{{ asset('js/alpine.min.js') }}"></script>
+<script>
+(function () {
+    function revealCashierUi() {
+        document.body.classList.remove('insapos-alpine-pending');
+        document.querySelectorAll('[x-cloak]').forEach(function (el) { el.removeAttribute('x-cloak'); });
+    }
+    document.addEventListener('alpine:initialized', revealCashierUi);
+    if (typeof window.Alpine !== 'undefined' && window.Alpine.version) {
+        revealCashierUi();
+    }
+    setTimeout(function () {
+        if (document.body.classList.contains('insapos-alpine-pending')) {
+            console.warn('[INSAPOS] Alpine slow or blocked — revealing cashier shell');
+            revealCashierUi();
+        }
+    }, 12000);
+})();
 </script>
 
 </body>

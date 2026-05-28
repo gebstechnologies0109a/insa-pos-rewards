@@ -73,7 +73,20 @@ class SessionManager(context: Context) {
 
     fun getBaseUrl(): String {
         val protocol = if (useHttp) "http" else "https"
-        return "$protocol://$serverDomain"
+        val host = lastUrl?.let { url ->
+            Regex("^https?://([^/]+)").find(url)?.groupValues?.getOrNull(1)
+        }?.takeIf { it.isNotBlank() } ?: serverDomain
+        return "$protocol://$host"
+    }
+
+    /** After HTTPS sign-in, keep secure cookies — do not derive protocol from a stale http lastUrl. */
+    fun lockHttps() {
+        useHttp = false
+        lastUrl?.let { url ->
+            if (url.startsWith("http://")) {
+                lastUrl = "https://" + url.removePrefix("http://")
+            }
+        }
     }
 
     fun getPosUrl(): String = "${getBaseUrl()}/pos/cashier"
