@@ -512,9 +512,9 @@ class MainActivity : AppCompatActivity() {
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                if (newProgress >= 100 || newProgress - lastProgressUpdate < 15) return
+                if (newProgress >= 100 || newProgress - lastProgressUpdate < 25) return
                 lastProgressUpdate = newProgress
-                showStatus("Loading $newProgress%...")
+                if (newProgress < 100) showStatus("Loading $newProgress%...")
             }
 
             override fun onPermissionRequest(request: PermissionRequest?) {
@@ -839,7 +839,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }.start()
-        }, 400)
+        }, 1500)
     }
 
     private fun showStatus(text: String) {

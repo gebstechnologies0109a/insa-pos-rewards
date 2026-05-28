@@ -26,7 +26,9 @@ class SyncEngine(
     companion object {
         private const val TAG = "SyncEngine"
         private const val PUSH_INTERVAL_ACTIVE_MS = 60_000L
-        private const val PUSH_INTERVAL_IDLE_MS = 180_000L
+        private const val PUSH_INTERVAL_IDLE_MS = 120_000L
+        private const val PUSH_FAIL_BACKOFF_MS = 300_000L
+        private const val MAX_PUSH_PER_CYCLE = 3
         private const val PULL_INTERVAL_MS = 300_000L
         private const val STARTUP_PULL_DELAY_MS = 2_000L
     }
@@ -34,6 +36,7 @@ class SyncEngine(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pushJob: Job? = null
     private var pullJob: Job? = null
+    private var consecutivePushFailures = 0
 
     var onSyncStatusChanged: ((SyncStatus) -> Unit)? = null
     var onDownloadProgress: ((DownloadProgress) -> Unit)? = null
@@ -87,7 +90,12 @@ class SyncEngine(
                 if (connectivity.isConnected()) {
                     hadWork = pushTransactions() || pushSyncQueue()
                 }
-                delay(if (hadWork) PUSH_INTERVAL_ACTIVE_MS else PUSH_INTERVAL_IDLE_MS)
+                val delayMs = when {
+                    consecutivePushFailures >= 3 -> PUSH_FAIL_BACKOFF_MS
+                    hadWork -> PUSH_INTERVAL_ACTIVE_MS
+                    else -> PUSH_INTERVAL_IDLE_MS
+                }
+                delay(delayMs)
             }
         }
     }
@@ -114,7 +122,9 @@ class SyncEngine(
         }
 
         var synced = 0
-        for (i in 0 until unsynced.length()) {
+        var failures = 0
+        val batchSize = minOf(unsynced.length(), MAX_PUSH_PER_CYCLE)
+        for (i in 0 until batchSize) {
             val txn = unsynced.getJSONObject(i)
             val payload = buildPushPayload(txn) ?: continue
             try {
@@ -128,11 +138,21 @@ class SyncEngine(
                     synced++
                     Log.i(TAG, "Synced transaction: ${txn.getString("local_id")} -> server #$serverId")
                 } else {
+                    failures++
                     Log.w(TAG, "Push failed for ${txn.optString("local_id")}: ${response?.optString("message")}")
                 }
             } catch (e: Exception) {
+                failures++
                 Log.e(TAG, "Push error: ${e.message}")
             }
+        }
+
+        consecutivePushFailures = if (failures > 0 && synced == 0) {
+            consecutivePushFailures + failures
+        } else if (synced > 0) {
+            0
+        } else {
+            consecutivePushFailures
         }
 
         val remaining = db.getUnsyncedCount()

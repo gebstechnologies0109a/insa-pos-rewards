@@ -9,19 +9,18 @@
     <script>
         window.INSA_IS_SUPER_ADMIN = @json(auth()->check() && auth()->user()->isSuperAdmin());
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    screens: {
-                        'xs': '640px',
-                        '3xl': '1920px',
-                    }
+    @if (file_exists(public_path('build/manifest.json')))
+        @vite(['resources/css/pos-cashier.css'])
+    @else
+        <script src="https://cdn.tailwindcss.com" defer></script>
+        <script defer>
+            document.addEventListener('DOMContentLoaded', function () {
+                if (typeof tailwind !== 'undefined') {
+                    tailwind.config = { theme: { extend: { screens: { 'xs': '640px', '3xl': '1920px' } } } };
                 }
-            }
-        }
-    </script>
+            });
+        </script>
+    @endif
     <style>
         [x-cloak] { display: none !important; }
         .product-tile:active { transform: scale(0.95); }
@@ -67,7 +66,7 @@
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/terminal-session.js') }}"></script>
     <script src="{{ asset('js/insabuddy.js') }}"></script>
-    <script src="{{ asset('js/sync-engine.js') }}"></script>
+    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.11"></script>
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
@@ -325,7 +324,7 @@
                        class="w-full p-1.5 pl-7 lg:p-2.5 lg:pl-9 border rounded-lg text-xs lg:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                 <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-400 absolute left-2 top-2 lg:left-3 lg:top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             </div>
-            <select x-model="selectedCategory" @change="filterProducts()" class="p-1.5 lg:p-2.5 border rounded-lg text-xs lg:text-sm bg-white max-w-[120px] lg:max-w-none">
+            <select x-model="selectedCategory" @change="gridDisplayLimit = 48; filterProducts()" class="p-1.5 lg:p-2.5 border rounded-lg text-xs lg:text-sm bg-white max-w-[120px] lg:max-w-none">
                 <option value="">All Categories</option>
                 <template x-for="cat in categories" :key="cat.id">
                     <option :value="cat.id" x-text="cat.name"></option>
@@ -363,7 +362,16 @@
                     </button>
                 </template>
             </div>
-            <div x-show="!productsLoading && filteredProducts.length === 0" class="text-center py-8 lg:py-12 text-gray-400 text-xs lg:text-sm">No products found.</div>
+            <div x-show="!productsLoading && catalogNeedsCategory" class="text-center py-8 lg:py-12 text-amber-700 text-xs lg:text-sm px-4">
+                Large catalog — choose a <strong>category</strong> above or search (3+ characters) to load products.
+            </div>
+            <div x-show="!productsLoading && !catalogNeedsCategory && filteredProducts.length === 0" class="text-center py-8 lg:py-12 text-gray-400 text-xs lg:text-sm">No products found.</div>
+            <div x-show="gridCanLoadMore" class="text-center py-3">
+                <button type="button" @click="loadMoreGrid()"
+                        class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-xs lg:text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
+                    Load more (<span x-text="filteredProducts.length"></span> of <span x-text="filteredProductsTotal"></span>)
+                </button>
+            </div>
         </div>
     </div>
 
@@ -1386,12 +1394,18 @@ function posApp() {
         categories: [],
         filteredProducts: [],
         filteredProductsTotal: 0,
+        catalogNeedsCategory: false,
+        gridDisplayLimit: 48,
+        gridCanLoadMore: false,
         productsLoading: true,
         _syncEngineReady: false,
         _scanInputTimer: null,
         _filterRaf: null,
         _searchCache: {},
-        _scanSearchDelay: 400,
+        _productBySku: null,
+        _productByBarcode: null,
+        _scanSearchDelay: 500,
+        LARGE_CATALOG_THRESHOLD: 200,
         searchQuery: '',
         selectedCategory: '',
         cart: [],
@@ -1597,12 +1611,19 @@ function posApp() {
             if (mode === 'retail') {
                 this.retailScanQuery = val;
                 if (enterPressed) this.retailScan();
-                else this.scheduleRetailLiveSearch();
+                else if (val.trim().length >= 3) this.scheduleRetailLiveSearch();
+                else if (!val.trim().length) {
+                    this.retailScanResult = null;
+                    if (this.filteredProducts.length) this.filteredProducts = [];
+                }
                 return;
             }
             this.searchQuery = val;
-            if (enterPressed) this.scheduleFilterProducts();
-            else this.scheduleFilterProducts();
+            if (enterPressed) {
+                this.scheduleFilterProducts();
+            } else if (!val.trim().length || val.trim().length >= 3) {
+                this.scheduleFilterProducts();
+            }
         },
 
         setScanFieldValue(mode, val) {
@@ -1640,16 +1661,34 @@ function posApp() {
 
         invalidateSearchCache() {
             this._searchCache = {};
+            this._productBySku = null;
+            this._productByBarcode = null;
         },
 
         toggleMode() {
             this.selectMode(this.posMode === 'cafe' ? 'retail' : 'cafe');
         },
 
+        rebuildProductIndex() {
+            const bySku = new Map();
+            const byBarcode = new Map();
+            for (let i = 0; i < this.products.length; i++) {
+                const p = this.products[i];
+                if (p.sku) bySku.set(String(p.sku), p);
+                if (p.barcode) byBarcode.set(String(p.barcode), p);
+            }
+            this._productBySku = bySku;
+            this._productByBarcode = byBarcode;
+        },
+
         /** Local IndexedDB-backed catalog search (no API per keystroke). */
         findProductExact(code) {
             if (!code) return null;
-            return this.products.find(p => (p.barcode && p.barcode === code) || (p.sku && p.sku === code)) || null;
+            const key = String(code);
+            if (this._productByBarcode) {
+                return this._productByBarcode.get(key) || this._productBySku.get(key) || null;
+            }
+            return this.products.find(p => (p.barcode && p.barcode === key) || (p.sku && p.sku === key)) || null;
         },
 
         searchProductsLocal(query, limit = 30) {
@@ -1953,7 +1992,7 @@ function posApp() {
         initBuddy() {
             if (typeof INSABuddy === 'undefined') return;
             INSABuddy.detectV2();
-            const pollMs = this.hasNativeBridge ? 45000 : 20000;
+            const pollMs = this.hasNativeBridge ? 90000 : 45000;
             const startDelay = this.hasNativeBridge ? 3000 : 0;
             setTimeout(() => {
                 INSABuddy.detectV2();
@@ -2711,6 +2750,7 @@ function posApp() {
                     if (cached.length > 0) {
                         this.products = cached;
                         this.invalidateSearchCache();
+                        this.rebuildProductIndex();
                         this.showToast('Using cached products (offline)', 'warning');
                     }
                     const cachedCats = await db.categories.getAll();
@@ -2737,7 +2777,7 @@ function posApp() {
             if (db && rawCategories.length > 0) {
                 db.categories.bulkPut(rawCategories).catch(() => {});
             }
-            if (rawProducts.length > 0) { this.products = rawProducts; this.invalidateSearchCache(); }
+            if (rawProducts.length > 0) { this.products = rawProducts; this.invalidateSearchCache(); this.rebuildProductIndex(); }
             if (rawCategories.length > 0) this.categories = rawCategories;
             this.filterProducts();
         },
@@ -2749,7 +2789,14 @@ function posApp() {
             if (db.productStock && this.config.branchId) {
                 cached = await db.productStock.mergeIntoProducts(cached, this.config.branchId);
             }
-            if (cached.length > 0) { this.products = cached; this.invalidateSearchCache(); this.filterProducts(); }
+            if (cached.length > 0) { this.products = cached; this.invalidateSearchCache(); this.rebuildProductIndex(); this.filterProducts(); }
+        },
+
+        loadMoreGrid() {
+            this.gridDisplayLimit += 48;
+            const cacheKey = 'c|' + this.selectedCategory + '|' + this.searchQuery.trim() + '|' + this.gridDisplayLimit;
+            delete this._searchCache[cacheKey];
+            this.filterProducts();
         },
 
         filterProducts() {
@@ -2758,16 +2805,26 @@ function posApp() {
                     this.filteredProducts = [];
                     this.filteredProductsTotal = 0;
                 }
+                this.catalogNeedsCategory = false;
+                this.gridCanLoadMore = false;
                 return;
             }
-            const GRID_LIMIT = 80;
-            const SEARCH_LIMIT = 120;
+            const SEARCH_LIMIT = 80;
             const q = this.searchQuery.trim();
-            const cacheKey = 'c|' + this.selectedCategory + '|' + q;
+            if (!q && !this.selectedCategory && this.products.length > this.LARGE_CATALOG_THRESHOLD) {
+                this.catalogNeedsCategory = true;
+                this.filteredProducts = [];
+                this.filteredProductsTotal = 0;
+                this.gridCanLoadMore = false;
+                return;
+            }
+            this.catalogNeedsCategory = false;
+            const cacheKey = 'c|' + this.selectedCategory + '|' + q + '|' + this.gridDisplayLimit;
             if (this._searchCache[cacheKey]) {
                 const cached = this._searchCache[cacheKey];
                 this.filteredProductsTotal = cached.total;
                 this.filteredProducts = cached.items;
+                this.gridCanLoadMore = cached.total > cached.items.length;
                 return;
             }
             let result = this.products;
@@ -2784,12 +2841,19 @@ function posApp() {
                     }
                 }
                 result = filtered;
+            } else if (q.length > 0 && q.length < 3) {
+                this.filteredProducts = [];
+                this.filteredProductsTotal = 0;
+                this.gridCanLoadMore = false;
+                return;
             }
             const total = result.length;
-            const items = total > GRID_LIMIT ? result.slice(0, GRID_LIMIT) : result;
+            const limit = this.gridDisplayLimit;
+            const items = total > limit ? result.slice(0, limit) : result;
             this.rememberSearchCache(cacheKey, { total, items });
             this.filteredProductsTotal = total;
             this.filteredProducts = items;
+            this.gridCanLoadMore = total > items.length;
         },
 
         async loadRecentSales() {
