@@ -1,6 +1,5 @@
 package com.insapos.v2
 
-import android.content.Context
 import android.util.Log
 import android.webkit.JavascriptInterface
 import org.json.JSONObject
@@ -12,7 +11,7 @@ class AndroidBridge(private val activity: MainActivity) {
         const val BRIDGE_NAME = "INSAPOS"
     }
 
-    private val session by lazy { SessionManager(context) }
+    private val session by lazy { SessionManager(activity) }
 
     @JavascriptInterface
     fun getDeviceInfo(): String {
@@ -41,7 +40,7 @@ class AndroidBridge(private val activity: MainActivity) {
 
     @JavascriptInterface
     fun getDeviceFingerprint(): String {
-        return DeviceFingerprint.get(context)
+        return DeviceFingerprint.get(activity)
     }
 
     @JavascriptInterface
@@ -58,6 +57,7 @@ class AndroidBridge(private val activity: MainActivity) {
     fun setBranchId(branchId: Int) {
         if (branchId > 0) {
             session.branchId = branchId
+            activity.runOnUiThread { activity.onBranchIdSetFromWeb(branchId) }
         }
     }
 
@@ -169,18 +169,33 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
-    fun triggerSync(): String {
+    fun triggerSync(): String = prefetchCatalog()
+
+    /** Full catalog + stock + customers download into native SQLite (after setBranchId). */
+    @JavascriptInterface
+    fun prefetchCatalog(): String {
         return try {
-            val url = "http://127.0.0.1:${PosLocalServer.PORT}/offline/sync/now"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 3000
-            val response = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-            response
+            val branchId = session.branchId
+            if (branchId != null && branchId > 0) {
+                activity.runOnUiThread { activity.onBranchIdSetFromWeb(branchId) }
+            } else {
+                val url = "http://127.0.0.1:${PosLocalServer.PORT}/offline/sync/now"
+                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 3000
+                conn.inputStream.bufferedReader().use { it.readText() }
+                conn.disconnect()
+            }
+            JSONObject().put("ok", true).put("triggered", true).put("full", true).toString()
         } catch (e: Exception) {
+            Log.e(TAG, "prefetchCatalog failed", e)
             JSONObject().put("ok", false).put("error", e.message).toString()
         }
+    }
+
+    @JavascriptInterface
+    fun setScanInputFocused(focused: Boolean) {
+        activity.notifyScanInputFocused(focused)
     }
 
     @JavascriptInterface

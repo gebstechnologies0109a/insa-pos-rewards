@@ -28,7 +28,7 @@ class SyncEngine(
         private const val PUSH_INTERVAL_ACTIVE_MS = 60_000L
         private const val PUSH_INTERVAL_IDLE_MS = 180_000L
         private const val PULL_INTERVAL_MS = 300_000L
-        private const val STARTUP_PULL_DELAY_MS = 180_000L
+        private const val STARTUP_PULL_DELAY_MS = 2_000L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -36,10 +36,17 @@ class SyncEngine(
     private var pullJob: Job? = null
 
     var onSyncStatusChanged: ((SyncStatus) -> Unit)? = null
+    var onDownloadProgress: ((DownloadProgress) -> Unit)? = null
 
     @Volatile
     var lastSyncStatus: SyncStatus = SyncStatus.IDLE
         private set
+
+    data class DownloadProgress(
+        val phase: String,
+        val percent: Int,
+        val message: String
+    )
 
     fun start() {
         startPushLoop()
@@ -58,7 +65,18 @@ class SyncEngine(
         scope.launch {
             pushTransactions()
             pushSyncQueue()
-            pullData()
+            pullData(fullSync = false)
+        }
+    }
+
+    /** Full catalog download (no delta `since`) — call after branch_id is set. */
+    fun syncNowFull() {
+        scope.launch {
+            emitDownloadProgress("products", 5, "Downloading products…")
+            pushTransactions()
+            pushSyncQueue()
+            pullData(fullSync = true)
+            emitDownloadProgress("done", 100, "Store data ready")
         }
     }
 
@@ -79,7 +97,7 @@ class SyncEngine(
             delay(STARTUP_PULL_DELAY_MS)
             while (isActive) {
                 if (connectivity.isConnected()) {
-                    pullData()
+                    pullData(fullSync = false)
                 }
                 delay(PULL_INTERVAL_MS)
             }
@@ -162,9 +180,9 @@ class SyncEngine(
         return processed > 0
     }
 
-    private suspend fun pullData() {
+    private suspend fun pullData(fullSync: Boolean) {
         updateStatus(SyncStatus.PULLING)
-        if (BuildConfig.DEBUG) Log.i(TAG, "Pulling data from server")
+        if (BuildConfig.DEBUG) Log.i(TAG, "Pulling data from server (fullSync=$fullSync)")
 
         try {
             val branchId = session.branchId
@@ -174,46 +192,75 @@ class SyncEngine(
                 return
             }
 
-            val lastSync = db.getSetting("inventory_last_sync") ?: db.getSetting("last_pull_at") ?: ""
-            val params = buildString {
-                append("?branch_id=").append(URLEncoder.encode(branchId.toString(), "UTF-8"))
-                if (lastSync.isNotBlank()) {
-                    append("&since=").append(URLEncoder.encode(lastSync, "UTF-8"))
-                }
-            }
+            emitDownloadProgress("products", 15, "Downloading products…")
+            pullProductCatalog(branchId)
 
-            val productsJson = httpGet("${session.getBaseUrl()}/api/pos/sync/pull$params")
-            if (productsJson != null && productsJson.optBoolean("success", true)) {
-                val products = productsJson.optJSONArray("products") ?: JSONArray()
-                if (products.length() > 0) {
-                    val count = db.upsertProducts(products)
-                    db.logSync("pull", "products", count, "completed")
-                    Log.i(TAG, "Pulled $count products (batch stock)")
-                }
-                val pulledAt = productsJson.optString("pulled_at", "")
-                if (pulledAt.isNotBlank()) {
-                    db.setSetting("inventory_last_sync", pulledAt)
-                    db.setSetting("last_pull_at", pulledAt)
-                } else {
-                    db.setSetting("last_pull_at", now())
-                }
-            }
+            emitDownloadProgress("inventory", 55, "Downloading stock levels…")
+            pullInventory(branchId, fullSync)
 
-            val customersJson = httpGet("${session.getBaseUrl()}/api/pos/customers/all")
-            if (customersJson != null) {
-                val customers = customersJson.optJSONArray("customers") ?: JSONArray()
-                if (customers.length() > 0) {
-                    val count = db.upsertCustomers(customers)
-                    db.logSync("pull", "customers", count, "completed")
-                    Log.i(TAG, "Pulled $count customers")
-                }
-            }
+            emitDownloadProgress("customers", 80, "Downloading customers…")
+            pullCustomers()
+
+            markCacheReady(branchId)
 
             updateStatus(SyncStatus.IDLE)
         } catch (e: Exception) {
             Log.e(TAG, "Pull failed: ${e.message}")
             db.logSync("pull", "all", 0, "failed", e.message)
             updateStatus(SyncStatus.ERROR)
+        }
+    }
+
+    private suspend fun pullProductCatalog(branchId: Int) {
+        val url = "${session.getBaseUrl()}/api/pos/products/all?branch_id=" +
+            URLEncoder.encode(branchId.toString(), "UTF-8")
+        val json = httpGet(url) ?: return
+        val products = json.optJSONArray("products") ?: JSONArray()
+        if (products.length() > 0) {
+            val count = db.upsertProducts(products)
+            db.logSync("pull", "products", count, "completed")
+            Log.i(TAG, "Pulled $count products from catalog")
+        }
+    }
+
+    private suspend fun pullInventory(branchId: Int, fullSync: Boolean) {
+        val lastSync = if (fullSync) "" else {
+            db.getSetting("inventory_last_sync") ?: db.getSetting("last_pull_at") ?: ""
+        }
+        val params = buildString {
+            append("?branch_id=").append(URLEncoder.encode(branchId.toString(), "UTF-8"))
+            if (lastSync.isNotBlank()) {
+                append("&since=").append(URLEncoder.encode(lastSync, "UTF-8"))
+            }
+        }
+
+        val productsJson = httpGet("${session.getBaseUrl()}/api/pos/sync/pull$params")
+        if (productsJson != null && productsJson.optBoolean("success", true)) {
+            val products = productsJson.optJSONArray("products") ?: JSONArray()
+            if (products.length() > 0) {
+                val count = db.upsertProducts(products)
+                db.logSync("pull", "inventory", count, "completed")
+                Log.i(TAG, "Pulled $count products (batch stock)")
+            }
+            val pulledAt = productsJson.optString("pulled_at", "")
+            if (pulledAt.isNotBlank()) {
+                db.setSetting("inventory_last_sync", pulledAt)
+                db.setSetting("last_pull_at", pulledAt)
+            } else {
+                db.setSetting("last_pull_at", now())
+            }
+        }
+    }
+
+    private suspend fun pullCustomers() {
+        val customersJson = httpGet("${session.getBaseUrl()}/api/pos/customers/all")
+        if (customersJson != null) {
+            val customers = customersJson.optJSONArray("customers") ?: JSONArray()
+            if (customers.length() > 0) {
+                val count = db.upsertCustomers(customers)
+                db.logSync("pull", "customers", count, "completed")
+                Log.i(TAG, "Pulled $count customers")
+            }
         }
     }
 
@@ -307,7 +354,7 @@ class SyncEngine(
             conn.requestMethod = "GET"
             applyRequestHeaders(conn)
             conn.connectTimeout = 15000
-            conn.readTimeout = 15000
+            conn.readTimeout = 30000
 
             readJsonResponse(conn)
         } catch (e: Exception) {
@@ -328,6 +375,20 @@ class SyncEngine(
             Log.w(TAG, "HTTP $code: $responseText")
             null
         }
+    }
+
+    private fun markCacheReady(branchId: Int) {
+        val count = db.getProducts().length()
+        if (count > 0) {
+            db.setSetting("cache_ready", "1")
+            db.setSetting("cache_ready_branch_id", branchId.toString())
+            db.setSetting("cache_ready_at", now())
+            Log.i(TAG, "Offline cache ready ($count products)")
+        }
+    }
+
+    private fun emitDownloadProgress(phase: String, percent: Int, message: String) {
+        onDownloadProgress?.invoke(DownloadProgress(phase, percent, message))
     }
 
     private fun updateStatus(status: SyncStatus) {

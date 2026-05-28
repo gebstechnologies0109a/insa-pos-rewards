@@ -93,8 +93,21 @@
     </div>
 </div>
 
+<!-- STORE DATA DOWNLOAD -->
+<div x-show="storeDownload.active" class="fixed inset-0 bg-slate-900/92 z-[205] flex items-center justify-center p-6" x-cloak>
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
+        <h2 class="text-xl font-bold text-gray-900 mb-2" x-text="storeDownload.title">Preparing POS…</h2>
+        <p class="text-gray-600 text-sm mb-5" x-text="storeDownload.message">Downloading catalog…</p>
+        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2 overflow-hidden">
+            <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-out"
+                 :style="'width:' + Math.min(100, Math.max(0, storeDownload.percent)) + '%'"></div>
+        </div>
+        <p class="text-xs text-gray-400" x-text="storeDownload.percent + '% complete'"></p>
+    </div>
+</div>
+
 <!-- MODE SELECTION OVERLAY -->
-<div x-show="showModeSelect && !licenseBlocked && licenseActive" class="fixed inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 z-[200] flex items-center justify-center" x-cloak>
+<div x-show="showModeSelect && !licenseBlocked && licenseActive && posReady" class="fixed inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 z-[200] flex items-center justify-center" x-cloak>
     <div class="text-center max-w-2xl mx-auto px-6">
         <div class="mb-2">
             <span class="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">{{ $brandName }}</span>
@@ -165,6 +178,11 @@
     </template>
 </div>
 
+<!-- OFFLINE BANNER -->
+<div x-show="offlineBanner" x-cloak class="bg-amber-50 border-b border-amber-200 px-3 py-1.5 text-center text-xs text-amber-900 flex-shrink-0">
+    <span class="font-medium">Offline mode</span> — using cached store data. Sales are saved locally and will sync when connected.
+</div>
+
 <!-- HEADER -->
 <header class="bg-white shadow px-2 py-1 lg:px-4 lg:py-2 flex items-center justify-between flex-shrink-0">
     <h1 class="text-sm lg:text-lg font-bold text-gray-800 whitespace-nowrap">{{ $brandName }}</h1>
@@ -173,15 +191,15 @@
         <div class="flex items-center gap-1 lg:gap-1.5 px-1.5 py-0.5 lg:px-2 lg:py-1 rounded-full border cursor-pointer"
              :class="{
                  'border-green-200 bg-green-50': syncStatus === 'synced',
-                 'border-yellow-200 bg-yellow-50': syncStatus === 'syncing' || syncStatus === 'pushing' || syncStatus === 'pulling-products' || syncStatus === 'pulling-customers',
+                 'border-yellow-200 bg-yellow-50': syncStatus === 'syncing' || syncStatus === 'pushing' || syncStatus === 'pulling-products' || syncStatus === 'pulling-customers' || syncStatus === 'pulling-inventory' || syncStatus === 'downloading',
                  'border-red-200 bg-red-50': syncStatus === 'offline',
                  'border-gray-200 bg-gray-50': syncStatus === 'partial' || syncStatus === 'error',
              }"
              @click="manualSync()" :title="syncStatusTitle">
             <span class="status-dot"
-                  :class="{ 'online': syncStatus === 'synced', 'syncing': syncStatus === 'syncing' || syncStatus === 'pushing' || syncStatus === 'pulling-products' || syncStatus === 'pulling-customers', 'offline': syncStatus === 'offline' || syncStatus === 'error' }"></span>
+                  :class="{ 'online': syncStatus === 'synced', 'syncing': syncStatus === 'syncing' || syncStatus === 'pushing' || syncStatus === 'pulling-products' || syncStatus === 'pulling-customers' || syncStatus === 'pulling-inventory' || syncStatus === 'downloading', 'offline': syncStatus === 'offline' || syncStatus === 'error' }"></span>
             <span class="text-[10px] lg:text-xs font-medium"
-                  :class="{ 'text-green-700': syncStatus === 'synced', 'text-yellow-700': syncStatus === 'syncing' || syncStatus === 'pushing' || syncStatus === 'pulling-products' || syncStatus === 'pulling-customers', 'text-red-700': syncStatus === 'offline', 'text-gray-500': syncStatus === 'partial' || syncStatus === 'error' }"
+                  :class="{ 'text-green-700': syncStatus === 'synced', 'text-yellow-700': syncStatus === 'syncing' || syncStatus === 'pushing' || syncStatus === 'pulling-products' || syncStatus === 'pulling-customers' || syncStatus === 'pulling-inventory' || syncStatus === 'downloading', 'text-red-700': syncStatus === 'offline', 'text-gray-500': syncStatus === 'partial' || syncStatus === 'error' }"
                   x-text="syncLabel"></span>
             <span x-show="pendingSyncCount > 0"
                   class="ml-0.5 px-1 py-0.5 text-[9px] lg:text-[10px] font-bold rounded-full bg-yellow-200 text-yellow-800"
@@ -1459,6 +1477,14 @@ function posApp() {
 
         syncStatus: 'offline',
         pendingSyncCount: 0,
+        posReady: false,
+        offlineBanner: false,
+        storeDownload: {
+            active: false,
+            title: 'Preparing POS…',
+            message: 'Downloading catalog…',
+            percent: 0,
+        },
         showConflictModal: false,
         conflictItems: [],
         conflictLocalId: null,
@@ -1502,7 +1528,18 @@ function posApp() {
             return true;
         },
         get syncLabel() {
-            return { 'synced':'Synced','syncing':'Syncing...','pushing':'Uploading...','pulling-products':'Updating...','pulling-customers':'Updating...','offline':'Offline','partial':'Pending','error':'Sync Error' }[this.syncStatus] || 'Unknown';
+            return {
+                'synced': 'Synced',
+                'syncing': 'Syncing...',
+                'downloading': 'Downloading…',
+                'pushing': 'Uploading...',
+                'pulling-products': 'Updating products…',
+                'pulling-inventory': 'Updating stock…',
+                'pulling-customers': 'Updating customers…',
+                'offline': 'Offline',
+                'partial': 'Pending',
+                'error': 'Sync Error',
+            }[this.syncStatus] || 'Unknown';
         },
         get syncStatusTitle() {
             if (this.syncStatus === 'synced') return 'All data synced. Click to sync now.';
@@ -1778,25 +1815,101 @@ function posApp() {
             }
         },
 
+        onStoreDownloadProgress(p) {
+            if (!p) return;
+            if (p.phase === 'offline') {
+                this.offlineBanner = true;
+                this.storeDownload.message = p.message || 'Using cached store data';
+                this.storeDownload.percent = 100;
+                return;
+            }
+            this.syncStatus = 'downloading';
+            this.storeDownload.message = p.message || 'Downloading store data…';
+            if (typeof p.percent === 'number') this.storeDownload.percent = p.percent;
+        },
+
+        async finishStoreDownload(result) {
+            this.storeDownload.active = false;
+            this.storeDownload.percent = 100;
+            await this.refreshProductsFromDB();
+            const count = this.products.length;
+            this.posReady = count > 0 || (result && result.online === false);
+            if (!this.posReady) {
+                this.posReady = true;
+                this.showToast('No products in catalog yet — you can still open the register', 'warning', 4000);
+            }
+            if (result && result.online === false) {
+                this.offlineBanner = true;
+                this.syncStatus = 'offline';
+            } else if (count > 0) {
+                this.syncStatus = 'synced';
+                if (!localStorage.getItem('insapos_mode')) {
+                    this.showToast('Store data ready (' + count + ' products)', 'success', 2500);
+                }
+            }
+            if (this.hasNativeBridge && typeof window.INSAPOS !== 'undefined') {
+                try {
+                    if (typeof window.INSAPOS.prefetchCatalog === 'function') {
+                        window.INSAPOS.prefetchCatalog();
+                    } else if (typeof window.INSAPOS.triggerSync === 'function') {
+                        window.INSAPOS.triggerSync();
+                    }
+                } catch (e) {}
+            }
+        },
+
         async initOffline() {
             const db = window.INSADB;
+            let hadCache = false;
             if (db) {
                 await db.init();
                 this.pendingSyncCount = await db.transactions.pendingCount();
-                await this.loadProductsFromCache();
+                hadCache = await this.loadProductsFromCache();
+                if (hadCache) {
+                    this.posReady = true;
+                }
             }
-            this.loadProducts();
+
             if (window.SyncEngine && !this._syncEngineReady) {
                 this._syncEngineReady = true;
-                SyncEngine.on('syncStatus', (s) => { this.syncStatus = s; });
-                SyncEngine.on('connectivity', (o) => { if (!o) this.syncStatus = 'offline'; });
+                SyncEngine.setBranchId(this.config.branchId);
+                SyncEngine.on('syncStatus', (s) => {
+                    if (s !== 'syncing') this.syncStatus = s;
+                    if (s === 'offline') this.offlineBanner = true;
+                });
+                SyncEngine.on('connectivity', (o) => {
+                    if (!o) {
+                        this.syncStatus = 'offline';
+                        this.offlineBanner = true;
+                    } else {
+                        this.offlineBanner = false;
+                    }
+                });
+                SyncEngine.on('downloadStart', () => {
+                    if (!this.posReady) {
+                        this.storeDownload.active = true;
+                        this.storeDownload.title = 'Preparing POS…';
+                        this.storeDownload.percent = 0;
+                        this.storeDownload.message = 'Downloading store data…';
+                    }
+                });
+                SyncEngine.on('downloadProgress', (p) => this.onStoreDownloadProgress(p));
+                SyncEngine.on('downloadComplete', (r) => this.finishStoreDownload(r));
                 SyncEngine.on('transactionSynced', () => { this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1); this.showToast('Transaction synced', 'success'); });
                 SyncEngine.on('syncComplete', async (d) => { this.pendingSyncCount = d.pendingCount; });
                 SyncEngine.on('conflict', (d) => { this.conflictItems = d.conflict; this.conflictLocalId = d.local_id; this.showConflictModal = true; });
                 SyncEngine.on('productsUpdated', (c) => { if (c > 0) this.refreshProductsFromDB(); });
                 SyncEngine.on('buddyRecovered', () => { this.showToast('Recovered offline data from INSABuddy', 'info'); });
                 SyncEngine.on('syncError', (d) => { this.showToast('Sync error: ' + (d.error || 'Unknown'), 'error'); });
-                SyncEngine.init({ branchId: this.config.branchId, deferInitialSync: true });
+                SyncEngine.init({ branchId: this.config.branchId, skipInitialDownload: true });
+                await SyncEngine.downloadAll({ force: !hadCache, silent: hadCache });
+            } else {
+                this.posReady = true;
+                this.loadProducts();
+            }
+
+            if (this.posReady && this.products.length > 0) {
+                this.productsLoading = false;
             }
         },
 
@@ -2513,7 +2626,12 @@ function posApp() {
         },
 
         async manualSync() {
-            if (window.SyncEngine) { this.showToast('Syncing...', 'info', 2000); await SyncEngine.syncNow(); await this.refreshProductsFromDB(); }
+            if (!window.SyncEngine) return;
+            this.showToast('Downloading store data…', 'info', 2000);
+            this.storeDownload.active = true;
+            this.storeDownload.percent = 0;
+            await SyncEngine.downloadAll({ force: true, silent: false });
+            await this.refreshProductsFromDB();
         },
 
         async resolveConflict(choice) {
@@ -2563,10 +2681,22 @@ function posApp() {
 
         async loadProducts() {
             const db = window.INSADB;
+            const useLocalOnly = this.posReady && this.products.length > 0;
+            if (useLocalOnly) {
+                this.productsLoading = false;
+                if (db) await this.refreshProductsFromDB();
+                this.filterProducts();
+                return;
+            }
             const hadCache = this.products.length > 0;
             if (!hadCache) this.productsLoading = true;
             else {
                 this.productsLoading = false;
+                if (window.SyncEngine && await SyncEngine.isCacheReady()) {
+                    await this.refreshProductsFromDB();
+                    this.filterProducts();
+                    return;
+                }
                 this._refreshProductsFromNetwork().catch((e) => {
                     console.warn('[pos] background product refresh failed:', e);
                 });
@@ -2742,8 +2872,21 @@ function posApp() {
                     items: txData.items, discount_total: txData.discount_total, order_discount: txData.order_discount,
                 }) });
                 const data = await res.json();
-                if (data.success) { serverSale = data.sale; if (db) { await db.transactions.markSynced(localId, data.sale.id); this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1); } }
-            } catch {}
+                if (data.success) {
+                    serverSale = data.sale;
+                    if (db) {
+                        await db.transactions.markSynced(localId, data.sale.id);
+                        this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1);
+                    }
+                } else if (window.SyncEngine) {
+                    SyncEngine.pushTransactions().catch(() => {});
+                }
+            } catch {
+                if (window.SyncEngine) SyncEngine.pushTransactions().catch(() => {});
+            }
+            if (!serverSale && window.SyncEngine) {
+                this.syncStatus = 'partial';
+            }
             this.lastSale = serverSale || { local_id: localId, sale_number: null, total: txData.total, amount_tendered: txData.amount_tendered, change_due: txData.change_due, payment_method: txData.payment_method, offline: !serverSale, _cart: txData.items };
             this.showReceipt = true;
             if (this.canUsePrinter()) { this.buddyPrintReceipt(); if (typeof INSABuddy !== 'undefined' && SyncEngine) SyncEngine.pushToBuddy(txData, receiptData); }

@@ -6,13 +6,14 @@
 (function () {
     'use strict';
 
-    const SYNC_INTERVAL_IDLE_MS = 120000;
-    const SYNC_INTERVAL_ACTIVE_MS = 45000;
+    const SYNC_INTERVAL_IDLE_MS = 90000;
+    const SYNC_INTERVAL_ACTIVE_MS = 30000;
     const FULL_PULL_INTERVAL_MS = 300000;
     const PING_TIMEOUT_MS = 3000;
 
     let _scheduleTimer = null;
     let _syncing = false;
+    let _downloading = false;
     let _online = false;
     let _initialized = false;
     let _onlineListenersBound = false;
@@ -61,6 +62,15 @@
             pending = db ? await db.transactions.pendingCount() : 0;
         } catch (e) { /* ignore */ }
         scheduleNext(pending > 0 ? SYNC_INTERVAL_ACTIVE_MS : SYNC_INTERVAL_IDLE_MS);
+    }
+
+    function setBranchId(branchId) {
+        if (branchId == null || branchId === '') return;
+        const prev = _branchId;
+        _branchId = branchId;
+        if (_initialized && prev !== branchId) {
+            downloadAll({ force: true, silent: false }).catch(() => {});
+        }
     }
 
     // ── Connectivity Check ────────────────────────────────────
@@ -132,39 +142,55 @@
         return true;
     }
 
-    // ── Pull Products ─────────────────────────────────────────
+    // ── Pull catalog (products + categories) ─────────────────
 
-    async function pullProducts() {
+    async function pullCatalog(forceFull = false) {
         const db = window.INSADB;
-        if (!db) return;
+        if (!db) return { products: 0, categories: 0 };
 
         try {
             emit('syncStatus', 'pulling-products');
 
-            const lastSync = await db.settings.get('products_last_sync', null);
             let url = '/api/pos/products/all';
-            if (_branchId) url += '?branch_id=' + _branchId;
-            if (lastSync) url += (url.includes('?') ? '&' : '?') + 'since=' + encodeURIComponent(lastSync);
+            if (_branchId) url += '?branch_id=' + encodeURIComponent(_branchId);
 
             const res = await fetch(url, { headers: headers() });
             const data = await res.json();
+            let productCount = 0;
+            let categoryCount = 0;
 
             if (data.products && data.products.length > 0) {
                 await db.products.bulkPut(data.products);
-                emit('productsUpdated', data.products.length);
+                productCount = data.products.length;
+                emit('productsUpdated', productCount);
             }
 
-            await db.settings.set('products_last_sync', new Date().toISOString());
+            const categories = data.categories || [];
+            if (categories.length > 0) {
+                await db.categories.bulkPut(categories);
+                categoryCount = categories.length;
+            }
+
+            const syncedAt = new Date().toISOString();
+            await db.settings.set('products_last_sync', syncedAt);
+            await db.settings.set('catalog_last_sync', syncedAt);
+            return { products: productCount, categories: categoryCount };
         } catch (e) {
-            console.error('[sync] pullProducts failed:', e);
+            console.error('[sync] pullCatalog failed:', e);
+            return { products: 0, categories: 0 };
         }
+    }
+
+    /** @deprecated use pullCatalog */
+    async function pullProducts(forceFull = false) {
+        return pullCatalog(forceFull);
     }
 
     // ── Pull Customers ────────────────────────────────────────
 
     async function pullCustomers() {
         const db = window.INSADB;
-        if (!db) return;
+        if (!db) return 0;
 
         try {
             emit('syncStatus', 'pulling-customers');
@@ -175,12 +201,84 @@
             if (data.customers && data.customers.length > 0) {
                 await db.customers.bulkPut(data.customers);
                 emit('customersUpdated', data.customers.length);
+                await db.settings.set('customers_last_sync', new Date().toISOString());
+                return data.customers.length;
             }
 
             await db.settings.set('customers_last_sync', new Date().toISOString());
+            return 0;
         } catch (e) {
             console.error('[sync] pullCustomers failed:', e);
+            return 0;
         }
+    }
+
+    // ── Pull POS settings ─────────────────────────────────────
+
+    async function pullSettings() {
+        const db = window.INSADB;
+        if (!db) return;
+
+        try {
+            const res = await fetch('/api/pos/settings', { headers: headers() });
+            const data = await res.json();
+            if (data.success && data.settings) {
+                await db.settings.set('pos_settings', JSON.stringify(data.settings));
+                await db.settings.set('settings_last_sync', new Date().toISOString());
+            }
+        } catch (e) {
+            console.error('[sync] pullSettings failed:', e);
+        }
+    }
+
+    // ── Pull POS settings (rewards / overrides) ───────────────
+
+    async function pullSettings() {
+        const db = window.INSADB;
+        if (!db) return 0;
+
+        try {
+            emit('syncStatus', 'pulling-settings');
+            const res = await fetch('/api/pos/settings', { headers: headers() });
+            const data = await res.json();
+            if (data.success && data.settings) {
+                await db.settings.set('pos_settings', data.settings);
+                await db.settings.set('settings_last_sync', new Date().toISOString());
+                return Object.keys(data.settings).length;
+            }
+            return 0;
+        } catch (e) {
+            console.error('[sync] pullSettings failed:', e);
+            return 0;
+        }
+    }
+
+    async function markCacheReady() {
+        const db = window.INSADB;
+        if (!db) return false;
+        const count = await db.products.count();
+        const ready = count > 0;
+        if (ready) {
+            await db.settings.set('cache_ready', true);
+            if (_branchId != null) {
+                await db.settings.set('cache_ready_branch_id', _branchId);
+            }
+            await db.settings.set('cache_ready_at', new Date().toISOString());
+        }
+        emit('cacheReady', { ready, productCount: count, branchId: _branchId });
+        return ready;
+    }
+
+    async function isCacheReady() {
+        const db = window.INSADB;
+        if (!db) return false;
+        const ready = await db.settings.get('cache_ready', false);
+        if (!ready) return false;
+        if (_branchId != null) {
+            const branch = await db.settings.get('cache_ready_branch_id', null);
+            if (branch != null && String(branch) !== String(_branchId)) return false;
+        }
+        return (await db.products.count()) > 0;
     }
 
     // ── Pull from INSABuddy backup ────────────────────────────
@@ -228,15 +326,17 @@
 
     // ── Pull inventory deltas (batch stock + expiry flags) ───
 
-    async function pullInventory() {
+    async function pullInventory(forceFull = false) {
         const db = window.INSADB;
-        if (!db || !_branchId) return;
+        if (!db || !_branchId) return 0;
 
         try {
             emit('syncStatus', 'pulling-inventory');
-            const lastSync = await db.settings.get('inventory_last_sync', null);
             let url = '/api/pos/sync/pull?branch_id=' + encodeURIComponent(_branchId);
-            if (lastSync) url += '&since=' + encodeURIComponent(lastSync);
+            if (!forceFull) {
+                const lastSync = await db.settings.get('inventory_last_sync', null);
+                if (lastSync) url += '&since=' + encodeURIComponent(lastSync);
+            }
 
             const res = await fetch(url, { headers: headers() });
             const data = await res.json();
@@ -247,20 +347,26 @@
                     await db.productStock.bulkPut(data.products, _branchId);
                 }
                 emit('productsUpdated', data.products.length);
+                await db.settings.set('inventory_last_sync', data.pulled_at || new Date().toISOString());
+                return data.products.length;
             }
 
             await db.settings.set('inventory_last_sync', data.pulled_at || new Date().toISOString());
+            return 0;
         } catch (e) {
             console.error('[sync] pullInventory failed:', e);
+            return 0;
         }
     }
 
     // ── Update Local Cache ────────────────────────────────────
 
-    async function updateLocalCache() {
-        await pullProducts();
-        await pullInventory();
+    async function updateLocalCache(forceFull = true) {
+        await pullCatalog(forceFull);
+        await pullInventory(forceFull);
         await pullCustomers();
+        await pullSettings();
+        await markCacheReady();
     }
 
     function shouldRunFullPull(forceFullPull) {
@@ -268,7 +374,81 @@
         return (Date.now() - _lastFullPullAt) >= FULL_PULL_INTERVAL_MS;
     }
 
+    /**
+     * Initial / manual full download for offline-first POS.
+     * @param {{ force?: boolean, silent?: boolean }} options
+     */
+    async function downloadAll(options = {}) {
+        if (_downloading) return { skipped: true };
+        _downloading = true;
+        const force = options.force !== false;
+        const silent = options.silent === true;
+
+        if (!silent) emit('downloadStart', { force });
+
+        const result = { online: false, products: 0, categories: 0, customers: 0, stock: 0, settings: 0, fromCache: false, cacheReady: false };
+
+        if (!_branchId) {
+            console.warn('[sync] downloadAll skipped — branch_id not set');
+            emit('downloadComplete', { ...result, error: 'branch_id required' });
+            _downloading = false;
+            return result;
+        }
+
+        try {
+            const online = await checkOnline();
+            result.online = online;
+
+            if (!online) {
+                emit('downloadProgress', {
+                    phase: 'offline',
+                    percent: 100,
+                    message: 'Offline — using cached store data',
+                });
+                result.cacheReady = await markCacheReady();
+                result.fromCache = result.cacheReady;
+                emit('downloadComplete', result);
+                emit('syncStatus', 'offline');
+                return result;
+            }
+
+            emit('downloadProgress', { phase: 'products', percent: 5, message: 'Downloading products…' });
+            const catalog = await pullCatalog(force);
+            result.products = catalog.products;
+            result.categories = catalog.categories;
+            emit('downloadProgress', { phase: 'products', percent: 40, message: 'Products saved locally' });
+
+            emit('downloadProgress', { phase: 'inventory', percent: 50, message: 'Downloading stock levels…' });
+            result.stock = await pullInventory(force);
+            emit('downloadProgress', { phase: 'inventory', percent: 75, message: 'Stock levels updated' });
+
+            emit('downloadProgress', { phase: 'customers', percent: 82, message: 'Downloading customers…' });
+            result.customers = await pullCustomers();
+            emit('downloadProgress', { phase: 'customers', percent: 90, message: 'Customers saved locally' });
+
+            emit('downloadProgress', { phase: 'settings', percent: 93, message: 'Downloading settings…' });
+            result.settings = await pullSettings();
+            emit('downloadProgress', { phase: 'settings', percent: 96, message: 'Settings saved locally' });
+
+            result.cacheReady = await markCacheReady();
+            _lastFullPullAt = Date.now();
+            emit('downloadProgress', { phase: 'done', percent: 100, message: 'Store data ready' });
+            emit('syncStatus', 'synced');
+            emit('downloadComplete', result);
+            return result;
+        } catch (e) {
+            console.error('[sync] downloadAll failed:', e);
+            emit('syncStatus', 'error');
+            emit('downloadComplete', { ...result, error: e.message });
+            return result;
+        } finally {
+            _downloading = false;
+        }
+    }
+
     // ── Main Sync Cycle ───────────────────────────────────────
+    // forceFullPull=true: manual / initial sync (always pull catalog)
+    // forceFullPull=false: scheduled idle tick (push + occasional pull)
 
     async function syncNow(forceFullPull = true) {
         if (_syncing) return;
@@ -286,7 +466,7 @@
             await pushTransactions();
 
             if (shouldRunFullPull(forceFullPull)) {
-                await updateLocalCache();
+                await updateLocalCache(forceFullPull);
                 _lastFullPullAt = Date.now();
             }
 
@@ -313,7 +493,14 @@
         if (options.branchId) _branchId = options.branchId;
         if (options.csrfToken) _csrfToken = options.csrfToken;
 
-        if (_initialized) return;
+        const skipInitialDownload = options.skipInitialDownload === true;
+
+        if (_initialized) {
+            if (!skipInitialDownload) {
+                downloadAll({ force: false, silent: true }).catch(() => {});
+            }
+            return;
+        }
         _initialized = true;
 
         if (!_onlineListenersBound) {
@@ -321,7 +508,7 @@
             window.addEventListener('online', () => {
                 _online = true;
                 emit('connectivity', true);
-                syncNow(true);
+                downloadAll({ force: false, silent: true }).catch(() => {});
             });
             window.addEventListener('offline', () => {
                 _online = false;
@@ -333,11 +520,14 @@
             });
         }
 
-        const initialDelay = options.deferInitialSync ? 12000 : 3000;
-        setTimeout(() => syncNow(true), initialDelay);
-        scheduleNext(initialDelay + SYNC_INTERVAL_IDLE_MS);
+        if (!skipInitialDownload) {
+            const initialDelay = options.deferInitialSync ? 12000 : 400;
+            setTimeout(() => downloadAll({ force: true }), initialDelay);
+        }
 
-        setTimeout(() => pullFromBuddy(), initialDelay + 2000);
+        const scheduleDelay = options.deferInitialSync ? 12000 + SYNC_INTERVAL_IDLE_MS : SYNC_INTERVAL_IDLE_MS;
+        scheduleNext(scheduleDelay);
+        setTimeout(() => pullFromBuddy(), (options.deferInitialSync ? 12000 : 400) + 2000);
 
         console.log('[sync] engine initialized');
     }
@@ -356,17 +546,25 @@
         init,
         destroy,
         syncNow,
+        downloadAll,
+        prefetchCatalog: downloadAll,
         pushTransactions,
         pullProducts,
+        pullCatalog,
         pullInventory,
         pullCustomers,
+        pullSettings,
         updateLocalCache,
         pullFromBuddy,
         pushToBuddy,
         checkOnline,
+        setBranchId,
+        markCacheReady,
+        isCacheReady,
 
         isOnline() { return _online; },
         isSyncing() { return _syncing; },
+        isDownloading() { return _downloading; },
 
         on(event, fn) {
             if (!_listeners[event]) _listeners[event] = [];

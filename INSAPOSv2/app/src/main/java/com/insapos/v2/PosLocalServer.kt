@@ -94,23 +94,49 @@ class PosLocalServer(
         val pm = getPrinterManager()
             ?: return jsonError("Printer service not ready")
 
-        val printer = pm.getActivePrinter()
-            ?: return jsonError("No printer connected")
-
-        val json = JSONObject(body)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
         val data = json.optString("data", "")
+        val text = json.optString("text", "")
         val raw = json.optJSONArray("raw")
+        val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
+        val type = json.optString("type", "").ifBlank { json.optString("printer_type", "") }
 
-        if (raw != null) {
-            val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
-            printer.printRaw(bytes)
-        } else if (data.isNotBlank()) {
-            printer.printText(data)
-        } else {
-            return jsonError("No print data provided")
+        val usbGranted = ensureUsbPermissionIfNeeded(
+            pm,
+            type.ifBlank { pm.lastSelectedType },
+            name.ifBlank { pm.lastSelectedName }
+        )
+        if (usbGranted == false) {
+            return jsonError("USB permission denied — allow access when prompted, then try again")
         }
 
-        return jsonOk(JSONObject().put("ok", true).put("printed", true))
+        val (printer, ensureErr) = pm.ensureActivePrinter(
+            type.ifBlank { null },
+            name.ifBlank { null }
+        )
+        if (printer == null) {
+            return jsonError(ensureErr ?: "No printer connected — select a printer first")
+        }
+
+        if (!printer.isConnected() && !printer.connect()) {
+            return jsonError("Printer disconnected — could not reconnect to ${printer.name}")
+        }
+
+        val ok = when {
+            raw != null -> {
+                val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
+                printer.printRaw(bytes)
+            }
+            text.isNotBlank() -> printer.printText(text)
+            data.isNotBlank() -> printer.printText(data)
+            else -> return jsonError("No print data provided")
+        }
+
+        return if (ok) {
+            jsonOk(JSONObject().put("ok", true).put("printed", true))
+        } else {
+            jsonError("Print failed on ${printer.name} — check paper, power, and connection")
+        }
     }
 
     private fun handleDrawerOpen(): Response {
@@ -428,8 +454,8 @@ class PosLocalServer(
 
     private fun handleSyncNow(): Response {
         val sync = getSyncEngine() ?: return jsonError("Sync engine not ready")
-        sync.syncNow()
-        return jsonOk(JSONObject().put("ok", true).put("triggered", true))
+        sync.syncNowFull()
+        return jsonOk(JSONObject().put("ok", true).put("triggered", true).put("full", true))
     }
 
     // --- Helpers ---

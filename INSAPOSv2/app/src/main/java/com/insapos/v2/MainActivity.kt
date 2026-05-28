@@ -95,6 +95,30 @@ class MainActivity : AppCompatActivity() {
         scanInputFocused = focused
     }
 
+    /** Called from WebView when cashier sets branch — triggers immediate full offline download. */
+    fun onBranchIdSetFromWeb(branchId: Int) {
+        Log.i(TAG, "Branch set from web: $branchId — starting full sync")
+        posService?.let { ensureSyncEngineAndPullFull(it) }
+    }
+
+    private fun ensureSyncEngineAndPullFull(service: PosService) {
+        if (!syncEngineStarted) {
+            service.startSyncEngine(connectivity) {
+                CookieManager.getInstance().getCookie(session.getBaseUrl())
+            }
+            syncEngineStarted = true
+            service.syncEngine?.onSyncStatusChanged = { runOnUiThread { updateSyncBadge() } }
+            service.syncEngine?.onDownloadProgress = { progress ->
+                runOnUiThread {
+                    statusText.text = progress.message
+                    updateSyncBadge()
+                }
+            }
+        }
+        service.syncEngine?.syncNowFull()
+        updateSyncBadge()
+    }
+
     private val usbPermissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != ACTION_USB_PERMISSION) return
@@ -609,8 +633,17 @@ class MainActivity : AppCompatActivity() {
             }
             syncEngineStarted = true
             service.syncEngine?.onSyncStatusChanged = { runOnUiThread { updateSyncBadge() } }
+            service.syncEngine?.onDownloadProgress = { progress ->
+                runOnUiThread {
+                    statusText.text = progress.message
+                    updateSyncBadge()
+                }
+            }
+            if (session.branchId != null) {
+                service.syncEngine?.syncNowFull()
+            }
             updateSyncBadge()
-        }, 10_000)
+        }, 2_000)
     }
 
     private fun loadPosUrl() {

@@ -59,7 +59,12 @@ class ProductLookupController extends Controller
         }
 
         $products = Product::where('active', true)
-            ->where('name', 'like', "%{$query}%")
+            ->where(function ($q) use ($query) {
+                $q->where('name', 'like', "%{$query}%")
+                    ->orWhere('sku', 'like', "%{$query}%")
+                    ->orWhere('barcode', 'like', "%{$query}%");
+            })
+            ->orderBy('name')
             ->limit(20)
             ->get();
 

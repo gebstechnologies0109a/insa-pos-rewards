@@ -55,6 +55,9 @@ Route::post('/sales', [PosSaleController::class, 'store'])
 Route::get('/sales/recent', [PosSaleController::class, 'recent'])
     ->name('pos.sales.recent');
 
+Route::get('/sales/{sale}/receipt', [PosSaleController::class, 'receipt'])
+    ->name('pos.sales.receipt');
+
 Route::post('/stock-in', [StockInController::class, 'store'])
     ->name('pos.stock-in.store');
 
