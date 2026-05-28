@@ -114,6 +114,8 @@ Route::middleware(['auth', 'role:owner,admin,manager', 'audit:backoffice'])->gro
     // ── X/Z Reading Reports ──
     Route::get('/backoffice/readings/x', [ReadingController::class, 'showXReading'])
         ->name('readings.x');
+    Route::get('/backoffice/readings/x/{xReading}', [ReadingController::class, 'viewXReading'])
+        ->name('readings.x.show');
     Route::get('/backoffice/readings/z', [ReadingController::class, 'showZReading'])
         ->name('readings.z');
     Route::get('/backoffice/readings/x/export/csv', [ReadingController::class, 'exportXReadingCsv'])

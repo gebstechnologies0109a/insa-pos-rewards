@@ -4,6 +4,7 @@ namespace App\Http\Controllers\POS;
 
 use App\Http\Controllers\Controller;
 use App\Models\POS\Branch;
+use App\Models\POS\PosSale;
 use App\Models\POS\PosXReading;
 use App\Models\POS\PosZReading;
 use App\Services\ReadingService;
@@ -87,6 +88,29 @@ class ReadingController extends Controller
         $branches = Branch::orderBy('name')->get();
 
         return view('backoffice.readings.x', compact('readings', 'branches'));
+    }
+
+    public function viewXReading(PosXReading $xReading)
+    {
+        $reading = $xReading->load(['branch', 'cashier']);
+
+        $salesQuery = PosSale::query()
+            ->where('cashier_id', $reading->cashier_id)
+            ->where('branch_id', $reading->branch_id)
+            ->whereDate('sold_at', $reading->generated_at)
+            ->where('sold_at', '<=', $reading->generated_at);
+
+        $completedSales = (clone $salesQuery)
+            ->where('status', 'completed')
+            ->orderBy('sold_at')
+            ->get();
+
+        $voidedSales = (clone $salesQuery)
+            ->where('status', 'voided')
+            ->orderBy('sold_at')
+            ->get();
+
+        return view('backoffice.readings.x-show', compact('reading', 'completedSales', 'voidedSales'));
     }
 
     public function showZReading(Request $request)
