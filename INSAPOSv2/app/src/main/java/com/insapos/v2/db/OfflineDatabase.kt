@@ -406,6 +406,15 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         count
     }
 
+    fun getCustomerCount(): Int = dbOp {
+        val cursor = readableDatabase.rawQuery("SELECT COUNT(*) FROM customers", null)
+        try {
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        } finally {
+            cursor.close()
+        }
+    }
+
     fun getProductCount(): Int = dbOp {
         val cursor = readableDatabase.rawQuery(
             "SELECT COUNT(*) FROM products WHERE is_active = 1", null

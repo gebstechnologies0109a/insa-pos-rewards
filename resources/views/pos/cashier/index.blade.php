@@ -1962,23 +1962,46 @@ function posApp() {
             return '';
         },
 
+        mapNativeProductRow(p) {
+            return {
+                id: p.server_id || p.id,
+                name: p.name,
+                barcode: p.barcode || '',
+                sku: p.sku || p.data_json?.sku || '',
+                price: parseFloat(p.price || 0),
+                stock: parseFloat(p.stock || 0),
+                category: p.category || '',
+                category_id: p.category_id || null,
+            };
+        },
+
         async loadProductsFromNative() {
             if (!this.useNativeEngine()) return false;
+            const pageSize = 500;
+            const fetchPage = (offset) => {
+                if (typeof window.INSAPOS.getLocalProductsPage === 'function') {
+                    return window.INSAPOS.getLocalProductsPage('', offset, pageSize);
+                }
+                return window.INSAPOS.getLocalProducts('');
+            };
             try {
-                const raw = window.INSAPOS.getLocalProducts('');
-                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                if (!data.ok || !data.products) return false;
-                const products = Array.isArray(data.products) ? data.products : Object.values(data.products);
-                const mapped = products.map(p => ({
-                    id: p.server_id || p.id,
-                    name: p.name,
-                    barcode: p.barcode || '',
-                    sku: p.sku || p.data_json?.sku || '',
-                    price: parseFloat(p.price || 0),
-                    stock: parseFloat(p.stock || 0),
-                    category: p.category || '',
-                    category_id: p.category_id || null,
-                })).filter(p => p.id);
+                const mapped = [];
+                let offset = 0;
+                let hasMore = true;
+                while (hasMore) {
+                    const raw = fetchPage(offset);
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (!data.ok || !data.products) break;
+                    const products = Array.isArray(data.products) ? data.products : Object.values(data.products);
+                    for (const p of products) {
+                        const row = this.mapNativeProductRow(p);
+                        if (row.id) mapped.push(row);
+                    }
+                    hasMore = !!data.has_more && products.length > 0;
+                    offset += products.length;
+                    if (!hasMore || products.length === 0) break;
+                    await new Promise((r) => setTimeout(r, 0));
+                }
                 if (mapped.length > 0) {
                     this.products = mapped;
                     this.invalidateSearchCache();
@@ -2040,11 +2063,13 @@ function posApp() {
                 }
             }
             if (this.hasNativeBridge && typeof window.INSAPOS !== 'undefined' && result && result.online === true) {
-                try {
-                    if (typeof window.INSAPOS.triggerLocalSync === 'function') {
-                        window.INSAPOS.triggerLocalSync();
-                    }
-                } catch (e) {}
+                setTimeout(() => {
+                    try {
+                        if (typeof window.INSAPOS.triggerLocalSync === 'function') {
+                            window.INSAPOS.triggerLocalSync();
+                        }
+                    } catch (e) {}
+                }, 6000);
             }
         },
 
@@ -2098,7 +2123,9 @@ function posApp() {
                         this.syncStatus = 'synced';
                         SyncEngine.init({ branchId: this.config.branchId, skipInitialDownload: true });
                         if (typeof window.INSAPOS.triggerLocalSync === 'function') {
-                            try { window.INSAPOS.triggerLocalSync(); } catch (e) {}
+                            setTimeout(() => {
+                                try { window.INSAPOS.triggerLocalSync(); } catch (e) {}
+                            }, 8000);
                         }
                     } else {
                         SyncEngine.init({ branchId: this.config.branchId, skipInitialDownload: true });

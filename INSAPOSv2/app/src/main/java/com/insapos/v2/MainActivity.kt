@@ -48,6 +48,7 @@ import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.insapos.v2.sync.SyncEngine
 import com.insapos.v2.ui.DashboardScreen
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
@@ -73,7 +74,7 @@ class MainActivity : AppCompatActivity() {
     private var allowSuperAdminPanel = false
 
     private val handler = Handler(Looper.getMainLooper())
-    private var posService: PosService? = null
+    internal var posService: PosService? = null
     private var serviceBound = false
     private var syncEngineStarted = false
     private var syncEngineSchedulePending = false
@@ -86,6 +87,9 @@ class MainActivity : AppCompatActivity() {
     private var cachedDeviceInfoJson: String? = null
     private var syncBadgeUpdatePending = false
     private var lastProgressUpdate = 0
+    private val syncScheduler = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "insapos-sync-scheduler").apply { isDaemon = true }
+    }
 
     private var hidScanner: HidScannerDriver? = null
     /** When true, HID keys go to the WebView scan/search field — do not intercept. */
@@ -97,10 +101,11 @@ class MainActivity : AppCompatActivity() {
         scanInputFocused = focused
     }
 
-    /** Called from WebView when cashier sets branch — background sync; full catalog only if cache missing/stale. */
+    /** Called from WebView when cashier sets branch — schedule sync off the main thread. */
     fun onBranchIdSetFromWeb(branchId: Int) {
-        Log.i(TAG, "Branch set from web: $branchId — starting background sync")
-        posService?.let { ensureSyncEngineAndPull(it, forceFullCatalog = false) }
+        Log.i(TAG, "Branch set from web: $branchId — scheduling background sync")
+        val service = posService ?: return
+        scheduleSyncEngineAndPull(service, forceFullCatalog = false)
     }
 
     /** WebView session cookies are scoped to the cashier URL scheme (usually HTTPS). */
@@ -118,32 +123,41 @@ class MainActivity : AppCompatActivity() {
             .firstOrNull()
     }
 
-    private fun ensureSyncEngineAndPull(service: PosService, forceFullCatalog: Boolean) {
+    private fun attachSyncEngineCallbacks(engine: SyncEngine) {
+        engine.onSyncStatusChanged = { status ->
+            runOnUiThread {
+                updateSyncBadge()
+                dispatchSyncStatusToWeb(status)
+            }
+        }
+        engine.onDownloadProgress = { progress ->
+            runOnUiThread {
+                if (!pageLoaded) {
+                    statusText.text = progress.message
+                }
+                updateSyncBadge()
+            }
+        }
+    }
+
+    private fun ensureSyncEngineStarted(service: PosService): SyncEngine? {
         if (!syncEngineStarted) {
             service.startSyncEngine(connectivity, ::syncSessionCookies)
             syncEngineStarted = true
-            service.syncEngine?.onSyncStatusChanged = { status ->
-                runOnUiThread {
-                    updateSyncBadge()
-                    dispatchSyncStatusToWeb(status)
-                }
-            }
-            service.syncEngine?.onDownloadProgress = { progress ->
-                runOnUiThread {
-                    if (!pageLoaded) {
-                        statusText.text = progress.message
-                    }
-                    updateSyncBadge()
-                }
-            }
+            service.syncEngine?.let { attachSyncEngineCallbacks(it) }
         }
-        val engine = service.syncEngine ?: return
-        if (forceFullCatalog || needsFullCatalogPull(service, session.branchId ?: 0)) {
-            engine.syncNowFull()
-        } else {
-            engine.syncNowIncremental()
+        return service.syncEngine
+    }
+
+    /** DB checks + sync trigger never run on the main thread (avoids ANR during catalog upsert). */
+    private fun scheduleSyncEngineAndPull(service: PosService, forceFullCatalog: Boolean) {
+        syncScheduler.execute {
+            val engine = ensureSyncEngineStarted(service) ?: return@execute
+            val branchId = session.branchId ?: 0
+            val full = forceFullCatalog || needsFullCatalogPull(service, branchId)
+            if (full) engine.syncNowFull() else engine.syncNowIncremental()
+            handler.post { updateSyncBadge() }
         }
-        updateSyncBadge()
     }
 
     private fun needsFullCatalogPull(service: PosService, branchId: Int): Boolean {
@@ -195,12 +209,7 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "PosService bound")
 
             service.ensureLocalServerStarted()
-            service.syncEngine?.onSyncStatusChanged = { status ->
-                runOnUiThread {
-                    updateSyncBadge()
-                    dispatchSyncStatusToWeb(status)
-                }
-            }
+            service.syncEngine?.let { attachSyncEngineCallbacks(it) }
 
             if (pageLoaded) {
                 onPageReadyForService(service)
@@ -279,6 +288,7 @@ class MainActivity : AppCompatActivity() {
         }
         posService = null
         connectivity.stop()
+        syncScheduler.shutdownNow()
         destroyWebView()
         super.onDestroy()
     }
@@ -736,34 +746,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onPageReadyForService(service: PosService) {
-        if (syncEngineStarted || syncEngineSchedulePending) return
+        if (syncEngineSchedulePending) return
         syncEngineSchedulePending = true
-        handler.postDelayed({
+        val startSync = {
             syncEngineSchedulePending = false
-            if (syncEngineStarted) return@postDelayed
-            service.startSyncEngine(connectivity, ::syncSessionCookies)
-            syncEngineStarted = true
-            service.syncEngine?.onSyncStatusChanged = { status ->
-                runOnUiThread {
-                    updateSyncBadge()
-                    dispatchSyncStatusToWeb(status)
-                }
+            if (session.branchId != null) {
+                scheduleSyncEngineAndPull(service, forceFullCatalog = false)
+            } else {
+                ensureSyncEngineStarted(service)
+                updateSyncBadge()
             }
-            service.syncEngine?.onDownloadProgress = { progress ->
-                runOnUiThread {
-                    statusText.text = progress.message
-                    updateSyncBadge()
-                }
+        }
+        // Defer until after first paint + idle so WebView/Alpine init is not competing with SQLite.
+        webView.post {
+            webView.post {
+                handler.postDelayed(startSync, 5_000)
             }
-            session.branchId?.let { branchId ->
-                if (needsFullCatalogPull(service, branchId)) {
-                    service.syncEngine?.syncNowFull()
-                } else {
-                    service.syncEngine?.syncNowIncremental()
-                }
-            }
-            updateSyncBadge()
-        }, 2_000)
+        }
     }
 
     private fun loadPosUrl() {
@@ -894,7 +893,7 @@ class MainActivity : AppCompatActivity() {
                     if (!isWebViewUsable()) return@runOnUiThread
                     Log.i(TAG, "Network online")
                     updateSyncBadge()
-                    posService?.syncEngine?.syncNowIncremental()
+                    posService?.let { scheduleSyncEngineAndPull(it, forceFullCatalog = false) }
                     if (isOfflineShown) hideOffline()
                     webView.evaluateJavascript(
                         "if(window.onINSAPOSConnectivity) window.onINSAPOSConnectivity(true);", null
@@ -946,22 +945,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun dispatchSyncStatusToWeb(status: SyncEngine.SyncStatus) {
         val engine = posService?.syncEngine ?: return
-        val json = engine.getStatusJson().toString()
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
-        val js = """
-            (function() {
-                var detail = JSON.parse('$json');
-                detail.engine_status = '${status.name}';
-                document.dispatchEvent(new CustomEvent('insapos:syncStatus', { detail: detail }));
-                if (window.posAppInstance && window.posAppInstance.applyNativeSyncStatus) {
-                    window.posAppInstance.applyNativeSyncStatus(detail);
-                }
-            })();
-        """.trimIndent()
-        if (!isWebViewUsable()) return
-        webView.post {
-            if (isWebViewUsable()) webView.evaluateJavascript(js, null)
+        syncScheduler.execute {
+            val json = engine.getStatusJson().toString()
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+            val js = """
+                (function() {
+                    var detail = JSON.parse('$json');
+                    detail.engine_status = '${status.name}';
+                    document.dispatchEvent(new CustomEvent('insapos:syncStatus', { detail: detail }));
+                    if (window.posAppInstance && window.posAppInstance.applyNativeSyncStatus) {
+                        window.posAppInstance.applyNativeSyncStatus(detail);
+                    }
+                })();
+            """.trimIndent()
+            handler.post {
+                if (!isWebViewUsable()) return@post
+                webView.evaluateJavascript(js, null)
+            }
         }
     }
 
@@ -1015,32 +1016,31 @@ class MainActivity : AppCompatActivity() {
     // --- JS Bridge ready notification ---
 
     private fun injectBridgeReady() {
-        val deviceInfo = getDeviceInfoJson()
-            .replace("'", "\\'")
-            .replace("\n", "")
-
         val isOnline = connectivity.isConnected()
-
-        val js = """
-            (function() {
-                window.INSAPOS_DEVICE = JSON.parse('$deviceInfo');
-                window.INSAPOS_SERVICE_PORT = ${PosLocalServer.PORT};
-                window.INSAPOS_OFFLINE_CAPABLE = true;
-                window.INSAPOS_ONLINE = $isOnline;
-                try {
-                    if (typeof INSAPOS !== 'undefined' && INSAPOS.getDeviceFingerprint) {
-                        localStorage.setItem('insapos_device_fingerprint', INSAPOS.getDeviceFingerprint());
-                    }
-                } catch (e) {}
-                if (window.onINSAPOSReady) window.onINSAPOSReady(window.INSAPOS_DEVICE);
-                document.dispatchEvent(new CustomEvent('insapos:ready', { detail: window.INSAPOS_DEVICE }));
-            })();
-        """.trimIndent()
-
-        if (isWebViewUsable()) {
-            webView.evaluateJavascript(js, null)
-        }
-        updateSyncBadge()
+        Thread {
+            val deviceInfo = getDeviceInfoJson()
+                .replace("'", "\\'")
+                .replace("\n", "")
+            val js = """
+                (function() {
+                    window.INSAPOS_DEVICE = JSON.parse('$deviceInfo');
+                    window.INSAPOS_SERVICE_PORT = ${PosLocalServer.PORT};
+                    window.INSAPOS_OFFLINE_CAPABLE = true;
+                    window.INSAPOS_ONLINE = $isOnline;
+                    try {
+                        if (typeof INSAPOS !== 'undefined' && INSAPOS.getDeviceFingerprint) {
+                            localStorage.setItem('insapos_device_fingerprint', INSAPOS.getDeviceFingerprint());
+                        }
+                    } catch (e) {}
+                    if (window.onINSAPOSReady) window.onINSAPOSReady(window.INSAPOS_DEVICE);
+                    document.dispatchEvent(new CustomEvent('insapos:ready', { detail: window.INSAPOS_DEVICE }));
+                })();
+            """.trimIndent()
+            handler.post {
+                if (isWebViewUsable()) webView.evaluateJavascript(js, null)
+                updateSyncBadge()
+            }
+        }.start()
     }
 
     // --- Camera barcode scanner ---

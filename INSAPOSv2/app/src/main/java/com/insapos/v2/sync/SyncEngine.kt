@@ -51,11 +51,30 @@ class SyncEngine(
     var lastSyncStatus: SyncStatus = SyncStatus.IDLE
         private set
 
+    @Volatile
+    private var cachedUnsyncedCount = 0
+
+    @Volatile
+    private var cachedSyncQueueCount = 0
+
+    /** Skip heavy catalog downloads while cashier is typing/scanning (inventory delta still runs). */
+    @Volatile
+    var catalogPullSuppressedUntilMs: Long = 0L
+
+    fun suppressCatalogPull(durationMs: Long = 120_000L) {
+        catalogPullSuppressedUntilMs = System.currentTimeMillis() + durationMs
+    }
+
+    fun refreshCachedCounts() {
+        cachedUnsyncedCount = db.getUnsyncedCount()
+        cachedSyncQueueCount = db.getSyncQueueCount()
+    }
+
     fun getStatusJson(): JSONObject {
         return JSONObject().apply {
             put("status", lastSyncStatus.name)
-            put("unsynced_count", db.getUnsyncedCount())
-            put("sync_queue_count", db.getSyncQueueCount())
+            put("unsynced_count", cachedUnsyncedCount)
+            put("sync_queue_count", cachedSyncQueueCount)
             put("consecutive_failures", consecutivePushFailures)
             put("last_conflict", lastConflict ?: JSONObject.NULL)
             put("online", connectivity.isConnected())
@@ -69,6 +88,7 @@ class SyncEngine(
     )
 
     fun start() {
+        scope.launch { refreshCachedCounts() }
         startPushLoop()
         startPullLoop()
         Log.i(TAG, "Sync engine started")
@@ -193,7 +213,8 @@ class SyncEngine(
             consecutivePushFailures
         }
 
-        val remaining = db.getUnsyncedCount()
+        refreshCachedCounts()
+        val remaining = cachedUnsyncedCount
         db.logSync("push", "transactions", synced, "completed")
         updateStatus(if (remaining > 0) SyncStatus.PARTIAL else SyncStatus.IDLE)
         return synced > 0
@@ -277,7 +298,8 @@ class SyncEngine(
                 return
             }
 
-            val needsCatalog = forceCatalog || fullSync || isCatalogStale(branchId)
+            val catalogSuppressed = System.currentTimeMillis() < catalogPullSuppressedUntilMs
+            val needsCatalog = !catalogSuppressed && (forceCatalog || fullSync || isCatalogStale(branchId))
             if (needsCatalog) {
                 emitDownloadProgress("products", 15, "Downloading products…")
                 pullProductCatalog(branchId)
@@ -294,6 +316,7 @@ class SyncEngine(
             pullInventory(branchId, fullSync)
 
             markCacheReady(branchId)
+            refreshCachedCounts()
 
             updateStatus(SyncStatus.IDLE)
         } catch (e: Exception) {
@@ -483,6 +506,9 @@ class SyncEngine(
 
     private fun updateStatus(status: SyncStatus) {
         lastSyncStatus = status
+        if (status == SyncStatus.PUSHING || status == SyncStatus.PULLING || status == SyncStatus.IDLE) {
+            refreshCachedCounts()
+        }
         onSyncStatusChanged?.invoke(status)
     }
 

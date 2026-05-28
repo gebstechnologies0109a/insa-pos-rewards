@@ -78,7 +78,7 @@ class PosEngine(private val db: OfflineDatabase) {
             put("unsynced_count", unsynced)
             put("sync_queue_count", queueCount)
             put("products", db.getProductCount())
-            put("customers", db.getCustomers().length())
+            put("customers", db.getCustomerCount())
         }
 
     fun getStats(): JSONObject = db.getOfflineStats().apply { put("ok", true) }
