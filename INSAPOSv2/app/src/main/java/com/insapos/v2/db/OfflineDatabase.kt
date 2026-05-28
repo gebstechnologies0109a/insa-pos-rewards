@@ -673,7 +673,7 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             put("member_id", txn.optInt("member_id", 0))
             put("items_json", txn.optString("items_json", "[]"))
             put("subtotal", txn.optDouble("subtotal", 0.0))
-            put("discount", txn.optDouble("discount", 0.0))
+            put("discount", txn.optDouble("discount", txn.optDouble("discount_total", 0.0)))
             put("tax", txn.optDouble("tax", 0.0))
             put("total", txn.optDouble("total", 0.0))
             put("payment_method", txn.optString("payment_method", "cash"))

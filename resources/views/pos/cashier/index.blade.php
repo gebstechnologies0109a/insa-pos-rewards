@@ -1121,6 +1121,28 @@
 
         <p class="text-[10px] lg:text-xs text-gray-500 mb-3 lg:mb-4" x-text="printerStatusMessage"></p>
 
+        <!-- Paper & font layout -->
+        <div class="bg-gray-50 border rounded-lg p-3 lg:p-4 mb-3 lg:mb-4 space-y-3">
+            <div class="text-[9px] lg:text-xs font-bold text-gray-500 uppercase">Receipt Layout</div>
+            <div>
+                <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-1">Paper Size</label>
+                <select x-model="printerPaperSize" @change="savePrinterLayoutSettings()"
+                        class="w-full p-2 lg:p-3 border rounded-lg text-xs lg:text-sm focus:border-blue-500 focus:outline-none">
+                    <option value="57mm">57mm (58mm thermal)</option>
+                    <option value="87mm">87mm (80mm thermal)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] lg:text-sm font-medium text-gray-600 mb-1">Font Mode</label>
+                <select x-model="printerFontMode" @change="savePrinterLayoutSettings()"
+                        class="w-full p-2 lg:p-3 border rounded-lg text-xs lg:text-sm focus:border-blue-500 focus:outline-none">
+                    <option value="paper_size">Paper Size (standard)</option>
+                    <option value="fine_print">Fine Print (condensed)</option>
+                </select>
+            </div>
+            <p class="text-[10px] lg:text-xs text-gray-400" x-text="printerLayoutHint"></p>
+        </div>
+
         <!-- Step 1: Scan -->
         <div x-show="printerStep === 1" class="space-y-3">
             <p class="text-[11px] lg:text-sm text-gray-600">Search for Bluetooth, USB, or built-in thermal printers on this device.</p>
@@ -1493,6 +1515,9 @@ function posApp() {
         printerStatusMessage: '',
         printerDefault: { connected: false, name: null, type: null },
         printerTestPassed: false,
+        printerPaperSize: '57mm',
+        printerFontMode: 'paper_size',
+        printerLayoutHint: '',
 
         showIoModal: false,
         ioMenuView: true,
@@ -2155,6 +2180,38 @@ function posApp() {
             this.printerStatusMessage = 'Scan for available printers on this device.';
             this.showPrinterModal = true;
             await this.loadPrinterDefaultStatus();
+            await this.loadPrinterLayoutSettings();
+        },
+
+        async loadPrinterLayoutSettings() {
+            if (typeof INSABuddy === 'undefined') return;
+            try {
+                const data = await INSABuddy.getPrinterSettings();
+                if (data) {
+                    this.printerPaperSize = data.paper_size || '57mm';
+                    this.printerFontMode = data.font_mode || 'paper_size';
+                    const w = data.char_width || 32;
+                    const dots = data.dot_width || 384;
+                    this.printerLayoutHint = `${w} chars / ${dots} dots per line`;
+                }
+            } catch {
+                this.printerLayoutHint = '32 chars / 384 dots (default)';
+            }
+        },
+
+        async savePrinterLayoutSettings() {
+            if (typeof INSABuddy === 'undefined') return;
+            try {
+                const data = await INSABuddy.savePrinterSettings(this.printerPaperSize, this.printerFontMode);
+                if (data && data.ok) {
+                    const w = data.char_width || 32;
+                    const dots = data.dot_width || 384;
+                    this.printerLayoutHint = `${w} chars / ${dots} dots per line`;
+                    this.showToast('Printer layout saved', 'success', 1500);
+                }
+            } catch {
+                this.showToast('Could not save printer layout', 'warning');
+            }
         },
 
         async loadPrinterDefaultStatus() {

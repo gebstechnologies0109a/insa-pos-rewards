@@ -27,13 +27,31 @@ class SyncPayloadBuilder(
             ?: resolveCashierIdFromQueue(localId)
             ?: 1
 
+        val itemDiscountSum = items.sumOf { it.discount }
+        val discountTotal = enriched.optDouble(
+            "discount_total",
+            enriched.optDouble("discount", 0.0),
+        )
+        val orderDiscount = enriched.optDouble("order_discount", -1.0).takeIf { it >= 0 }
+            ?: (discountTotal - itemDiscountSum).coerceAtLeast(0.0)
+
+        val subtotal = enriched.optDouble("subtotal", -1.0).takeIf { it >= 0 }
+            ?: items.sumOf { it.qty * it.price }
+
+        val total = enriched.optDouble("total", -1.0).takeIf { it >= 0 }
+            ?: (subtotal - discountTotal).coerceAtLeast(0.0)
+
         return SyncPayload(
             localId = localId,
             branchId = branchId,
             cashierId = cashierId,
             paymentMethod = enriched.optString("payment_method", "cash"),
-            amountTendered = enriched.optDouble("amount_tendered", enriched.optDouble("total", 0.0)),
+            amountTendered = enriched.optDouble("amount_tendered", total),
             items = items,
+            subtotal = subtotal,
+            discountTotal = discountTotal,
+            orderDiscount = orderDiscount,
+            total = total,
             shiftId = enriched.optInt("shift_id", 0).takeIf { it > 0 },
             memberId = enriched.optInt("member_id", enriched.optInt("customer_id", 0)).takeIf { it > 0 },
             createdAt = enriched.optString("created_at", null),

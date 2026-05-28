@@ -30,9 +30,12 @@ class PosSaleProcessor(
             }
         }
 
-        val subtotal = sumSubtotal(items)
+        val subtotal = payload.optDouble("subtotal", sumSubtotal(items))
         val discount = payload.optDouble("discount_total", payload.optDouble("discount", 0.0))
-        val total = payload.optDouble("total", subtotal - discount)
+        val orderDiscount = payload.optDouble("order_discount", -1.0).let {
+            if (it >= 0) it else (discount - sumItemDiscounts(items)).coerceAtLeast(0.0)
+        }
+        val total = payload.optDouble("total", (subtotal - discount).coerceAtLeast(0.0))
         val tendered = payload.optDouble("amount_tendered", total)
         val change = payload.optDouble("change_due", payload.optDouble("change_amount", (tendered - total).coerceAtLeast(0.0)))
 
@@ -47,6 +50,7 @@ class PosSaleProcessor(
             put("subtotal", subtotal)
             put("discount", discount)
             put("discount_total", discount)
+            put("order_discount", orderDiscount)
             put("tax", payload.optDouble("tax", 0.0))
             put("total", total)
             put("payment_method", payload.optString("payment_method", "cash"))
@@ -105,6 +109,14 @@ class PosSaleProcessor(
             val qty = item.optDouble("qty", item.optDouble("quantity", 1.0))
             val price = item.optDouble("price", 0.0)
             sum += qty * price
+        }
+        return sum
+    }
+
+    private fun sumItemDiscounts(items: JSONArray): Double {
+        var sum = 0.0
+        for (i in 0 until items.length()) {
+            sum += items.getJSONObject(i).optDouble("discount", 0.0)
         }
         return sum
     }

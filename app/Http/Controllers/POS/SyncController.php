@@ -56,6 +56,10 @@ class SyncController extends Controller
             'items.*.qty'        => 'required|numeric|min:0.001',
             'items.*.price'      => 'required|numeric|min:0',
             'items.*.discount'   => 'nullable|numeric|min:0',
+            'subtotal'           => 'nullable|numeric|min:0',
+            'discount_total'     => 'nullable|numeric|min:0',
+            'order_discount'     => 'nullable|numeric|min:0',
+            'total'              => 'nullable|numeric|min:0',
             'created_at'         => 'nullable|string',
             'sales'              => 'nullable|array',
         ]);

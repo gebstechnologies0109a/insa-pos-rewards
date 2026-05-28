@@ -10,6 +10,10 @@ data class SyncPayload(
     val paymentMethod: String,
     val amountTendered: Double,
     val items: List<SyncPayloadItem>,
+    val subtotal: Double? = null,
+    val discountTotal: Double? = null,
+    val orderDiscount: Double? = null,
+    val total: Double? = null,
     val shiftId: Int? = null,
     val memberId: Int? = null,
     val createdAt: String? = null,
@@ -21,6 +25,10 @@ data class SyncPayload(
         put("cashier_id", cashierId)
         put("payment_method", paymentMethod)
         put("amount_tendered", amountTendered)
+        subtotal?.let { put("subtotal", it) }
+        discountTotal?.let { put("discount_total", it) }
+        orderDiscount?.let { put("order_discount", it) }
+        total?.let { put("total", it) }
         shiftId?.let { put("shift_id", it) }
         memberId?.let { put("member_id", it) }
         createdAt?.let { put("created_at", it) }
