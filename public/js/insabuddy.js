@@ -121,8 +121,7 @@ const INSABuddy = {
      * Print a receipt from structured data.
      * Generates ESC/POS commands for a formatted receipt.
      */
-    async printReceipt(receipt) {
-        const settings = await this.getPrinterSettings();
+    buildReceiptText(receipt, settings) {
         const w = settings.char_width || 32;
         const labelWidth = Math.max(w - 10, Math.floor(w * 0.65));
         const valueWidth = w - labelWidth;
@@ -130,11 +129,11 @@ const INSABuddy = {
         const lines = [];
         const divider = '='.repeat(w);
 
-        lines.push('\x1B\x61\x01'); // center align
+        lines.push('\x1B\x61\x01');
         lines.push((receipt.storeName || (window.location.hostname.includes('epayplus') ? 'ePay Plus' : 'INSA POS')).substring(0, w));
         if (receipt.branchName) lines.push(String(receipt.branchName).substring(0, w));
         lines.push(divider);
-        lines.push('\x1B\x61\x00'); // left align
+        lines.push('\x1B\x61\x00');
 
         if (receipt.saleNumber) {
             lines.push(`Sale #: ${receipt.saleNumber}`.substring(0, w));
@@ -165,12 +164,26 @@ const INSABuddy = {
             lines.push(`${'Change:'.padEnd(labelWidth)}${(receipt.change || 0).toFixed(2).padStart(valueWidth)}`.substring(0, w));
         }
         lines.push('');
-        lines.push('\x1B\x61\x01'); // center
+        lines.push('\x1B\x61\x01');
         lines.push('Thank you for your purchase!');
         lines.push('');
         lines.push('');
+        return lines.join('\n');
+    },
 
-        return this.printText(lines.join('\n'));
+    async printReceipt(receipt) {
+        const settings = await this.getPrinterSettings();
+        const text = this.buildReceiptText(receipt, settings);
+        if (typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.printReceipt === 'function') {
+            try {
+                const raw = window.INSAPOS.printReceipt(JSON.stringify({ text }));
+                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (data && data.ok) return data;
+            } catch (e) {
+                console.warn('[INSABuddy] native printReceipt failed, falling back to HTTP', e);
+            }
+        }
+        return this.printText(text);
     },
 
     /**

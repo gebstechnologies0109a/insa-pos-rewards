@@ -23,7 +23,28 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     private val dbLock = Any()
 
-    private inline fun <T> dbOp(block: () -> T): T = synchronized(dbLock) { block() }
+    /** Single-writer lock — all SQLite access must go through this to avoid pool exhaustion. */
+    private inline fun <T> withDb(block: () -> T): T = synchronized(dbLock) { block() }
+
+    private inline fun <T> dbOp(block: () -> T): T = withDb(block)
+
+    override fun onConfigure(db: SQLiteDatabase) {
+        super.onConfigure(db)
+        db.enableWriteAheadLogging()
+    }
+
+    /** Atomic write; return false to roll back. */
+    fun runInTransaction(block: (SQLiteDatabase) -> Boolean): Boolean = withDb {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val ok = block(db)
+            if (ok) db.setTransactionSuccessful()
+            ok
+        } finally {
+            db.endTransaction()
+        }
+    }
 
     override fun onCreate(db: SQLiteDatabase) {
         createV1Tables(db)
@@ -361,13 +382,25 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     // --- Products ---
 
-    fun upsertProducts(products: JSONArray): Int = dbOp {
+    fun upsertProducts(products: JSONArray): Int {
+        var count = 0
+        val batchSize = 80
+        var i = 0
+        while (i < products.length()) {
+            val end = minOf(i + batchSize, products.length())
+            count += upsertProductsBatch(products, i, end)
+            i += batchSize
+        }
+        return count
+    }
+
+    private fun upsertProductsBatch(products: JSONArray, start: Int, end: Int): Int = withDb {
         val db = writableDatabase
         var count = 0
         db.beginTransaction()
         try {
-            for (i in 0 until products.length()) {
-                val p = products.getJSONObject(i)
+            for (j in start until end) {
+                val p = products.getJSONObject(j)
                 val cv = ContentValues().apply {
                     put("server_id", p.optInt("id"))
                     put("barcode", p.optString("barcode", ""))
@@ -464,24 +497,26 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         arr
     }
 
-    fun getProductStock(productId: Int): Double {
+    fun getProductStock(productId: Int): Double = withDb {
         val cursor = readableDatabase.rawQuery(
             "SELECT stock FROM products WHERE server_id = ? OR id = ? LIMIT 1",
             arrayOf(productId.toString(), productId.toString())
         )
-        val stock = if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0
-        cursor.close()
-        return stock
+        try {
+            if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0
+        } finally {
+            cursor.close()
+        }
     }
 
-    fun adjustProductStock(productId: Int, delta: Double) {
+    fun adjustProductStock(productId: Int, delta: Double) = withDb {
         writableDatabase.execSQL(
             "UPDATE products SET stock = MAX(0, stock + ?), updated_at = ? WHERE server_id = ? OR id = ?",
             arrayOf(delta, now(), productId.toString(), productId.toString())
         )
     }
 
-    fun recordStockMovement(productId: Int, qty: Double, movementType: String, reference: String) {
+    fun recordStockMovement(productId: Int, qty: Double, movementType: String, reference: String) = withDb {
         val cv = ContentValues().apply {
             put("local_id", java.util.UUID.randomUUID().toString())
             put("product_id", productId)
@@ -494,26 +529,53 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         writableDatabase.insert("stock_movements", null, cv)
     }
 
-    fun getInventorySummary(): JSONArray {
+    fun getInventorySummary(): JSONArray = withDb {
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
             """SELECT server_id, name, barcode, stock, category, updated_at
                FROM products WHERE is_active = 1 ORDER BY name""", null
         )
-        while (cursor.moveToNext()) {
-            arr.put(JSONObject().apply {
-                put("product_id", cursor.getLong(cursor.getColumnIndexOrThrow("server_id")))
-                put("name", cursor.getString(cursor.getColumnIndexOrThrow("name")))
-                put("barcode", cursor.getString(cursor.getColumnIndexOrThrow("barcode")))
-                put("stock", cursor.getDouble(cursor.getColumnIndexOrThrow("stock")))
-                put("category", cursor.getString(cursor.getColumnIndexOrThrow("category")))
-            })
+        try {
+            while (cursor.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("product_id", cursor.getLong(cursor.getColumnIndexOrThrow("server_id")))
+                    put("name", cursor.getString(cursor.getColumnIndexOrThrow("name")))
+                    put("barcode", cursor.getString(cursor.getColumnIndexOrThrow("barcode")))
+                    put("stock", cursor.getDouble(cursor.getColumnIndexOrThrow("stock")))
+                    put("category", cursor.getString(cursor.getColumnIndexOrThrow("category")))
+                })
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        return arr
+        arr
     }
 
-    fun savePosSale(txn: JSONObject) {
+    /** Single transaction for sale row + legacy txn + sync queue + receipt. */
+    fun persistSale(txn: JSONObject, localId: String, receipt: JSONObject) = withDb {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            writePosSaleLocked(db, txn)
+            writeTransactionLocked(db, txn)
+            writeSyncQueueLocked(db, "push-transaction", "transactions_local", localId, txn)
+            writeReceiptLocked(
+                db, localId,
+                receipt.optString("json", txn.toString()),
+                receipt.optString("text", ""),
+                receipt.optString("html", ""),
+            )
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun savePosSale(txn: JSONObject) = withDb {
+        writePosSaleLocked(writableDatabase, txn)
+    }
+
+    private fun writePosSaleLocked(db: SQLiteDatabase, txn: JSONObject) {
         val localId = txn.getString("local_id")
         val cv = ContentValues().apply {
             put("local_id", localId)
@@ -532,9 +594,9 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             put("synced", 0)
             put("created_at", txn.optString("created_at", now()))
         }
-        writableDatabase.insertWithOnConflict("pos_sales", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        db.insertWithOnConflict("pos_sales", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
 
-        writableDatabase.delete("pos_sale_items", "sale_local_id = ?", arrayOf(localId))
+        db.delete("pos_sale_items", "sale_local_id = ?", arrayOf(localId))
         val items = try {
             JSONArray(txn.optString("items_json", "[]"))
         } catch (_: Exception) {
@@ -551,30 +613,34 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
                 put("discount", item.optDouble("discount", 0.0))
                 put("data_json", item.toString())
             }
-            writableDatabase.insert("pos_sale_items", null, itemCv)
+            db.insert("pos_sale_items", null, itemCv)
         }
     }
 
-    fun getReceipt(localId: String): JSONObject? {
+    fun getReceipt(localId: String): JSONObject? = withDb {
         val cursor = readableDatabase.rawQuery(
             "SELECT * FROM receipts WHERE transaction_local_id = ? ORDER BY id DESC LIMIT 1",
             arrayOf(localId)
         )
-        val result = if (cursor.moveToFirst()) cursorToJson(cursor) else null
-        cursor.close()
-        return result
+        try {
+            if (cursor.moveToFirst()) cursorToJson(cursor) else null
+        } finally {
+            cursor.close()
+        }
     }
 
-    fun getActiveShift(): JSONObject? {
+    fun getActiveShift(): JSONObject? = withDb {
         val cursor = readableDatabase.rawQuery(
             "SELECT * FROM shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1", null
         )
-        val result = if (cursor.moveToFirst()) cursorToJson(cursor) else null
-        cursor.close()
-        return result
+        try {
+            if (cursor.moveToFirst()) cursorToJson(cursor) else null
+        } finally {
+            cursor.close()
+        }
     }
 
-    fun openLocalShift(localId: String, branchId: Int, cashierId: Int, openingCash: Double): JSONObject {
+    fun openLocalShift(localId: String, branchId: Int, cashierId: Int, openingCash: Double): JSONObject = withDb {
         val cv = ContentValues().apply {
             put("local_id", localId)
             put("branch_id", branchId)
@@ -596,7 +662,7 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         }
     }
 
-    fun closeLocalShift(localId: String, closingCash: Double): JSONObject {
+    fun closeLocalShift(localId: String, closingCash: Double): JSONObject = withDb {
         val cv = ContentValues().apply {
             put("closing_cash", closingCash)
             put("status", "closed")
@@ -607,12 +673,14 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         val cursor = readableDatabase.rawQuery(
             "SELECT * FROM shifts WHERE local_id = ? LIMIT 1", arrayOf(localId)
         )
-        val result = if (cursor.moveToFirst()) cursorToJson(cursor) else JSONObject()
-        cursor.close()
-        return result
+        try {
+            if (cursor.moveToFirst()) cursorToJson(cursor) else JSONObject()
+        } finally {
+            cursor.close()
+        }
     }
 
-    fun upsertCategories(categories: JSONArray): Int {
+    fun upsertCategories(categories: JSONArray): Int = withDb {
         var count = 0
         val db = writableDatabase
         db.beginTransaction()
@@ -644,25 +712,39 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         return count
     }
 
-    fun getProductByBarcode(barcode: String): JSONObject? {
+    fun getProductByBarcode(barcode: String): JSONObject? = withDb {
         val cursor = readableDatabase.rawQuery(
             "SELECT * FROM products WHERE barcode = ? AND is_active = 1 LIMIT 1",
             arrayOf(barcode)
         )
-        val result = if (cursor.moveToFirst()) cursorToJson(cursor) else null
-        cursor.close()
-        return result
+        try {
+            if (cursor.moveToFirst()) cursorToJson(cursor) else null
+        } finally {
+            cursor.close()
+        }
     }
 
     // --- Customers ---
 
     fun upsertCustomers(customers: JSONArray): Int {
+        var count = 0
+        val batchSize = 80
+        var i = 0
+        while (i < customers.length()) {
+            val end = minOf(i + batchSize, customers.length())
+            count += upsertCustomersBatch(customers, i, end)
+            i += batchSize
+        }
+        return count
+    }
+
+    private fun upsertCustomersBatch(customers: JSONArray, start: Int, end: Int): Int = withDb {
         val db = writableDatabase
         var count = 0
         db.beginTransaction()
         try {
-            for (i in 0 until customers.length()) {
-                val c = customers.getJSONObject(i)
+            for (j in start until end) {
+                val c = customers.getJSONObject(j)
                 val cv = ContentValues().apply {
                     put("server_id", c.optInt("id"))
                     put("name", c.optString("name"))
@@ -677,34 +759,44 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
                     "SELECT id FROM customers WHERE server_id = ?",
                     arrayOf(c.optInt("id").toString())
                 )
-                if (existing.moveToFirst()) {
-                    db.update("customers", cv, "server_id = ?", arrayOf(c.optInt("id").toString()))
-                } else {
-                    db.insert("customers", null, cv)
+                try {
+                    if (existing.moveToFirst()) {
+                        db.update("customers", cv, "server_id = ?", arrayOf(c.optInt("id").toString()))
+                    } else {
+                        db.insert("customers", null, cv)
+                    }
+                    count++
+                } finally {
+                    existing.close()
                 }
-                existing.close()
-                count++
             }
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
         }
-        return count
+        count
     }
 
-    fun getCustomers(): JSONArray {
+    fun getCustomers(): JSONArray = withDb {
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery("SELECT * FROM customers ORDER BY name", null)
-        while (cursor.moveToNext()) {
-            arr.put(cursorToJson(cursor))
+        try {
+            while (cursor.moveToNext()) {
+                arr.put(cursorToJson(cursor))
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        return arr
+        arr
     }
 
     // --- Transactions ---
 
-    fun saveTransaction(txn: JSONObject): Long {
+    fun saveTransaction(txn: JSONObject): Long = withDb {
+        writeTransactionLocked(writableDatabase, txn)
+    }
+
+    private fun writeTransactionLocked(db: SQLiteDatabase, txn: JSONObject): Long {
         val cv = ContentValues().apply {
             put("local_id", txn.getString("local_id"))
             put("type", txn.optString("type", "sale"))
@@ -728,24 +820,56 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             put("synced", 0)
             put("created_at", now())
         }
-        return writableDatabase.insertWithOnConflict(
+        return db.insertWithOnConflict(
             "transactions_local", null, cv, SQLiteDatabase.CONFLICT_REPLACE
         )
     }
 
-    fun getUnsyncedTransactions(): JSONArray {
+    private fun writeSyncQueueLocked(
+        db: SQLiteDatabase,
+        action: String,
+        tableName: String,
+        recordId: String,
+        payload: JSONObject,
+    ) {
+        val cv = ContentValues().apply {
+            put("action", action)
+            put("table_name", tableName)
+            put("record_id", recordId)
+            put("payload", payload.toString())
+            put("status", "pending")
+            put("created_at", now())
+        }
+        db.insert("sync_queue", null, cv)
+    }
+
+    private fun writeReceiptLocked(db: SQLiteDatabase, localId: String, json: String, text: String, html: String) {
+        val cv = ContentValues().apply {
+            put("transaction_local_id", localId)
+            put("receipt_json", json)
+            put("receipt_text", text)
+            put("receipt_html", html)
+            put("created_at", now())
+        }
+        db.insert("receipts", null, cv)
+    }
+
+    fun getUnsyncedTransactions(): JSONArray = withDb {
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
             "SELECT * FROM transactions_local WHERE synced = 0 ORDER BY created_at", null
         )
-        while (cursor.moveToNext()) {
-            arr.put(cursorToJson(cursor))
+        try {
+            while (cursor.moveToNext()) {
+                arr.put(cursorToJson(cursor))
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        return arr
+        arr
     }
 
-    fun markTransactionSynced(localId: String, serverId: Int) {
+    fun markTransactionSynced(localId: String, serverId: Int) = withDb {
         val cv = ContentValues().apply {
             put("synced", 1)
             put("server_id", serverId)
@@ -754,11 +878,13 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         writableDatabase.update("transactions_local", cv, "local_id = ?", arrayOf(localId))
     }
 
-    fun getTransactionCount(): Int {
+    fun getTransactionCount(): Int = withDb {
         val cursor = readableDatabase.rawQuery("SELECT COUNT(*) FROM transactions_local", null)
-        val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
-        cursor.close()
-        return count
+        try {
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        } finally {
+            cursor.close()
+        }
     }
 
     fun getUnsyncedCount(): Int = dbOp {
@@ -774,53 +900,49 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     // --- Sync Queue ---
 
-    fun enqueueSyncAction(action: String, tableName: String, recordId: String, payload: JSONObject) {
-        val cv = ContentValues().apply {
-            put("action", action)
-            put("table_name", tableName)
-            put("record_id", recordId)
-            put("payload", payload.toString())
-            put("status", "pending")
-            put("created_at", now())
-        }
-        writableDatabase.insert("sync_queue", null, cv)
+    fun enqueueSyncAction(action: String, tableName: String, recordId: String, payload: JSONObject) = withDb {
+        writeSyncQueueLocked(writableDatabase, action, tableName, recordId, payload)
     }
 
-    fun getSyncQueuePayloadForLocalId(localId: String): JSONObject? {
+    fun getSyncQueuePayloadForLocalId(localId: String): JSONObject? = withDb {
         val cursor = readableDatabase.rawQuery(
             """SELECT payload FROM sync_queue
                WHERE record_id = ? AND status IN ('pending', 'failed')
                ORDER BY id DESC LIMIT 1""",
             arrayOf(localId)
         )
-        val result = if (cursor.moveToFirst()) {
-            try {
-                JSONObject(cursor.getString(cursor.getColumnIndexOrThrow("payload")))
-            } catch (_: Exception) {
-                null
-            }
-        } else null
-        cursor.close()
-        return result
+        try {
+            if (cursor.moveToFirst()) {
+                try {
+                    JSONObject(cursor.getString(cursor.getColumnIndexOrThrow("payload")))
+                } catch (_: Exception) {
+                    null
+                }
+            } else null
+        } finally {
+            cursor.close()
+        }
     }
 
-    fun getPosSaleContext(localId: String): JSONObject? {
+    fun getPosSaleContext(localId: String): JSONObject? = withDb {
         val cursor = readableDatabase.rawQuery(
             "SELECT branch_id, cashier_id, shift_id FROM pos_sales WHERE local_id = ? LIMIT 1",
             arrayOf(localId)
         )
-        val result = if (cursor.moveToFirst()) {
-            JSONObject().apply {
-                put("branch_id", cursor.getInt(0))
-                put("cashier_id", cursor.getInt(1))
-                put("shift_id", cursor.getInt(2))
-            }
-        } else null
-        cursor.close()
-        return result
+        try {
+            if (cursor.moveToFirst()) {
+                JSONObject().apply {
+                    put("branch_id", cursor.getInt(0))
+                    put("cashier_id", cursor.getInt(1))
+                    put("shift_id", cursor.getInt(2))
+                }
+            } else null
+        } finally {
+            cursor.close()
+        }
     }
 
-    fun getPendingSyncItems(limit: Int = 50): JSONArray {
+    fun getPendingSyncItems(limit: Int = 50): JSONArray = withDb {
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
             """SELECT * FROM sync_queue
@@ -829,18 +951,21 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
                LIMIT ?""",
             arrayOf(limit.toString())
         )
-        while (cursor.moveToNext()) {
-            arr.put(cursorToJson(cursor))
+        try {
+            while (cursor.moveToNext()) {
+                arr.put(cursorToJson(cursor))
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        return arr
+        arr
     }
 
-    fun markSyncItemDone(id: Long) {
+    fun markSyncItemDone(id: Long) = withDb {
         writableDatabase.delete("sync_queue", "id = ?", arrayOf(id.toString()))
     }
 
-    fun markSyncItemFailed(id: Long, error: String) {
+    fun markSyncItemFailed(id: Long, error: String) = withDb {
         if (isPermanentPriceConflict(error)) {
             writableDatabase.execSQL(
                 "UPDATE sync_queue SET attempts = attempts + 1, error = ?, status = 'failed' WHERE id = ?",
@@ -874,20 +999,13 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     // --- Receipts ---
 
-    fun saveReceipt(transactionLocalId: String, json: String, text: String = "", html: String = "") {
-        val cv = ContentValues().apply {
-            put("transaction_local_id", transactionLocalId)
-            put("receipt_json", json)
-            put("receipt_text", text)
-            put("receipt_html", html)
-            put("created_at", now())
-        }
-        writableDatabase.insert("receipts", null, cv)
+    fun saveReceipt(transactionLocalId: String, json: String, text: String = "", html: String = "") = withDb {
+        writeReceiptLocked(writableDatabase, transactionLocalId, json, text, html)
     }
 
     // --- Settings ---
 
-    fun setSetting(key: String, value: String) {
+    fun setSetting(key: String, value: String) = withDb {
         val cv = ContentValues().apply {
             put("key", key)
             put("value", value)
@@ -895,18 +1013,20 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         writableDatabase.insertWithOnConflict("settings", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
-    fun getSetting(key: String): String? {
+    fun getSetting(key: String): String? = withDb {
         val cursor = readableDatabase.rawQuery(
             "SELECT value FROM settings WHERE key = ?", arrayOf(key)
         )
-        val value = if (cursor.moveToFirst()) cursor.getString(0) else null
-        cursor.close()
-        return value
+        try {
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        } finally {
+            cursor.close()
+        }
     }
 
     // --- Sync Log ---
 
-    fun logSync(direction: String, table: String, count: Int, status: String, error: String? = null) {
+    fun logSync(direction: String, table: String, count: Int, status: String, error: String? = null) = withDb {
         val cv = ContentValues().apply {
             put("direction", direction)
             put("table_name", table)
@@ -931,7 +1051,7 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         }
     }
 
-    fun getFefoBatches(productId: Int): JSONArray {
+    fun getFefoBatches(productId: Int): JSONArray = withDb {
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
             """SELECT id, product_id, qty, expiry_date, batch_code
@@ -941,27 +1061,30 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
                         expiry_date ASC, id ASC""",
             arrayOf(productId.toString())
         )
-        while (cursor.moveToNext()) {
-            arr.put(JSONObject().apply {
-                put("id", cursor.getLong(0))
-                put("product_id", cursor.getInt(1))
-                put("qty", cursor.getDouble(2))
-                put("expiry_date", cursor.getString(3))
-                put("batch_code", cursor.getString(4))
-            })
+        try {
+            while (cursor.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("id", cursor.getLong(0))
+                    put("product_id", cursor.getInt(1))
+                    put("qty", cursor.getDouble(2))
+                    put("expiry_date", cursor.getString(3))
+                    put("batch_code", cursor.getString(4))
+                })
+            }
+        } finally {
+            cursor.close()
         }
-        cursor.close()
-        return arr
+        arr
     }
 
-    fun deductBatchQty(batchRowId: Long, qty: Double) {
+    fun deductBatchQty(batchRowId: Long, qty: Double) = withDb {
         writableDatabase.execSQL(
             "UPDATE inventory_batches SET qty = MAX(0, qty - ?) WHERE id = ?",
             arrayOf(qty, batchRowId.toString())
         )
     }
 
-    fun upsertInventoryBatches(batches: JSONArray): Int {
+    fun upsertInventoryBatches(batches: JSONArray): Int = withDb {
         var count = 0
         val db = writableDatabase
         db.beginTransaction()
@@ -1001,7 +1124,7 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         return count
     }
 
-    fun upsertExpiryAlerts(alerts: JSONArray): Int {
+    fun upsertExpiryAlerts(alerts: JSONArray): Int = withDb {
         var count = 0
         val db = writableDatabase
         db.beginTransaction()
@@ -1041,9 +1164,11 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     private fun countTable(table: String): Int {
         val cursor = readableDatabase.rawQuery("SELECT COUNT(*) FROM $table", null)
-        val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
-        cursor.close()
-        return count
+        return try {
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        } finally {
+            cursor.close()
+        }
     }
 
     private fun cursorToJson(cursor: Cursor): JSONObject {

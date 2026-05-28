@@ -61,9 +61,25 @@ class PosService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder {
+        ensureOfflineReady()
         ensureLocalServerStarted()
         scheduleDeferredPrinterInit()
         return binder
+    }
+
+    /** SQLite + POS engine must exist before NanoHTTPD serves /local/sale. */
+    fun ensureOfflineReady() {
+        if (offlineDb != null && posEngine != null) return
+        synchronized(serverLock) {
+            if (offlineDb != null && posEngine != null) return
+            try {
+                offlineDb = OfflineDatabase(this)
+                posEngine = offlineDb?.let { PosEngine(it) }
+                Log.i(TAG, "Offline database and POS engine ready")
+            } catch (e: Exception) {
+                Log.e(TAG, "Offline DB init failed", e)
+            }
+        }
     }
 
     override fun onCreate() {
@@ -73,15 +89,7 @@ class PosService : Service() {
 
         registerUsbReceiver()
 
-        scope.launch {
-            try {
-                offlineDb = OfflineDatabase(this@PosService)
-                posEngine = offlineDb?.let { PosEngine(it) }
-                Log.i(TAG, "Offline database and POS engine initialized")
-            } catch (e: Exception) {
-                Log.e(TAG, "Offline DB init failed", e)
-            }
-        }
+        ensureOfflineReady()
     }
 
     /** Lazily creates [PrinterManager]. Print paths init on a worker thread so deferred startup does not block receipts. */
@@ -128,7 +136,7 @@ class PosService : Service() {
         if (printerInitScheduled || printerManager != null) return
         printerInitScheduled = true
         scope.launch {
-            delay(120_000)
+            delay(15_000)
             if (printerManager == null) initPrinterBlocking()
         }
     }

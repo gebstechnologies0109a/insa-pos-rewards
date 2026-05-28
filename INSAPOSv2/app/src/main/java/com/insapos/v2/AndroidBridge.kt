@@ -13,7 +13,8 @@ class AndroidBridge(private val activity: MainActivity) {
     companion object {
         private const val TAG = "INSAPOSv3Bridge"
         const val BRIDGE_NAME = "INSAPOS"
-        private const val LOCAL_HTTP_TIMEOUT_SEC = 12L
+        private const val LOCAL_HTTP_TIMEOUT_SEC = 8L
+        private const val SALE_HTTP_TIMEOUT_SEC = 25L
     }
 
     private val session by lazy { SessionManager(activity) }
@@ -95,7 +96,15 @@ class AndroidBridge(private val activity: MainActivity) {
     fun isDebug(): Boolean = BuildConfig.DEBUG
 
     @JavascriptInterface
-    fun printReceipt(data: String): String = safeBridge { httpPostJson("/print", data) }
+    fun printReceipt(data: String): String = safeBridge {
+        activity.posService?.let { svc ->
+            val pm = svc.requestPrinterManager()
+            if (pm != null) {
+                return@safeBridge printViaService(svc, data)
+            }
+        }
+        httpPostJson("/print", data, SALE_HTTP_TIMEOUT_SEC)
+    }
 
     @JavascriptInterface
     fun openDrawer(): String = safeBridge { httpPostJson("/drawer/open", null) }
@@ -170,7 +179,13 @@ class AndroidBridge(private val activity: MainActivity) {
     fun getLocalCustomers(): String = safeBridge { httpGet("/local/customers", 5000, 15_000) }
 
     @JavascriptInterface
-    fun createLocalSale(jsonPayload: String): String = safeBridge { httpPostJson("/local/sale", jsonPayload) }
+    fun createLocalSale(jsonPayload: String): String = safeBridge {
+        val engine = activity.posService?.posEngine
+        if (engine != null) {
+            return@safeBridge engine.createSale(JSONObject(jsonPayload)).toString()
+        }
+        httpPostJson("/local/sale", jsonPayload, SALE_HTTP_TIMEOUT_SEC)
+    }
 
     @JavascriptInterface
     fun openLocalShift(jsonPayload: String): String = safeBridge { httpPostJson("/local/shift/open", jsonPayload) }
@@ -191,7 +206,46 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
-    fun triggerLocalSync(): String = safeBridge { httpPostJson("/local/sync/now", null) }
+    fun triggerLocalSync(): String = safeBridge {
+        activity.posService?.syncEngine?.syncNow()
+        JSONObject().put("ok", true).put("triggered", true).toString()
+    }
+
+    private fun printViaService(service: PosService, data: String): String {
+        val pm = service.printerManager ?: service.requestPrinterManager()
+            ?: return JSONObject().put("ok", false).put("error", "Printer service not ready").toString()
+        val json = try {
+            JSONObject(data)
+        } catch (_: Exception) {
+            JSONObject().put("text", data)
+        }
+        val text = json.optString("text", "")
+        val raw = json.optJSONArray("raw")
+        val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
+        val type = json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        val (printer, ensureErr) = pm.ensureActivePrinter(type.ifBlank { null }, name.ifBlank { null })
+        if (printer == null) {
+            return JSONObject().put("ok", false).put("error", ensureErr ?: "No printer connected").toString()
+        }
+        if (!printer.isConnected() && !printer.connect()) {
+            return JSONObject().put("ok", false).put("error", "Printer disconnected").toString()
+        }
+        val db = service.offlineDb
+        val layout = com.insapos.v2.printers.PrinterSettings(db).layout()
+        val ok = when {
+            raw != null -> {
+                val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
+                printer.printRaw(bytes)
+            }
+            text.isNotBlank() -> printer.printText(text, layout)
+            else -> false
+        }
+        return if (ok) {
+            JSONObject().put("ok", true).put("printed", true).toString()
+        } else {
+            JSONObject().put("ok", false).put("error", "Print failed").toString()
+        }
+    }
 
     @JavascriptInterface
     fun log(level: String, message: String) {
@@ -206,13 +260,13 @@ class AndroidBridge(private val activity: MainActivity) {
     private fun httpGet(path: String, connectMs: Int, readMs: Int): String =
         runOnHttpThread { httpGetBlocking(path, connectMs, readMs) }
 
-    private fun httpPostJson(path: String, body: String?): String =
-        runOnHttpThread { httpPostJsonBlocking(path, body) }
+    private fun httpPostJson(path: String, body: String?, timeoutSec: Long = LOCAL_HTTP_TIMEOUT_SEC): String =
+        runOnHttpThread(timeoutSec) { httpPostJsonBlocking(path, body) }
 
-    private fun runOnHttpThread(block: () -> String): String {
+    private fun runOnHttpThread(timeoutSec: Long = LOCAL_HTTP_TIMEOUT_SEC, block: () -> String): String {
         val future = httpExecutor.submit(block)
         return try {
-            future.get(LOCAL_HTTP_TIMEOUT_SEC, TimeUnit.SECONDS)
+            future.get(timeoutSec, TimeUnit.SECONDS)
         } catch (e: TimeoutException) {
             future.cancel(true)
             Log.w(TAG, "Local HTTP timed out")

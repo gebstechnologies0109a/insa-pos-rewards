@@ -63,17 +63,13 @@ class PosSaleProcessor(
             put("status", "completed")
         }
 
-        db.savePosSale(txn)
-        db.saveTransaction(txn)
-        db.enqueueSyncAction("push-transaction", "transactions_local", localId, txn)
-
         val receipt = receiptGenerator.generate(
             txn,
             storeName = payload.optString("store_name", "INSA POS"),
             branchName = payload.optString("branch_name", ""),
             cashier = payload.optString("cashier_name", ""),
         )
-        db.saveReceipt(localId, receipt.optString("json", txn.toString()), receipt.optString("text", ""), receipt.optString("html", ""))
+        db.persistSale(txn, localId, receipt)
 
         return JSONObject().apply {
             put("ok", true)

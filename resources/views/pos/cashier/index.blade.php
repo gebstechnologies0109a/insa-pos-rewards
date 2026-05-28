@@ -2775,13 +2775,17 @@ function posApp() {
         },
 
         async sendReceiptToPrinter(payload) {
-            if (typeof INSABuddy === 'undefined') {
+            if (typeof INSABuddy === 'undefined' && !(this.hasNativeBridge && typeof window.INSAPOS !== 'undefined')) {
                 this.showToast('Printer service unavailable', 'error');
                 return false;
             }
-            INSABuddy.detectV2();
+            if (typeof INSABuddy !== 'undefined') {
+                INSABuddy.detectV2();
+            }
             try {
-                const result = await INSABuddy.printReceipt(payload);
+                const result = typeof INSABuddy !== 'undefined'
+                    ? await INSABuddy.printReceipt(payload)
+                    : null;
                 if (!INSABuddy.isPrintSuccess(result)) {
                     this.showToast(INSABuddy.parseApiError(result, 'Receipt print failed'), 'error');
                     return false;
