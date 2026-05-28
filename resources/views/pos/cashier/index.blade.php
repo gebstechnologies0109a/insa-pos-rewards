@@ -1229,7 +1229,7 @@
         <div x-show="ioMenuView" class="space-y-2">
             <p class="text-[11px] lg:text-sm text-gray-600 mb-2">Configure input devices for this terminal.</p>
             <div x-show="!ioApiAvailable && (buddyConnected || hasNativeBridge)" class="text-[10px] lg:text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2">
-                Full device setup requires INSAPOSv3. INSABuddy supports HID scanner test only.
+                Full device setup requires INSAPOS v3. INSABuddy supports HID scanner test only.
             </div>
             <button @click="startIoWizard('keyboard')" class="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors">
                 <div class="font-semibold text-sm text-gray-800">Keyboard / Mouse</div>
@@ -2490,7 +2490,7 @@ function posApp() {
                     this.ioStatusMessage = msg;
                     if (this.ioOption === 'camera' && payload.use_camera_for_scan !== undefined) {
                         localStorage.setItem('insapos_use_camera_for_scan', payload.use_camera_for_scan ? '1' : '0');
-                        this.showToast('Saved locally (device prefs need INSAPOSv3)', 'info');
+                        this.showToast('Saved locally (device prefs need INSAPOS v3)', 'info');
                     } else {
                         this.showToast(msg, 'warning');
                     }

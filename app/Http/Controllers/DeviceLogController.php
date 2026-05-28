@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 class DeviceLogController extends Controller
 {
     /**
-     * Receive logs from the INSAPOS Android app.
+     * Receive logs from the INSA POS v3 Android app.
      * No auth required — the device might not have a session.
      */
     public function store(Request $request): JsonResponse

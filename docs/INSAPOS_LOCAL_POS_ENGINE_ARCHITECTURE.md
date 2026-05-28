@@ -8,7 +8,7 @@
 
 ## Executive summary
 
-INSAPOSv2 today is a **WebView shell + hardware bridge**, not a self-contained POS engine. The cashier UI (`resources/views/pos/cashier/index.blade.php`) runs in Chromium, uses **IndexedDB** (`public/js/db.js`) as its primary offline store, and calls **cloud APIs** for checkout, shifts, and readings. Android provides **SQLite** (`OfflineDatabase.kt`), **background sync** (`SyncEngine.kt`), and **NanoHTTPD** (`PosLocalServer.kt` on port `18182`) mainly for catalog cache, transaction queueing, and printers/scanners.
+INSAPOS v3 (Gradle module `INSAPOSv2/`) is a **WebView shell + hardware bridge**, not a self-contained POS engine. The cashier UI (`resources/views/pos/cashier/index.blade.php`) runs in Chromium, uses **IndexedDB** (`public/js/db.js`) as its primary offline store, and calls **cloud APIs** for checkout, shifts, and readings. Android provides **SQLite** (`OfflineDatabase.kt`), **background sync** (`SyncEngine.kt`), and **NanoHTTPD** (`PosLocalServer.kt` on port `18182`) mainly for catalog cache, transaction queueing, and printers/scanners.
 
 The target architecture moves **all operational reads/writes** into a native **`posengine/`** module backed by SQLite, with the cloud used only for auth, license, and background sync.
 

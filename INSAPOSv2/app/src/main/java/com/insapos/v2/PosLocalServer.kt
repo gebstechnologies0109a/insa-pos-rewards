@@ -99,7 +99,7 @@ class PosLocalServer(
     }
 
     private fun handlePing(): Response {
-        return jsonOk(JSONObject().put("ok", true).put("app", "INSAPOSv3").put("port", PORT))
+        return jsonOk(JSONObject().put("ok", true).put("app", "INSA POS v3").put("port", PORT))
     }
 
     private fun handleDeviceInfo(): Response {

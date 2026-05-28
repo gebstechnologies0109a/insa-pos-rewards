@@ -1,7 +1,7 @@
 /**
  * INSABuddy — Hardware Bridge Client for INSA POS
  * Communicates with the INSABuddy Android companion app (port 18181)
- * or the built-in INSAPOSv3 service layer (port 18182).
+ * or the built-in INSAPOS v3 service layer (port 18182).
  */
 const INSABuddy = {
     BASE_URL: 'http://127.0.0.1:18181',
@@ -11,7 +11,7 @@ const INSABuddy = {
     _printerLayoutCache: null,
 
     /**
-     * Detect INSAPOSv3 native bridge and switch to its local port.
+     * Detect INSAPOS v3 native bridge and switch to its local port.
      * Call this early (e.g. on DOMContentLoaded).
      */
     detectV2() {
@@ -242,7 +242,7 @@ const INSABuddy = {
     },
 
     /**
-     * Whether the connected bridge exposes full I/O device APIs (INSAPOSv3).
+     * Whether the connected bridge exposes full I/O device APIs (INSAPOS v3).
      */
     hasIoApi() {
         return this._isV2;
@@ -323,7 +323,7 @@ const INSABuddy = {
     },
 
     /**
-     * Normalize printer list response from INSABuddy or INSAPOSv3.
+     * Normalize printer list response from INSABuddy or INSAPOS v3.
      */
     parsePrinterList(data) {
         if (!data) return [];
@@ -442,7 +442,7 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof window !== 'undefined') {
     window.INSABuddy = INSABuddy;
 
-    // Auto-detect INSAPOSv3 bridge when available
+    // Auto-detect INSAPOS v3 bridge when available
     INSABuddy.detectV2();
     document.addEventListener('insapos:ready', function() {
         INSABuddy.detectV2();

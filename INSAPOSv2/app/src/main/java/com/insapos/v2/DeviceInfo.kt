@@ -17,7 +17,7 @@ object DeviceInfo {
         )
         val fingerprint = DeviceFingerprint.get(context)
         return JSONObject().apply {
-            put("app", "INSAPOSv3")
+            put("app", "INSA POS v3")
             put("version", BuildConfig.VERSION_NAME)
             put("versionCode", BuildConfig.VERSION_CODE)
             put("deviceId", deviceId)
