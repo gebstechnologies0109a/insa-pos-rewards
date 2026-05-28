@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\POS\LicenseValidateController;
 use App\Http\Controllers\POS\CustomerLookupController;
 use App\Http\Controllers\POS\PosTerminalSessionController;
 use App\Http\Controllers\POS\InventoryApiController;
@@ -39,6 +40,9 @@ Route::prefix('sync')->group(function () {
     Route::post('/push', [SyncController::class, 'push'])->name('pos.sync.push');
     Route::get('/pull', [SyncController::class, 'pull'])->name('pos.sync.pull');
 });
+
+Route::post('/license/validate', [LicenseValidateController::class, 'validate'])
+    ->name('pos.license.validate');
 
 Route::get('/customers/all', [SyncController::class, 'allCustomers'])->name('pos.customers.all');
 

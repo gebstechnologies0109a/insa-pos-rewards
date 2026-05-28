@@ -16,6 +16,8 @@ class SessionManager(context: Context) {
         private const val KEY_FIRST_LAUNCH = "first_launch"
         private const val KEY_BRANCH_ID = "branch_id"
         private const val KEY_TERMINAL_SESSION_ID = "terminal_session_id"
+        private const val KEY_CASHIER_ID = "cashier_id"
+        private const val KEY_LICENSE_VALID_UNTIL = "license_valid_until"
     }
 
     var lastUrl: String?
@@ -50,6 +52,24 @@ class SessionManager(context: Context) {
     var terminalSessionId: String?
         get() = prefs.getString(KEY_TERMINAL_SESSION_ID, null)
         set(value) = prefs.edit().putString(KEY_TERMINAL_SESSION_ID, value).apply()
+
+    var cashierId: Int?
+        get() {
+            val v = prefs.getInt(KEY_CASHIER_ID, -1)
+            return if (v > 0) v else null
+        }
+        set(value) = prefs.edit().apply {
+            if (value != null && value > 0) putInt(KEY_CASHIER_ID, value) else remove(KEY_CASHIER_ID)
+        }.apply()
+
+    var licenseValidUntil: Long
+        get() = prefs.getLong(KEY_LICENSE_VALID_UNTIL, 0L)
+        set(value) = prefs.edit().putLong(KEY_LICENSE_VALID_UNTIL, value).apply()
+
+    fun isLicenseCachedValid(): Boolean {
+        val until = licenseValidUntil
+        return until > System.currentTimeMillis()
+    }
 
     fun getBaseUrl(): String {
         val protocol = if (useHttp) "http" else "https"

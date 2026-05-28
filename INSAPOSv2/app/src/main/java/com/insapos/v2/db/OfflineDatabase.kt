@@ -15,10 +15,16 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
     companion object {
         private const val TAG = "OfflineDB"
         private const val DB_NAME = "insapos_offline.db"
-        private const val DB_VERSION = 1
+        private const val DB_VERSION = 2
     }
 
     override fun onCreate(db: SQLiteDatabase) {
+        createV1Tables(db)
+        createV2Tables(db)
+        Log.i(TAG, "Database created with all tables")
+    }
+
+    private fun createV1Tables(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY,
@@ -147,11 +153,121 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             )
         """)
 
-        Log.i(TAG, "Database created with all tables")
+    }
+
+    private fun createV2Tables(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY,
+                server_id INTEGER,
+                name TEXT NOT NULL,
+                data_json TEXT,
+                synced_at TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS inventory_batches (
+                id INTEGER PRIMARY KEY,
+                server_id INTEGER,
+                product_id INTEGER NOT NULL,
+                branch_id INTEGER,
+                batch_code TEXT,
+                expiry_date TEXT,
+                qty REAL DEFAULT 0,
+                cost REAL DEFAULT 0,
+                data_json TEXT,
+                synced_at TEXT
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_batches_product ON inventory_batches(product_id)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS stock_movements (
+                id INTEGER PRIMARY KEY,
+                local_id TEXT,
+                product_id INTEGER NOT NULL,
+                qty REAL NOT NULL,
+                movement_type TEXT NOT NULL,
+                reference TEXT,
+                synced INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS pos_sales (
+                id INTEGER PRIMARY KEY,
+                local_id TEXT NOT NULL UNIQUE,
+                server_id INTEGER,
+                shift_id INTEGER,
+                branch_id INTEGER,
+                cashier_id INTEGER,
+                customer_id INTEGER,
+                subtotal REAL DEFAULT 0,
+                discount REAL DEFAULT 0,
+                tax REAL DEFAULT 0,
+                total REAL NOT NULL DEFAULT 0,
+                payment_method TEXT DEFAULT 'cash',
+                amount_tendered REAL DEFAULT 0,
+                change_amount REAL DEFAULT 0,
+                status TEXT DEFAULT 'completed',
+                synced INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                synced_at TEXT
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pos_sales_local ON pos_sales(local_id)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS pos_sale_items (
+                id INTEGER PRIMARY KEY,
+                sale_local_id TEXT NOT NULL,
+                product_id INTEGER NOT NULL,
+                product_name TEXT,
+                qty REAL DEFAULT 1,
+                price REAL DEFAULT 0,
+                discount REAL DEFAULT 0,
+                data_json TEXT
+            )
+        """)
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS shifts (
+                id INTEGER PRIMARY KEY,
+                local_id TEXT NOT NULL UNIQUE,
+                server_id INTEGER,
+                branch_id INTEGER NOT NULL,
+                cashier_id INTEGER,
+                opening_cash REAL DEFAULT 0,
+                closing_cash REAL,
+                status TEXT DEFAULT 'open',
+                opened_at TEXT,
+                closed_at TEXT,
+                synced INTEGER DEFAULT 0
+            )
+        """)
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS expiry_alerts (
+                id INTEGER PRIMARY KEY,
+                server_id INTEGER,
+                product_id INTEGER,
+                batch_id INTEGER,
+                alert_type TEXT,
+                message TEXT,
+                data_json TEXT,
+                synced_at TEXT
+            )
+        """)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         Log.i(TAG, "Upgrading DB from v$oldVersion to v$newVersion")
+        if (oldVersion < 2) {
+            createV2Tables(db)
+        }
     }
 
     // --- Products ---
@@ -221,6 +337,186 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         }
         cursor.close()
         return arr
+    }
+
+    fun getProductStock(productId: Int): Double {
+        val cursor = readableDatabase.rawQuery(
+            "SELECT stock FROM products WHERE server_id = ? OR id = ? LIMIT 1",
+            arrayOf(productId.toString(), productId.toString())
+        )
+        val stock = if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0
+        cursor.close()
+        return stock
+    }
+
+    fun adjustProductStock(productId: Int, delta: Double) {
+        writableDatabase.execSQL(
+            "UPDATE products SET stock = MAX(0, stock + ?), updated_at = ? WHERE server_id = ? OR id = ?",
+            arrayOf(delta, now(), productId.toString(), productId.toString())
+        )
+    }
+
+    fun recordStockMovement(productId: Int, qty: Double, movementType: String, reference: String) {
+        val cv = ContentValues().apply {
+            put("local_id", java.util.UUID.randomUUID().toString())
+            put("product_id", productId)
+            put("qty", qty)
+            put("movement_type", movementType)
+            put("reference", reference)
+            put("synced", 0)
+            put("created_at", now())
+        }
+        writableDatabase.insert("stock_movements", null, cv)
+    }
+
+    fun getInventorySummary(): JSONArray {
+        val arr = JSONArray()
+        val cursor = readableDatabase.rawQuery(
+            """SELECT server_id, name, barcode, stock, category, updated_at
+               FROM products WHERE is_active = 1 ORDER BY name""", null
+        )
+        while (cursor.moveToNext()) {
+            arr.put(JSONObject().apply {
+                put("product_id", cursor.getLong(cursor.getColumnIndexOrThrow("server_id")))
+                put("name", cursor.getString(cursor.getColumnIndexOrThrow("name")))
+                put("barcode", cursor.getString(cursor.getColumnIndexOrThrow("barcode")))
+                put("stock", cursor.getDouble(cursor.getColumnIndexOrThrow("stock")))
+                put("category", cursor.getString(cursor.getColumnIndexOrThrow("category")))
+            })
+        }
+        cursor.close()
+        return arr
+    }
+
+    fun savePosSale(txn: JSONObject) {
+        val localId = txn.getString("local_id")
+        val cv = ContentValues().apply {
+            put("local_id", localId)
+            put("shift_id", txn.optInt("shift_id", 0))
+            put("branch_id", txn.optInt("branch_id", 0))
+            put("cashier_id", txn.optInt("cashier_id", 0))
+            put("customer_id", txn.optInt("member_id", txn.optInt("customer_id", 0)))
+            put("subtotal", txn.optDouble("subtotal", 0.0))
+            put("discount", txn.optDouble("discount", txn.optDouble("discount_total", 0.0)))
+            put("tax", txn.optDouble("tax", 0.0))
+            put("total", txn.optDouble("total", 0.0))
+            put("payment_method", txn.optString("payment_method", "cash"))
+            put("amount_tendered", txn.optDouble("amount_tendered", 0.0))
+            put("change_amount", txn.optDouble("change_amount", txn.optDouble("change_due", 0.0)))
+            put("status", txn.optString("status", "completed"))
+            put("synced", 0)
+            put("created_at", txn.optString("created_at", now()))
+        }
+        writableDatabase.insertWithOnConflict("pos_sales", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+
+        writableDatabase.delete("pos_sale_items", "sale_local_id = ?", arrayOf(localId))
+        val items = try {
+            JSONArray(txn.optString("items_json", "[]"))
+        } catch (_: Exception) {
+            txn.optJSONArray("items") ?: JSONArray()
+        }
+        for (i in 0 until items.length()) {
+            val item = items.getJSONObject(i)
+            val itemCv = ContentValues().apply {
+                put("sale_local_id", localId)
+                put("product_id", item.optInt("product_id", item.optInt("id", 0)))
+                put("product_name", item.optString("product_name", item.optString("name", "")))
+                put("qty", item.optDouble("qty", item.optDouble("quantity", 1.0)))
+                put("price", item.optDouble("price", 0.0))
+                put("discount", item.optDouble("discount", 0.0))
+                put("data_json", item.toString())
+            }
+            writableDatabase.insert("pos_sale_items", null, itemCv)
+        }
+    }
+
+    fun getReceipt(localId: String): JSONObject? {
+        val cursor = readableDatabase.rawQuery(
+            "SELECT * FROM receipts WHERE transaction_local_id = ? ORDER BY id DESC LIMIT 1",
+            arrayOf(localId)
+        )
+        val result = if (cursor.moveToFirst()) cursorToJson(cursor) else null
+        cursor.close()
+        return result
+    }
+
+    fun getActiveShift(): JSONObject? {
+        val cursor = readableDatabase.rawQuery(
+            "SELECT * FROM shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1", null
+        )
+        val result = if (cursor.moveToFirst()) cursorToJson(cursor) else null
+        cursor.close()
+        return result
+    }
+
+    fun openLocalShift(localId: String, branchId: Int, cashierId: Int, openingCash: Double): JSONObject {
+        val cv = ContentValues().apply {
+            put("local_id", localId)
+            put("branch_id", branchId)
+            put("cashier_id", cashierId)
+            put("opening_cash", openingCash)
+            put("status", "open")
+            put("opened_at", now())
+            put("synced", 0)
+        }
+        val rowId = writableDatabase.insert("shifts", null, cv)
+        return JSONObject().apply {
+            put("id", rowId)
+            put("local_id", localId)
+            put("branch_id", branchId)
+            put("cashier_id", cashierId)
+            put("opening_cash", openingCash)
+            put("status", "open")
+            put("opened_at", now())
+        }
+    }
+
+    fun closeLocalShift(localId: String, closingCash: Double): JSONObject {
+        val cv = ContentValues().apply {
+            put("closing_cash", closingCash)
+            put("status", "closed")
+            put("closed_at", now())
+            put("synced", 0)
+        }
+        writableDatabase.update("shifts", cv, "local_id = ?", arrayOf(localId))
+        val cursor = readableDatabase.rawQuery(
+            "SELECT * FROM shifts WHERE local_id = ? LIMIT 1", arrayOf(localId)
+        )
+        val result = if (cursor.moveToFirst()) cursorToJson(cursor) else JSONObject()
+        cursor.close()
+        return result
+    }
+
+    fun upsertCategories(categories: JSONArray): Int {
+        var count = 0
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            for (i in 0 until categories.length()) {
+                val c = categories.getJSONObject(i)
+                val cv = ContentValues().apply {
+                    put("server_id", c.optInt("id"))
+                    put("name", c.optString("name"))
+                    put("data_json", c.toString())
+                    put("synced_at", now())
+                }
+                val existing = db.rawQuery(
+                    "SELECT id FROM categories WHERE server_id = ?",
+                    arrayOf(c.optInt("id").toString())
+                )
+                if (existing.moveToFirst()) {
+                    db.update("categories", cv, "server_id = ?", arrayOf(c.optInt("id").toString()))
+                } else {
+                    db.insert("categories", null, cv)
+                }
+                existing.close()
+                count++
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return count
     }
 
     fun getProductByBarcode(barcode: String): JSONObject? {

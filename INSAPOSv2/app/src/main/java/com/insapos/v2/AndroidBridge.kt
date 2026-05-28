@@ -199,6 +199,85 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
+    fun setCashierId(cashierId: Int) {
+        if (cashierId > 0) session.cashierId = cashierId
+    }
+
+    @JavascriptInterface
+    fun getLocalProducts(query: String?): String = localGet("/local/products" + if (!query.isNullOrBlank()) "?q=${java.net.URLEncoder.encode(query, "UTF-8")}" else "")
+
+    @JavascriptInterface
+    fun getLocalInventory(): String = localGet("/local/inventory")
+
+    @JavascriptInterface
+    fun getLocalCustomers(): String = localGet("/local/customers")
+
+    @JavascriptInterface
+    fun createLocalSale(jsonPayload: String): String = localPost("/local/sale", jsonPayload)
+
+    @JavascriptInterface
+    fun openLocalShift(jsonPayload: String): String = localPost("/local/shift/open", jsonPayload)
+
+    @JavascriptInterface
+    fun closeLocalShift(jsonPayload: String): String = localPost("/local/shift/close", jsonPayload)
+
+    @JavascriptInterface
+    fun getLocalShiftStatus(): String = localGet("/local/shift/status")
+
+    @JavascriptInterface
+    fun getLocalReceipt(localId: String): String = localGet("/local/receipt?local_id=${java.net.URLEncoder.encode(localId, "UTF-8")}")
+
+    @JavascriptInterface
+    fun triggerLocalSync(): String {
+        return try {
+            val url = "http://127.0.0.1:${PosLocalServer.PORT}/local/sync/now"
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 5000
+            val response = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            response
+        } catch (e: Exception) {
+            JSONObject().put("ok", false).put("error", e.message).toString()
+        }
+    }
+
+    private fun localGet(path: String): String {
+        return try {
+            val url = "http://127.0.0.1:${PosLocalServer.PORT}$path"
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 5000
+            conn.readTimeout = 15000
+            val response = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            response
+        } catch (e: Exception) {
+            Log.e(TAG, "localGet $path failed", e)
+            JSONObject().put("ok", false).put("error", e.message).toString()
+        }
+    }
+
+    private fun localPost(path: String, body: String): String {
+        return try {
+            val url = "http://127.0.0.1:${PosLocalServer.PORT}$path"
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.connectTimeout = 5000
+            conn.readTimeout = 15000
+            conn.outputStream.bufferedWriter().use { it.write(body) }
+            val response = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            response
+        } catch (e: Exception) {
+            Log.e(TAG, "localPost $path failed", e)
+            JSONObject().put("ok", false).put("error", e.message).toString()
+        }
+    }
+
+    @JavascriptInterface
     fun log(level: String, message: String) {
         when (level.lowercase()) {
             "error" -> Log.e(TAG, message)

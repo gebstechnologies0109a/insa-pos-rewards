@@ -25,11 +25,12 @@ class SyncEngine(
 ) {
     companion object {
         private const val TAG = "SyncEngine"
-        private const val PUSH_INTERVAL_ACTIVE_MS = 60_000L
-        private const val PUSH_INTERVAL_IDLE_MS = 120_000L
-        private const val PUSH_FAIL_BACKOFF_MS = 300_000L
-        private const val MAX_PUSH_PER_CYCLE = 3
-        private const val PULL_INTERVAL_MS = 300_000L
+        private const val PUSH_INTERVAL_ACTIVE_MS = 12_000L
+        private const val PUSH_INTERVAL_IDLE_MS = 15_000L
+        private const val PUSH_FAIL_BACKOFF_BASE_MS = 5_000L
+        private const val PUSH_FAIL_BACKOFF_MAX_MS = 300_000L
+        private const val MAX_PUSH_PER_CYCLE = 5
+        private const val PULL_INTERVAL_MS = 120_000L
         private const val STARTUP_PULL_DELAY_MS = 2_000L
     }
 
@@ -37,13 +38,26 @@ class SyncEngine(
     private var pushJob: Job? = null
     private var pullJob: Job? = null
     private var consecutivePushFailures = 0
+    private var lastConflict: JSONObject? = null
 
     var onSyncStatusChanged: ((SyncStatus) -> Unit)? = null
     var onDownloadProgress: ((DownloadProgress) -> Unit)? = null
+    var onConflict: ((JSONObject) -> Unit)? = null
 
     @Volatile
     var lastSyncStatus: SyncStatus = SyncStatus.IDLE
         private set
+
+    fun getStatusJson(): JSONObject {
+        return JSONObject().apply {
+            put("status", lastSyncStatus.name)
+            put("unsynced_count", db.getUnsyncedCount())
+            put("sync_queue_count", db.getSyncQueueCount())
+            put("consecutive_failures", consecutivePushFailures)
+            put("last_conflict", lastConflict ?: JSONObject.NULL)
+            put("online", connectivity.isConnected())
+        }
+    }
 
     data class DownloadProgress(
         val phase: String,
@@ -91,7 +105,12 @@ class SyncEngine(
                     hadWork = pushTransactions() || pushSyncQueue()
                 }
                 val delayMs = when {
-                    consecutivePushFailures >= 3 -> PUSH_FAIL_BACKOFF_MS
+                    consecutivePushFailures >= 1 -> {
+                        minOf(
+                            PUSH_FAIL_BACKOFF_BASE_MS * (1 shl minOf(consecutivePushFailures, 6)),
+                            PUSH_FAIL_BACKOFF_MAX_MS
+                        )
+                    }
                     hadWork -> PUSH_INTERVAL_ACTIVE_MS
                     else -> PUSH_INTERVAL_IDLE_MS
                 }
@@ -137,6 +156,11 @@ class SyncEngine(
                     db.markTransactionSynced(txn.getString("local_id"), serverId)
                     synced++
                     Log.i(TAG, "Synced transaction: ${txn.getString("local_id")} -> server #$serverId")
+                } else if (response != null && response.has("conflict")) {
+                    lastConflict = response
+                    onConflict?.invoke(response)
+                    failures++
+                    Log.w(TAG, "Conflict for ${txn.optString("local_id")}")
                 } else {
                     failures++
                     Log.w(TAG, "Push failed for ${txn.optString("local_id")}: ${response?.optString("message")}")
@@ -241,6 +265,10 @@ class SyncEngine(
             db.logSync("pull", "products", count, "completed")
             Log.i(TAG, "Pulled $count products from catalog")
         }
+        val categories = json.optJSONArray("categories") ?: JSONArray()
+        if (categories.length() > 0) {
+            db.upsertCategories(categories)
+        }
     }
 
     private suspend fun pullInventory(branchId: Int, fullSync: Boolean) {
@@ -300,8 +328,10 @@ class SyncEngine(
             if (txn.has("shift_id") && !txn.isNull("shift_id")) {
                 put("shift_id", txn.optInt("shift_id"))
             }
-            val cashierId = txn.optInt("cashier_id", 0)
-            if (cashierId > 0) put("cashier_id", cashierId)
+            val cashierId = txn.optInt("cashier_id", 0).takeIf { it > 0 }
+                ?: session.cashierId
+                ?: db.getSetting("cashier_id")?.toIntOrNull()
+            if (cashierId != null && cashierId > 0) put("cashier_id", cashierId)
             if (txn.has("member_id") && !txn.isNull("member_id")) {
                 put("member_id", txn.optInt("member_id"))
             }

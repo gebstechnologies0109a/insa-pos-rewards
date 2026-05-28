@@ -3,6 +3,7 @@ package com.insapos.v2
 import android.content.Context
 import android.util.Log
 import com.insapos.v2.db.OfflineDatabase
+import com.insapos.v2.posengine.PosEngine
 import com.insapos.v2.printers.PrinterManager
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -16,6 +17,7 @@ class PosLocalServer(
     private val getPrinterManager: () -> PrinterManager?,
     private val getHidScanner: () -> HidScannerDriver?,
     private val getDatabase: () -> OfflineDatabase?,
+    private val getPosEngine: () -> PosEngine?,
     private val getSyncEngine: () -> SyncEngine?,
     private val ioPreferences: IoPreferencesStore,
     private val launchCameraScan: (() -> Unit)? = null,
@@ -72,6 +74,17 @@ class PosLocalServer(
                 uri == "/offline/stats" -> handleOfflineStats()
                 uri == "/offline/sync/status" -> handleSyncStatus()
                 uri == "/offline/sync/now" && method == Method.POST -> handleSyncNow()
+                // Local POS engine endpoints
+                uri == "/local/products" -> handleLocalProducts(session)
+                uri == "/local/inventory" -> handleLocalInventory()
+                uri == "/local/customers" -> handleLocalCustomers()
+                uri == "/local/sale" && method == Method.POST -> handleLocalSale(session)
+                uri == "/local/shift/open" && method == Method.POST -> handleLocalShiftOpen(session)
+                uri == "/local/shift/close" && method == Method.POST -> handleLocalShiftClose(session)
+                uri == "/local/shift/status" -> handleLocalShiftStatus()
+                uri == "/local/receipt" -> handleLocalReceipt(session)
+                uri == "/local/sync/status" -> handleLocalSyncStatus()
+                uri == "/local/sync/now" && method == Method.POST -> handleSyncNow()
                 else -> json404("Unknown endpoint: $uri")
             }
             cors(resp, headers)
@@ -456,6 +469,73 @@ class PosLocalServer(
         val sync = getSyncEngine() ?: return jsonError("Sync engine not ready")
         sync.syncNowFull()
         return jsonOk(JSONObject().put("ok", true).put("triggered", true).put("full", true))
+    }
+
+    // --- Local POS engine handlers ---
+
+    private fun handleLocalProducts(session: IHTTPSession): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val query = session.parms?.get("q")
+        return jsonOk(engine.getProducts(query))
+    }
+
+    private fun handleLocalInventory(): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        return jsonOk(engine.getInventory())
+    }
+
+    private fun handleLocalCustomers(): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        return jsonOk(engine.getCustomers())
+    }
+
+    private fun handleLocalSale(session: IHTTPSession): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val body = readBody(session)
+        val payload = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        return jsonOk(engine.createSale(payload))
+    }
+
+    private fun handleLocalShiftOpen(session: IHTTPSession): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        return jsonOk(engine.openShift(
+            json.optInt("cashier_id", 0),
+            json.optInt("branch_id", 0),
+            json.optDouble("opening_cash", 0.0)
+        ))
+    }
+
+    private fun handleLocalShiftClose(session: IHTTPSession): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        return jsonOk(engine.closeShift(json.optDouble("closing_cash", 0.0)))
+    }
+
+    private fun handleLocalShiftStatus(): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        return jsonOk(engine.getShiftStatus())
+    }
+
+    private fun handleLocalReceipt(session: IHTTPSession): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val localId = session.parms?.get("local_id") ?: return jsonError("local_id required")
+        val receipt = engine.getReceipt(localId) ?: return jsonError("Receipt not found")
+        return jsonOk(receipt)
+    }
+
+    private fun handleLocalSyncStatus(): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val sync = getSyncEngine()
+        val db = getDatabase()
+        val status = sync?.lastSyncStatus?.name ?: "UNKNOWN"
+        return jsonOk(engine.getSyncStatus(
+            db?.getUnsyncedCount() ?: 0,
+            db?.getSyncQueueCount() ?: 0,
+            status
+        ))
     }
 
     // --- Helpers ---

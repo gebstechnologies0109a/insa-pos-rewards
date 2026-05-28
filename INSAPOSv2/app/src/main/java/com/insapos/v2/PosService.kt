@@ -16,6 +16,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import com.insapos.v2.db.OfflineDatabase
+import com.insapos.v2.posengine.PosEngine
 import com.insapos.v2.printers.PrinterManager
 import com.insapos.v2.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +44,8 @@ class PosService : Service() {
     var localServer: PosLocalServer? = null
         private set
     var offlineDb: OfflineDatabase? = null
+        private set
+    var posEngine: PosEngine? = null
         private set
     var syncEngine: SyncEngine? = null
         private set
@@ -73,7 +76,8 @@ class PosService : Service() {
         scope.launch {
             try {
                 offlineDb = OfflineDatabase(this@PosService)
-                Log.i(TAG, "Offline database initialized")
+                posEngine = offlineDb?.let { PosEngine(it) }
+                Log.i(TAG, "Offline database and POS engine initialized")
             } catch (e: Exception) {
                 Log.e(TAG, "Offline DB init failed", e)
             }
@@ -124,6 +128,7 @@ class PosService : Service() {
                     getPrinterManager = { ensurePrinterManagerReady() },
                     getHidScanner = { hidScannerDriver },
                     getDatabase = { offlineDb },
+                    getPosEngine = { posEngine },
                     getSyncEngine = { syncEngine },
                     ioPreferences = ioPreferences,
                     launchCameraScan = { onCameraScanRequested?.invoke() },

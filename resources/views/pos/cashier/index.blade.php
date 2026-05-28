@@ -1765,6 +1765,9 @@ function posApp() {
                 if (this.config.branchId && typeof window.INSAPOS.setBranchId === 'function') {
                     try { window.INSAPOS.setBranchId(this.config.branchId); } catch (e) {}
                 }
+                if (this.config.cashierId && typeof window.INSAPOS.setCashierId === 'function') {
+                    try { window.INSAPOS.setCashierId(this.config.cashierId); } catch (e) {}
+                }
                 try {
                     if (window.INSA_IS_SUPER_ADMIN && window.INSAPOS.notifySuperAdminStatus) {
                         window.INSAPOS.notifySuperAdminStatus(true);
@@ -1840,6 +1843,43 @@ function posApp() {
                 await this.initOffline();
                 this.loadShift();
             }
+        },
+
+        useNativeEngine() {
+            return this.hasNativeBridge && this.androidLocalUp &&
+                typeof window.INSAPOS !== 'undefined' &&
+                typeof window.INSAPOS.createLocalSale === 'function';
+        },
+
+        async loadProductsFromNative() {
+            if (!this.useNativeEngine()) return false;
+            try {
+                const raw = window.INSAPOS.getLocalProducts('');
+                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (!data.ok || !data.products) return false;
+                const products = Array.isArray(data.products) ? data.products : Object.values(data.products);
+                const mapped = products.map(p => ({
+                    id: p.server_id || p.id,
+                    name: p.name,
+                    barcode: p.barcode || '',
+                    sku: p.sku || p.data_json?.sku || '',
+                    price: parseFloat(p.price || 0),
+                    stock: parseFloat(p.stock || 0),
+                    category: p.category || '',
+                    category_id: p.category_id || null,
+                })).filter(p => p.id);
+                if (mapped.length > 0) {
+                    this.products = mapped;
+                    this.invalidateSearchCache();
+                    this.rebuildProductIndex();
+                    this.filterProducts();
+                    this.productsLoading = false;
+                    return true;
+                }
+            } catch (e) {
+                console.warn('[pos] native product load failed:', e);
+            }
+            return false;
         },
 
         async checkAndroidLocalHealth() {
@@ -1940,8 +1980,23 @@ function posApp() {
                 SyncEngine.on('productsUpdated', (c) => { if (c > 0) this.refreshProductsFromDB(); });
                 SyncEngine.on('buddyRecovered', () => { this.showToast('Recovered offline data from INSABuddy', 'info'); });
                 SyncEngine.on('syncError', (d) => { this.showToast('Sync error: ' + (d.error || 'Unknown'), 'error'); });
-                SyncEngine.init({ branchId: this.config.branchId, skipInitialDownload: true });
-                await SyncEngine.downloadAll({ force: !hadCache, silent: hadCache });
+                if (this.useNativeEngine()) {
+                    const nativeLoaded = await this.loadProductsFromNative();
+                    if (nativeLoaded) {
+                        this.posReady = true;
+                        this.syncStatus = 'synced';
+                        SyncEngine.init({ branchId: this.config.branchId, skipInitialDownload: true });
+                        if (typeof window.INSAPOS.triggerLocalSync === 'function') {
+                            try { window.INSAPOS.triggerLocalSync(); } catch (e) {}
+                        }
+                    } else {
+                        SyncEngine.init({ branchId: this.config.branchId, skipInitialDownload: true });
+                        await SyncEngine.downloadAll({ force: !hadCache, silent: hadCache });
+                    }
+                } else {
+                    SyncEngine.init({ branchId: this.config.branchId, skipInitialDownload: true });
+                    await SyncEngine.downloadAll({ force: !hadCache, silent: hadCache });
+                }
             } else {
                 this.posReady = true;
                 this.loadProducts();
@@ -2929,7 +2984,46 @@ function posApp() {
             };
             if (db) await db.receipts.add(receiptData);
             let serverSale = null;
-            try {
+            let localSaleOk = false;
+
+            if (this.useNativeEngine()) {
+                try {
+                    const payload = JSON.stringify({
+                        local_id: localId,
+                        branch_id: txData.branch_id,
+                        shift_id: txData.shift_id,
+                        cashier_id: txData.cashier_id,
+                        member_id: txData.member_id,
+                        payment_method: txData.payment_method,
+                        amount_tendered: txData.amount_tendered,
+                        items: txData.items,
+                        subtotal: txData.subtotal,
+                        discount_total: txData.discount_total,
+                        total: txData.total,
+                        change_due: txData.change_due,
+                        cashier_name: '{{ auth()->user()->name }}',
+                        branch_name: '{{ auth()->user()->branch?->name ?? "" }}',
+                        store_name: '{{ $brandName }}',
+                        created_at: txData.created_at,
+                    });
+                    const raw = window.INSAPOS.createLocalSale(payload);
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (data.ok) {
+                        localSaleOk = true;
+                        serverSale = data.sale;
+                        if (typeof window.INSAPOS.triggerLocalSync === 'function') {
+                            window.INSAPOS.triggerLocalSync();
+                        }
+                    } else {
+                        this.showToast(data.error || 'Local sale failed', 'error');
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('[pos] native sale failed, falling back to cloud:', e);
+                }
+            }
+
+            if (!localSaleOk) try {
                 const res = await fetch('/api/pos/sales', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({
                     branch_id: txData.branch_id, shift_id: txData.shift_id, cashier_id: txData.cashier_id, member_id: txData.member_id,
                     payment_method: txData.payment_method, payment_ref: txData.payment_ref, amount_tendered: txData.amount_tendered,
@@ -2948,10 +3042,12 @@ function posApp() {
             } catch {
                 if (window.SyncEngine) SyncEngine.pushTransactions().catch(() => {});
             }
-            if (!serverSale && window.SyncEngine) {
+            if (!serverSale && !localSaleOk && window.SyncEngine) {
+                this.syncStatus = 'partial';
+            } else if (localSaleOk && !serverSale) {
                 this.syncStatus = 'partial';
             }
-            this.lastSale = serverSale || { local_id: localId, sale_number: null, total: txData.total, amount_tendered: txData.amount_tendered, change_due: txData.change_due, payment_method: txData.payment_method, offline: !serverSale, _cart: txData.items };
+            this.lastSale = serverSale || { local_id: localId, sale_number: null, total: txData.total, amount_tendered: txData.amount_tendered, change_due: txData.change_due, payment_method: txData.payment_method, offline: !serverSale || localSaleOk, _cart: txData.items };
             this.showReceipt = true;
             if (this.canUsePrinter()) { this.buddyPrintReceipt(); if (typeof INSABuddy !== 'undefined' && SyncEngine) SyncEngine.pushToBuddy(txData, receiptData); }
         },
@@ -2966,6 +3062,23 @@ function posApp() {
         async openShift() {
             const amount = parseFloat(this.shiftCashInput);
             if (isNaN(amount) || amount < 0) { this.showToast('Invalid amount.', 'error'); return; }
+            if (this.useNativeEngine()) {
+                try {
+                    const raw = window.INSAPOS.openLocalShift(JSON.stringify({
+                        opening_cash: amount,
+                        branch_id: this.config.branchId,
+                        cashier_id: this.config.cashierId,
+                    }));
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (data.ok && data.shift) {
+                        this.activeShift = { id: data.shift.server_id || data.shift.id, local_id: data.shift.local_id, opening_cash: data.shift.opening_cash };
+                        this.showShiftOpenModal = false;
+                        this.shiftCashInput = 0;
+                        this.showToast('Shift opened!', 'success');
+                        return;
+                    }
+                } catch (e) { console.warn('[pos] native shift open failed:', e); }
+            }
             try {
                 const res = await fetch('/api/pos/shift/open', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({ opening_cash: amount }) });
                 const data = await res.json();

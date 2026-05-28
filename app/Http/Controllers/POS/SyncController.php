@@ -185,9 +185,15 @@ class SyncController extends Controller
             ];
         });
 
+        $categories = Category::query()
+            ->when($since, fn ($q) => $q->where('updated_at', '>', $since))
+            ->orderBy('name')
+            ->get(['id', 'name', 'updated_at']);
+
         return response()->json([
             'success'    => true,
             'products'   => $products,
+            'categories' => $categories,
             'pulled_at'  => now()->toIso8601String(),
         ]);
     }
