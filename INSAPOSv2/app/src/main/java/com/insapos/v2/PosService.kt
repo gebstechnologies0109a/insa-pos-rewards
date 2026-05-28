@@ -136,8 +136,19 @@ class PosService : Service() {
         if (printerInitScheduled || printerManager != null) return
         printerInitScheduled = true
         scope.launch {
-            delay(15_000)
+            delay(3_000)
             if (printerManager == null) initPrinterBlocking()
+        }
+    }
+
+    /** Cashier page is active — warm up printer stack early for faster first receipt. */
+    fun signalCashierPageReady() {
+        synchronized(printerInitLock) {
+            printerInitScheduled = true
+        }
+        scope.launch {
+            delay(500)
+            initPrinterBlocking()
         }
     }
 

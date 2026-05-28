@@ -61,6 +61,10 @@ class SyncEngine(
     @Volatile
     var catalogPullSuppressedUntilMs: Long = 0L
 
+    /** Pause catalog pull while a local sale is being written to SQLite. */
+    @Volatile
+    var saleInProgress: Boolean = false
+
     fun suppressCatalogPull(durationMs: Long = 120_000L) {
         catalogPullSuppressedUntilMs = System.currentTimeMillis() + durationMs
     }
@@ -298,7 +302,7 @@ class SyncEngine(
                 return
             }
 
-            val catalogSuppressed = System.currentTimeMillis() < catalogPullSuppressedUntilMs
+            val catalogSuppressed = System.currentTimeMillis() < catalogPullSuppressedUntilMs || saleInProgress
             val needsCatalog = !catalogSuppressed && (forceCatalog || fullSync || isCatalogStale(branchId))
             if (needsCatalog) {
                 emitDownloadProgress("products", 15, "Downloading products…")

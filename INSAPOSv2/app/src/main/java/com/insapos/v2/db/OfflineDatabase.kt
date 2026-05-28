@@ -382,6 +382,50 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     // --- Products ---
 
+    /** Upsert products inside an existing transaction — do not call [withDb] from here. */
+    internal fun upsertProductsInTransaction(
+        db: SQLiteDatabase,
+        products: JSONArray,
+        start: Int,
+        end: Int,
+    ): Int {
+        var count = 0
+        for (j in start until end) {
+            val p = products.getJSONObject(j)
+            val cv = ContentValues().apply {
+                put("server_id", p.optInt("id"))
+                put("barcode", p.optString("barcode", ""))
+                put("name", p.optString("name"))
+                put("price", p.optDouble("price", 0.0))
+                put("cost", p.optDouble("cost", 0.0))
+                put("category", p.optString("category", ""))
+                put("unit", p.optString("unit", "pc"))
+                put("stock", p.optDouble("stock", 0.0))
+                put("image_url", p.optString("image_url", ""))
+                put("tax_rate", p.optDouble("tax_rate", 0.0))
+                put("is_active", if (p.optBoolean("is_active", true)) 1 else 0)
+                put("data_json", p.toString())
+                put("synced_at", now())
+                put("updated_at", now())
+            }
+            val existing = db.rawQuery(
+                "SELECT id FROM products WHERE server_id = ?",
+                arrayOf(p.optInt("id").toString())
+            )
+            try {
+                if (existing.moveToFirst()) {
+                    db.update("products", cv, "server_id = ?", arrayOf(p.optInt("id").toString()))
+                } else {
+                    db.insert("products", null, cv)
+                }
+                count++
+            } finally {
+                existing.close()
+            }
+        }
+        return count
+    }
+
     fun upsertProducts(products: JSONArray): Int {
         var count = 0
         val batchSize = 80
@@ -396,47 +440,14 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     private fun upsertProductsBatch(products: JSONArray, start: Int, end: Int): Int = withDb {
         val db = writableDatabase
-        var count = 0
         db.beginTransaction()
         try {
-            for (j in start until end) {
-                val p = products.getJSONObject(j)
-                val cv = ContentValues().apply {
-                    put("server_id", p.optInt("id"))
-                    put("barcode", p.optString("barcode", ""))
-                    put("name", p.optString("name"))
-                    put("price", p.optDouble("price", 0.0))
-                    put("cost", p.optDouble("cost", 0.0))
-                    put("category", p.optString("category", ""))
-                    put("unit", p.optString("unit", "pc"))
-                    put("stock", p.optDouble("stock", 0.0))
-                    put("image_url", p.optString("image_url", ""))
-                    put("tax_rate", p.optDouble("tax_rate", 0.0))
-                    put("is_active", if (p.optBoolean("is_active", true)) 1 else 0)
-                    put("data_json", p.toString())
-                    put("synced_at", now())
-                    put("updated_at", now())
-                }
-                val existing = db.rawQuery(
-                    "SELECT id FROM products WHERE server_id = ?",
-                    arrayOf(p.optInt("id").toString())
-                )
-                try {
-                    if (existing.moveToFirst()) {
-                        db.update("products", cv, "server_id = ?", arrayOf(p.optInt("id").toString()))
-                    } else {
-                        db.insert("products", null, cv)
-                    }
-                    count++
-                } finally {
-                    existing.close()
-                }
-            }
+            val count = upsertProductsInTransaction(db, products, start, end)
             db.setTransactionSuccessful()
+            count
         } finally {
             db.endTransaction()
         }
-        count
     }
 
     fun getCustomerCount(): Int = dbOp {
@@ -680,36 +691,44 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         }
     }
 
-    fun upsertCategories(categories: JSONArray): Int = withDb {
+    internal fun upsertCategoriesInTransaction(db: SQLiteDatabase, categories: JSONArray): Int {
         var count = 0
-        val db = writableDatabase
-        db.beginTransaction()
-        try {
-            for (i in 0 until categories.length()) {
-                val c = categories.getJSONObject(i)
-                val cv = ContentValues().apply {
-                    put("server_id", c.optInt("id"))
-                    put("name", c.optString("name"))
-                    put("data_json", c.toString())
-                    put("synced_at", now())
-                }
-                val existing = db.rawQuery(
-                    "SELECT id FROM categories WHERE server_id = ?",
-                    arrayOf(c.optInt("id").toString())
-                )
+        for (i in 0 until categories.length()) {
+            val c = categories.getJSONObject(i)
+            val cv = ContentValues().apply {
+                put("server_id", c.optInt("id"))
+                put("name", c.optString("name"))
+                put("data_json", c.toString())
+                put("synced_at", now())
+            }
+            val existing = db.rawQuery(
+                "SELECT id FROM categories WHERE server_id = ?",
+                arrayOf(c.optInt("id").toString())
+            )
+            try {
                 if (existing.moveToFirst()) {
                     db.update("categories", cv, "server_id = ?", arrayOf(c.optInt("id").toString()))
                 } else {
                     db.insert("categories", null, cv)
                 }
-                existing.close()
                 count++
+            } finally {
+                existing.close()
             }
+        }
+        return count
+    }
+
+    fun upsertCategories(categories: JSONArray): Int = withDb {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val count = upsertCategoriesInTransaction(db, categories)
             db.setTransactionSuccessful()
+            count
         } finally {
             db.endTransaction()
         }
-        return count
     }
 
     fun getProductByBarcode(barcode: String): JSONObject? = withDb {
@@ -726,6 +745,43 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     // --- Customers ---
 
+    internal fun upsertCustomersInTransaction(
+        db: SQLiteDatabase,
+        customers: JSONArray,
+        start: Int,
+        end: Int,
+    ): Int {
+        var count = 0
+        for (j in start until end) {
+            val c = customers.getJSONObject(j)
+            val cv = ContentValues().apply {
+                put("server_id", c.optInt("id"))
+                put("name", c.optString("name"))
+                put("phone", c.optString("phone", ""))
+                put("email", c.optString("email", ""))
+                put("address", c.optString("address", ""))
+                put("data_json", c.toString())
+                put("synced_at", now())
+                put("updated_at", now())
+            }
+            val existing = db.rawQuery(
+                "SELECT id FROM customers WHERE server_id = ?",
+                arrayOf(c.optInt("id").toString())
+            )
+            try {
+                if (existing.moveToFirst()) {
+                    db.update("customers", cv, "server_id = ?", arrayOf(c.optInt("id").toString()))
+                } else {
+                    db.insert("customers", null, cv)
+                }
+                count++
+            } finally {
+                existing.close()
+            }
+        }
+        return count
+    }
+
     fun upsertCustomers(customers: JSONArray): Int {
         var count = 0
         val batchSize = 80
@@ -740,41 +796,14 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     private fun upsertCustomersBatch(customers: JSONArray, start: Int, end: Int): Int = withDb {
         val db = writableDatabase
-        var count = 0
         db.beginTransaction()
         try {
-            for (j in start until end) {
-                val c = customers.getJSONObject(j)
-                val cv = ContentValues().apply {
-                    put("server_id", c.optInt("id"))
-                    put("name", c.optString("name"))
-                    put("phone", c.optString("phone", ""))
-                    put("email", c.optString("email", ""))
-                    put("address", c.optString("address", ""))
-                    put("data_json", c.toString())
-                    put("synced_at", now())
-                    put("updated_at", now())
-                }
-                val existing = db.rawQuery(
-                    "SELECT id FROM customers WHERE server_id = ?",
-                    arrayOf(c.optInt("id").toString())
-                )
-                try {
-                    if (existing.moveToFirst()) {
-                        db.update("customers", cv, "server_id = ?", arrayOf(c.optInt("id").toString()))
-                    } else {
-                        db.insert("customers", null, cv)
-                    }
-                    count++
-                } finally {
-                    existing.close()
-                }
-            }
+            val count = upsertCustomersInTransaction(db, customers, start, end)
             db.setTransactionSuccessful()
+            count
         } finally {
             db.endTransaction()
         }
-        count
     }
 
     fun getCustomers(): JSONArray = withDb {
@@ -1005,12 +1034,16 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     // --- Settings ---
 
-    fun setSetting(key: String, value: String) = withDb {
+    internal fun setSettingInTransaction(db: SQLiteDatabase, key: String, value: String) {
         val cv = ContentValues().apply {
             put("key", key)
             put("value", value)
         }
-        writableDatabase.insertWithOnConflict("settings", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        db.insertWithOnConflict("settings", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun setSetting(key: String, value: String) = withDb {
+        setSettingInTransaction(writableDatabase, key, value)
     }
 
     fun getSetting(key: String): String? = withDb {
@@ -1084,80 +1117,96 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         )
     }
 
-    fun upsertInventoryBatches(batches: JSONArray): Int = withDb {
+    internal fun upsertInventoryBatchesInTransaction(db: SQLiteDatabase, batches: JSONArray): Int {
         var count = 0
-        val db = writableDatabase
-        db.beginTransaction()
-        try {
-            for (i in 0 until batches.length()) {
-                val b = batches.getJSONObject(i)
-                val serverId = b.optInt("id", 0)
-                val productId = b.optInt("product_id", 0)
-                if (productId <= 0) continue
-                val cv = ContentValues().apply {
-                    put("server_id", serverId)
-                    put("product_id", productId)
-                    put("branch_id", b.optInt("branch_id", 0))
-                    put("batch_code", b.optString("batch_code", ""))
-                    put("expiry_date", b.optString("expiry_date", ""))
-                    put("qty", b.optDouble("quantity", b.optDouble("qty", 0.0)))
-                    put("cost", b.optDouble("cost_price", 0.0))
-                    put("data_json", b.toString())
-                    put("synced_at", now())
-                }
-                val existing = db.rawQuery(
-                    "SELECT id FROM inventory_batches WHERE server_id = ?",
-                    arrayOf(serverId.toString())
-                )
+        for (i in 0 until batches.length()) {
+            val b = batches.getJSONObject(i)
+            val serverId = b.optInt("id", 0)
+            val productId = b.optInt("product_id", 0)
+            if (productId <= 0) continue
+            val cv = ContentValues().apply {
+                put("server_id", serverId)
+                put("product_id", productId)
+                put("branch_id", b.optInt("branch_id", 0))
+                put("batch_code", b.optString("batch_code", ""))
+                put("expiry_date", b.optString("expiry_date", ""))
+                put("qty", b.optDouble("quantity", b.optDouble("qty", 0.0)))
+                put("cost", b.optDouble("cost_price", 0.0))
+                put("data_json", b.toString())
+                put("synced_at", now())
+            }
+            val existing = db.rawQuery(
+                "SELECT id FROM inventory_batches WHERE server_id = ?",
+                arrayOf(serverId.toString())
+            )
+            try {
                 if (existing.moveToFirst()) {
                     db.update("inventory_batches", cv, "server_id = ?", arrayOf(serverId.toString()))
                 } else {
                     db.insert("inventory_batches", null, cv)
                 }
-                existing.close()
                 count++
+            } finally {
+                existing.close()
             }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
         }
         return count
     }
 
-    fun upsertExpiryAlerts(alerts: JSONArray): Int = withDb {
-        var count = 0
+    fun upsertInventoryBatches(batches: JSONArray): Int = withDb {
         val db = writableDatabase
         db.beginTransaction()
         try {
-            for (i in 0 until alerts.length()) {
-                val a = alerts.getJSONObject(i)
-                val serverId = a.optInt("id", 0)
-                val cv = ContentValues().apply {
-                    put("server_id", serverId)
-                    put("product_id", a.optInt("product_id", 0))
-                    put("batch_id", a.optInt("inventory_batch_id", a.optInt("batch_id", 0)))
-                    put("alert_type", a.optString("alert_type", ""))
-                    put("message", a.optString("message", a.optString("alert_type", "")))
-                    put("data_json", a.toString())
-                    put("synced_at", now())
-                }
-                val existing = db.rawQuery(
-                    "SELECT id FROM expiry_alerts WHERE server_id = ?",
-                    arrayOf(serverId.toString())
-                )
+            val count = upsertInventoryBatchesInTransaction(db, batches)
+            db.setTransactionSuccessful()
+            count
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    internal fun upsertExpiryAlertsInTransaction(db: SQLiteDatabase, alerts: JSONArray): Int {
+        var count = 0
+        for (i in 0 until alerts.length()) {
+            val a = alerts.getJSONObject(i)
+            val serverId = a.optInt("id", 0)
+            val cv = ContentValues().apply {
+                put("server_id", serverId)
+                put("product_id", a.optInt("product_id", 0))
+                put("batch_id", a.optInt("inventory_batch_id", a.optInt("batch_id", 0)))
+                put("alert_type", a.optString("alert_type", ""))
+                put("message", a.optString("message", a.optString("alert_type", "")))
+                put("data_json", a.toString())
+                put("synced_at", now())
+            }
+            val existing = db.rawQuery(
+                "SELECT id FROM expiry_alerts WHERE server_id = ?",
+                arrayOf(serverId.toString())
+            )
+            try {
                 if (serverId > 0 && existing.moveToFirst()) {
                     db.update("expiry_alerts", cv, "server_id = ?", arrayOf(serverId.toString()))
                 } else {
                     db.insert("expiry_alerts", null, cv)
                 }
-                existing.close()
                 count++
+            } finally {
+                existing.close()
             }
+        }
+        return count
+    }
+
+    fun upsertExpiryAlerts(alerts: JSONArray): Int = withDb {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val count = upsertExpiryAlertsInTransaction(db, alerts)
             db.setTransactionSuccessful()
+            count
         } finally {
             db.endTransaction()
         }
-        return count
     }
 
     // --- Helpers ---

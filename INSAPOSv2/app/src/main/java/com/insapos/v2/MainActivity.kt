@@ -105,7 +105,22 @@ class MainActivity : AppCompatActivity() {
     fun onBranchIdSetFromWeb(branchId: Int) {
         Log.i(TAG, "Branch set from web: $branchId — scheduling background sync")
         val service = posService ?: return
+        service.signalCashierPageReady()
         scheduleSyncEngineAndPull(service, forceFullCatalog = false)
+    }
+
+    /** Deliver async createLocalSale result to the WebView without blocking the bridge thread. */
+    fun dispatchLocalSaleResult(requestId: String, resultJson: String) {
+        if (!isWebViewUsable()) return
+        val quotedId = org.json.JSONObject.quote(requestId)
+        val quotedResult = org.json.JSONObject.quote(resultJson)
+        runOnUiThread {
+            if (!isWebViewUsable()) return@runOnUiThread
+            webView.evaluateJavascript(
+                "if(window.onINSAPOSLocalSaleResult) window.onINSAPOSLocalSaleResult($quotedId, JSON.parse($quotedResult));",
+                null
+            )
+        }
     }
 
     /** WebView session cookies are scoped to the cashier URL scheme (usually HTTPS). */

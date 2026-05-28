@@ -4,6 +4,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import com.insapos.v2.db.OfflineDatabase
 import org.json.JSONObject
+import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -20,6 +21,9 @@ class AndroidBridge(private val activity: MainActivity) {
     private val session by lazy { SessionManager(activity) }
     private val httpExecutor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "insapos-bridge-http").apply { isDaemon = true }
+    }
+    private val saleExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "insapos-bridge-sale").apply { isDaemon = true }
     }
 
     private fun activityAlive(): Boolean =
@@ -179,12 +183,37 @@ class AndroidBridge(private val activity: MainActivity) {
     fun getLocalCustomers(): String = safeBridge { httpGet("/local/customers", 5000, 15_000) }
 
     @JavascriptInterface
-    fun createLocalSale(jsonPayload: String): String = safeBridge {
+    fun createLocalSale(jsonPayload: String): String {
+        if (!activityAlive()) return unavailable()
+        val requestId = UUID.randomUUID().toString()
+        saleExecutor.execute {
+            val syncEngine = activity.posService?.syncEngine
+            syncEngine?.saleInProgress = true
+            val result = try {
+                executeCreateLocalSale(jsonPayload)
+            } catch (t: Throwable) {
+                Log.e(TAG, "createLocalSale failed", t)
+                JSONObject().put("ok", false).put("error", t.message ?: "error").toString()
+            } finally {
+                syncEngine?.saleInProgress = false
+            }
+            activity.dispatchLocalSaleResult(requestId, result)
+        }
+        return JSONObject()
+            .put("ok", true)
+            .put("pending", true)
+            .put("request_id", requestId)
+            .toString()
+    }
+
+    private fun executeCreateLocalSale(jsonPayload: String): String {
         val engine = activity.posService?.posEngine
         if (engine != null) {
-            return@safeBridge engine.createSale(JSONObject(jsonPayload)).toString()
+            return engine.createSale(JSONObject(jsonPayload)).toString()
         }
-        httpPostJson("/local/sale", jsonPayload, SALE_HTTP_TIMEOUT_SEC)
+        return runOnHttpThread(SALE_HTTP_TIMEOUT_SEC) {
+            httpPostJsonBlocking("/local/sale", jsonPayload)
+        }
     }
 
     @JavascriptInterface

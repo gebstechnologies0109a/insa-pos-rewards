@@ -793,7 +793,8 @@
             <button @click="completeSale()" :disabled="!canProceed"
                     class="w-full py-2.5 lg:py-4 rounded-lg text-white font-bold text-sm lg:text-xl transition-colors"
                     :class="canProceed ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 cursor-not-allowed'">
-                Complete Sale
+                <span x-show="!saleProcessing">Complete Sale</span>
+                <span x-show="saleProcessing">Processing…</span>
             </button>
         </div>
     </div>
@@ -1546,8 +1547,7 @@ function posApp() {
         androidLocalUp: true,
         _nativeScanPort: 18182,
         _scanning: false,
-
-        licenseActive: @json($licenseActive ?? true),
+        saleProcessing: false,
         licenseBlocked: false,
         licenseBlockMessage: '',
         terminalSessionReady: false,
@@ -1601,6 +1601,7 @@ function posApp() {
             return [...new Set(amounts)].filter(a => a >= total).sort((a, b) => a - b).slice(0, 7);
         },
         get canProceed() {
+            if (this.saleProcessing) return false;
             if (this.cart.length === 0) return false;
             if (this.paymentMethod === 'cash') return this.amountTendered >= this.cartTotal;
             return true;
@@ -1862,6 +1863,14 @@ function posApp() {
             this.loadShift();
             this.initBuddy();
             window.onINSAPOSBarcode = (barcode) => { this._lastNativeScanTime = Date.now(); this._lastNativeScan = barcode; this.handleBarcodeScan(barcode); };
+            window.onINSAPOSLocalSaleResult = (requestId, data) => {
+                const pending = window.__insaposSalePending;
+                if (!pending || !pending[requestId]) return;
+                const entry = pending[requestId];
+                clearTimeout(entry.timeout);
+                delete pending[requestId];
+                entry.resolve(data);
+            };
             this.bindScanInputFocusBridge();
             await this.loadIoPreferences();
         },
@@ -2775,19 +2784,30 @@ function posApp() {
         },
 
         async sendReceiptToPrinter(payload) {
-            if (typeof INSABuddy === 'undefined' && !(this.hasNativeBridge && typeof window.INSAPOS !== 'undefined')) {
+            if (!this.canUsePrinter()) {
                 this.showToast('Printer service unavailable', 'error');
                 return false;
             }
-            if (typeof INSABuddy !== 'undefined') {
-                INSABuddy.detectV2();
-            }
             try {
-                const result = typeof INSABuddy !== 'undefined'
-                    ? await INSABuddy.printReceipt(payload)
-                    : null;
-                if (!INSABuddy.isPrintSuccess(result)) {
-                    this.showToast(INSABuddy.parseApiError(result, 'Receipt print failed'), 'error');
+                if (typeof INSABuddy !== 'undefined') {
+                    INSABuddy.detectV2();
+                    const result = await INSABuddy.printReceipt(payload);
+                    if (!INSABuddy.isPrintSuccess(result)) {
+                        this.showToast(INSABuddy.parseApiError(result, 'Receipt print failed'), 'error');
+                        return false;
+                    }
+                } else if (this.hasNativeBridge && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.printReceipt === 'function') {
+                    const text = (typeof INSABuddy !== 'undefined' && INSABuddy.buildReceiptText)
+                        ? INSABuddy.buildReceiptText(payload, { paperSize: '57mm' })
+                        : this.formatNativeReceiptText(payload);
+                    const raw = window.INSAPOS.printReceipt(JSON.stringify({ text }));
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (!data || !data.ok) {
+                        this.showToast((data && data.error) || 'Receipt print failed', 'error');
+                        return false;
+                    }
+                } else {
+                    this.showToast('Printer service unavailable', 'error');
                     return false;
                 }
                 this.showToast('Receipt sent to printer', 'success', 2000);
@@ -2796,6 +2816,60 @@ function posApp() {
                 this.showToast('Receipt print failed — local service unavailable', 'error');
                 return false;
             }
+        },
+
+        formatNativeReceiptText(payload) {
+            const lines = [];
+            lines.push(payload.storeName || 'INSA POS');
+            if (payload.branchName) lines.push(payload.branchName);
+            lines.push('--------------------------------');
+            if (payload.saleNumber) lines.push('Sale #: ' + payload.saleNumber);
+            lines.push('Date: ' + (payload.date || new Date().toLocaleString()));
+            lines.push('Cashier: ' + (payload.cashier || ''));
+            lines.push('--------------------------------');
+            (payload.items || []).forEach((item) => {
+                lines.push(String(item.name).substring(0, 20) + ' x' + item.qty + ' ' + (item.qty * item.price).toFixed(2));
+            });
+            lines.push('--------------------------------');
+            lines.push('TOTAL: ' + parseFloat(payload.total || 0).toFixed(2));
+            lines.push('Payment: ' + (payload.paymentMethod || 'cash'));
+            if (payload.amountTendered) {
+                lines.push('Tendered: ' + parseFloat(payload.amountTendered).toFixed(2));
+                lines.push('Change: ' + parseFloat(payload.change || 0).toFixed(2));
+            }
+            lines.push('');
+            lines.push('Thank you for your purchase!');
+            return lines.join('\n');
+        },
+
+        createLocalSaleWithTimeout(payloadStr, timeoutMs = 25000) {
+            return new Promise((resolve, reject) => {
+                window.__insaposSalePending = window.__insaposSalePending || {};
+                let raw;
+                try {
+                    raw = window.INSAPOS.createLocalSale(payloadStr);
+                } catch (e) {
+                    reject(e);
+                    return;
+                }
+                let init;
+                try {
+                    init = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                } catch (e) {
+                    reject(e);
+                    return;
+                }
+                if (!init.pending || !init.request_id) {
+                    resolve(init);
+                    return;
+                }
+                const requestId = init.request_id;
+                const timeout = setTimeout(() => {
+                    delete window.__insaposSalePending[requestId];
+                    reject(new Error('Sale timed out after ' + Math.round(timeoutMs / 1000) + 's'));
+                }, timeoutMs);
+                window.__insaposSalePending[requestId] = { resolve, reject, timeout };
+            });
         },
 
         async buddyPrintReceipt() {
@@ -3188,6 +3262,7 @@ function posApp() {
             };
 
             if (nativeEngine) {
+                this.saleProcessing = true;
                 try {
                     const payload = JSON.stringify({
                         local_id: localId,
@@ -3208,8 +3283,7 @@ function posApp() {
                         store_name: '{{ $brandName }}',
                         created_at: txData.created_at,
                     });
-                    const raw = window.INSAPOS.createLocalSale(payload);
-                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    const data = await this.createLocalSaleWithTimeout(payload);
                     if (data.ok) {
                         localSaleOk = true;
                         serverSale = data.sale;
@@ -3220,8 +3294,10 @@ function posApp() {
                     }
                 } catch (e) {
                     console.warn('[pos] native sale failed:', e);
-                    this.showToast('Could not complete sale locally. Check storage and try again.', 'error');
+                    this.showToast(e.message || 'Could not complete sale locally. Check storage and try again.', 'error');
                     return;
+                } finally {
+                    this.saleProcessing = false;
                 }
             } else if (db) {
                 await db.transactions.add(txData);
