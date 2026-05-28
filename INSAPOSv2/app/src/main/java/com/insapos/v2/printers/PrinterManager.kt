@@ -196,8 +196,12 @@ class PrinterManager(private val context: Context) {
         if (includeBt) {
             all.addAll(scanAllBluetoothDevices())
         }
+        Log.d(TAG, "scanAll includeBt=$includeBt → ${all.size} printer(s)")
         return all
     }
+
+    /** Full discovery for printer settings UI (bonded BT + USB + built-in). */
+    fun scanForUi(): List<Printer> = scanAll(includeBluetooth = true)
 
     private fun scanForSelection(type: String): List<Printer> {
         val savedType = prefs.getString(KEY_PRINTER_TYPE, null)

@@ -2281,12 +2281,13 @@ function posApp() {
 
         async scanPrinters() {
             if (typeof INSABuddy === 'undefined') return;
+            if (typeof INSABuddy !== 'undefined') INSABuddy.detectV2();
             this.printerScanning = true;
             this.printerStatusMessage = 'Scanning for printers...';
             this.printerList = [];
             this.printerSelectedIndex = -1;
             try {
-                const data = await INSABuddy.listPrinters(true);
+                const data = await INSABuddy.scanPrintersForUi();
                 this.printerList = INSABuddy.parsePrinterList(data);
                 if (this.printerList.length === 0) {
                     this.printerStatusMessage = 'No printers found. Ensure Bluetooth is on and devices are paired.';

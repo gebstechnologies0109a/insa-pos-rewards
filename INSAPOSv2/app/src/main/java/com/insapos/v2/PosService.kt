@@ -175,7 +175,7 @@ class PosService : Service() {
             try {
                 localServer = PosLocalServer(
                     context = this,
-                    getPrinterManager = { ensurePrinterManagerReady() },
+                    getPrinterManager = { requestPrinterManager() },
                     getHidScanner = { hidScannerDriver },
                     getDatabase = { offlineDb },
                     getPosEngine = { posEngine },

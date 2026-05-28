@@ -28,4 +28,17 @@ class PrinterManagerBluetoothScanTest {
             PrinterScanPolicy.includeBluetoothForSelection("", savedType = "usb", lastSelectedType = null, currentType = null)
         )
     }
+
+    @Test
+    fun discoveryDefaultsToBluetoothIncluded() {
+        assertTrue(PrinterScanPolicy.includeBluetoothForDiscovery(null))
+        assertTrue(PrinterScanPolicy.includeBluetoothForDiscovery(""))
+        assertTrue(PrinterScanPolicy.includeBluetoothForDiscovery("1"))
+    }
+
+    @Test
+    fun discoveryCanOptOutOfBluetooth() {
+        assertFalse(PrinterScanPolicy.includeBluetoothForDiscovery("0"))
+        assertFalse(PrinterScanPolicy.includeBluetoothForDiscovery("false"))
+    }
 }

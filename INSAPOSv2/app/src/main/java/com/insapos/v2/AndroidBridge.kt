@@ -119,6 +119,12 @@ class AndroidBridge(private val activity: MainActivity) {
     @JavascriptInterface
     fun getPrinterStatus(): String = safeBridge { httpGet("/printer/status", 3000, 3000) }
 
+    /** Bonded BT + USB + built-in printers for settings UI (same as GET /printer/list). */
+    @JavascriptInterface
+    fun listPrinters(): String = safeBridge {
+        httpGet("/printer/list?bluetooth=1", 5000, 15_000)
+    }
+
     @JavascriptInterface
     fun getServicePort(): Int = PosLocalServer.PORT
 

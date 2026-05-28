@@ -231,11 +231,28 @@ const INSABuddy = {
     },
 
     /**
-     * List all available printers detected by INSABuddy.
+     * List all available printers (bonded Bluetooth, USB, built-in).
+     * Always requests full discovery; omitting bluetooth=1 previously returned no BT printers.
      */
     async listPrinters(includeBluetooth = true) {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.listPrinters === 'function') {
+            try {
+                const raw = window.INSAPOS.listPrinters();
+                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (data && data.ok !== false) return data;
+            } catch (e) {
+                console.warn('[INSABuddy] native listPrinters failed, falling back to HTTP', e);
+            }
+        }
         const q = includeBluetooth ? '?bluetooth=1' : '';
         return this._get(`/printer/list${q}`);
+    },
+
+    /**
+     * Alias for printer settings search — full device scan.
+     */
+    async scanPrintersForUi() {
+        return this.listPrinters(true);
     },
 
     /**
@@ -341,7 +358,11 @@ const INSABuddy = {
      */
     parsePrinterList(data) {
         if (!data) return [];
-        const raw = data.printers || [];
+        if (data.ok === false) {
+            console.warn('[INSABuddy] printer list error:', data.error || data.reason);
+            return [];
+        }
+        const raw = data.printers || data.devices || [];
         if (!Array.isArray(raw)) return [];
         return raw.map(p => ({
             type: p.type || 'unknown',
@@ -425,11 +446,16 @@ const INSABuddy = {
         this.detectV2();
         try {
             const res = await fetch(`${this.BASE_URL}${path}`, {
-                signal: AbortSignal.timeout(5000),
+                signal: AbortSignal.timeout(15000),
             });
+            if (!res.ok) {
+                console.warn('[INSABuddy] GET', path, res.status);
+                return { ok: false, error: `HTTP ${res.status}` };
+            }
             return await res.json();
-        } catch {
-            return null;
+        } catch (e) {
+            console.warn('[INSABuddy] GET failed', path, e);
+            return { ok: false, error: 'fetch_failed' };
         }
     },
 

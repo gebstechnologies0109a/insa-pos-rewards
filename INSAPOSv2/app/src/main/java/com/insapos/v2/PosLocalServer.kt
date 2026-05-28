@@ -185,13 +185,17 @@ class PosLocalServer(
     }
 
     private fun handlePrinterList(session: IHTTPSession): Response {
+        parseQueryParameters(session)
         val pm = getPrinterManager() ?: return jsonOk(
             JSONObject().put("ok", true).put("printers", JSONArray())
+                .put("reason", "Printer service starting")
         )
-        val params = session.parms
-        val includeBt = params["bluetooth"] == "1"
-            || params["bluetooth"]?.equals("true", ignoreCase = true) == true
-        val list = pm.scanAll(includeBluetooth = includeBt)
+        val params = session.parms ?: emptyMap()
+        val includeBt = com.insapos.v2.printers.PrinterScanPolicy.includeBluetoothForDiscovery(
+            params["bluetooth"]
+        )
+        val list = if (includeBt) pm.scanForUi() else pm.scanAll(includeBluetooth = false)
+        Log.i(TAG, "GET /printer/list → ${list.size} printer(s) (bluetooth=$includeBt)")
         val arr = JSONArray()
         for (p in list) {
             arr.put(JSONObject().apply {
@@ -200,7 +204,7 @@ class PosLocalServer(
                 put("connected", p.isConnected())
             })
         }
-        return jsonOk(JSONObject().put("ok", true).put("printers", arr))
+        return jsonOk(JSONObject().put("ok", true).put("printers", arr).put("count", list.size))
     }
 
     private fun handlePrinterSelect(session: IHTTPSession): Response {
@@ -602,6 +606,15 @@ class PosLocalServer(
     }
 
     // --- Helpers ---
+
+    /** NanoHTTPD populates [IHTTPSession.parms] from the query string only after parseBody. */
+    private fun parseQueryParameters(session: IHTTPSession) {
+        try {
+            session.parseBody(HashMap<String, String>())
+        } catch (e: Exception) {
+            Log.w(TAG, "parseBody for query params failed: ${e.message}")
+        }
+    }
 
     private fun readBody(session: IHTTPSession): String {
         val map = HashMap<String, String>()
