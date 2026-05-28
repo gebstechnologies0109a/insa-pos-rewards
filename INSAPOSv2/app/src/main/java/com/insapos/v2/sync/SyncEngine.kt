@@ -31,8 +31,10 @@ class SyncEngine(
         private const val PUSH_FAIL_BACKOFF_MAX_MS = 300_000L
         private const val MAX_PUSH_PER_CYCLE = 25
         private const val MAX_BATCH_PUSH = 25
-        private const val PULL_INTERVAL_MS = 120_000L
-        private const val STARTUP_PULL_DELAY_MS = 2_000L
+        private const val PULL_INTERVAL_MS = 300_000L
+        private const val STARTUP_PULL_DELAY_MS = 8_000L
+        private const val KEY_CATALOG_LAST_SYNC = "catalog_last_sync"
+        private const val KEY_CATALOG_SYNCED_AT = "catalog_synced_at"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -80,21 +82,26 @@ class SyncEngine(
     }
 
     fun syncNow() {
-        scope.launch {
-            pushTransactions()
-            pushSyncQueue()
-            pullData(fullSync = false)
-        }
+        syncNowIncremental()
     }
 
-    /** Full catalog download (no delta `since`) — call after branch_id is set. */
+    /** Full catalog download — manual refresh or first login only. */
     fun syncNowFull() {
         scope.launch {
             emitDownloadProgress("products", 5, "Downloading products…")
             pushTransactions()
             pushSyncQueue()
-            pullData(fullSync = true)
+            pullData(fullSync = true, forceCatalog = true)
             emitDownloadProgress("done", 100, "Store data ready")
+        }
+    }
+
+    /** Push queued sales + delta inventory only (routine / startup). */
+    fun syncNowIncremental() {
+        scope.launch {
+            pushTransactions()
+            pushSyncQueue()
+            pullData(fullSync = false, forceCatalog = false)
         }
     }
 
@@ -125,7 +132,7 @@ class SyncEngine(
             delay(STARTUP_PULL_DELAY_MS)
             while (isActive) {
                 if (connectivity.isConnected()) {
-                    pullData(fullSync = false)
+                    pullData(fullSync = false, forceCatalog = false)
                 }
                 delay(PULL_INTERVAL_MS)
             }
@@ -251,9 +258,16 @@ class SyncEngine(
         return processed > 0
     }
 
-    private suspend fun pullData(fullSync: Boolean) {
+    private suspend fun pullData(fullSync: Boolean, forceCatalog: Boolean = fullSync) {
+        if (!connectivity.isConnected()) {
+            updateStatus(SyncStatus.IDLE)
+            return
+        }
+
         updateStatus(SyncStatus.PULLING)
-        if (BuildConfig.DEBUG) Log.i(TAG, "Pulling data from server (fullSync=$fullSync)")
+        if (BuildConfig.DEBUG) {
+            Log.i(TAG, "Pulling data (fullSync=$fullSync forceCatalog=$forceCatalog)")
+        }
 
         try {
             val branchId = session.branchId
@@ -263,14 +277,21 @@ class SyncEngine(
                 return
             }
 
-            emitDownloadProgress("products", 15, "Downloading products…")
-            pullProductCatalog(branchId)
+            val needsCatalog = forceCatalog || fullSync || isCatalogStale(branchId)
+            if (needsCatalog) {
+                emitDownloadProgress("products", 15, "Downloading products…")
+                pullProductCatalog(branchId)
+                val syncedAt = now()
+                db.setSetting(KEY_CATALOG_LAST_SYNC, syncedAt)
+                db.setSetting(KEY_CATALOG_SYNCED_AT, syncedAt)
+                emitDownloadProgress("customers", 80, "Downloading customers…")
+                pullCustomers()
+            } else if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Skipping product catalog pull — already synced for branch $branchId")
+            }
 
             emitDownloadProgress("inventory", 55, "Downloading stock levels…")
             pullInventory(branchId, fullSync)
-
-            emitDownloadProgress("customers", 80, "Downloading customers…")
-            pullCustomers()
 
             markCacheReady(branchId)
 
@@ -432,12 +453,26 @@ class SyncEngine(
         }
     }
 
+    /** True when catalog was never synced for this branch (first login / branch change). */
+    private fun isCatalogStale(branchId: Int): Boolean {
+        if (db.getProducts().length() == 0) return true
+        val readyBranch = db.getSetting("cache_ready_branch_id")?.toIntOrNull()
+        if (readyBranch != branchId) return true
+        val syncedAt = db.getSetting(KEY_CATALOG_SYNCED_AT)
+            ?: db.getSetting(KEY_CATALOG_LAST_SYNC)
+            ?: db.getSetting("cache_ready_at")
+        return syncedAt.isNullOrBlank()
+    }
+
     private fun markCacheReady(branchId: Int) {
         val count = db.getProducts().length()
         if (count > 0) {
             db.setSetting("cache_ready", "1")
             db.setSetting("cache_ready_branch_id", branchId.toString())
             db.setSetting("cache_ready_at", now())
+            if (db.getSetting(KEY_CATALOG_LAST_SYNC).isNullOrBlank()) {
+                db.setSetting(KEY_CATALOG_LAST_SYNC, now())
+            }
             Log.i(TAG, "Offline cache ready ($count products)")
         }
     }

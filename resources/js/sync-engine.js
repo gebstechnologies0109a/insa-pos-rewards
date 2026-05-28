@@ -281,6 +281,22 @@
         return (await db.products.count()) > 0;
     }
 
+    async function isCatalogStale() {
+        const db = window.INSADB;
+        if (!db) return true;
+        if ((await db.products.count()) === 0) return true;
+        if (_branchId != null) {
+            const branch = await db.settings.get('cache_ready_branch_id', null);
+            if (branch != null && String(branch) !== String(_branchId)) return true;
+        }
+        const last = await db.settings.get('catalog_last_sync', null)
+            || await db.settings.get('products_last_sync', null)
+            || await db.settings.get('cache_ready_at', null);
+        if (!last) return true;
+        const age = Date.now() - new Date(last).getTime();
+        return !Number.isFinite(age) || age >= FULL_PULL_INTERVAL_MS;
+    }
+
     // ── Pull from INSABuddy backup ────────────────────────────
 
     async function pullFromBuddy() {
@@ -412,11 +428,16 @@
                 return result;
             }
 
-            emit('downloadProgress', { phase: 'products', percent: 5, message: 'Downloading products…' });
-            const catalog = await pullCatalog(force);
-            result.products = catalog.products;
-            result.categories = catalog.categories;
-            emit('downloadProgress', { phase: 'products', percent: 40, message: 'Products saved locally' });
+            const catalogStale = force || await isCatalogStale();
+            if (catalogStale) {
+                emit('downloadProgress', { phase: 'products', percent: 5, message: 'Downloading products…' });
+                const catalog = await pullCatalog(force);
+                result.products = catalog.products;
+                result.categories = catalog.categories;
+                emit('downloadProgress', { phase: 'products', percent: 40, message: 'Products saved locally' });
+            } else {
+                emit('downloadProgress', { phase: 'products', percent: 35, message: 'Using cached products' });
+            }
 
             emit('downloadProgress', { phase: 'inventory', percent: 50, message: 'Downloading stock levels…' });
             result.stock = await pullInventory(force);

@@ -506,8 +506,8 @@ class PosLocalServer(
 
     private fun handleSyncNow(): Response {
         val sync = getSyncEngine() ?: return jsonError("Sync engine not ready")
-        sync.syncNowFull()
-        return jsonOk(JSONObject().put("ok", true).put("triggered", true).put("full", true))
+        sync.syncNow()
+        return jsonOk(JSONObject().put("ok", true).put("triggered", true).put("full", false))
     }
 
     // --- Local POS engine handlers ---

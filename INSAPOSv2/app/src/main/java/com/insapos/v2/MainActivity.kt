@@ -97,10 +97,10 @@ class MainActivity : AppCompatActivity() {
         scanInputFocused = focused
     }
 
-    /** Called from WebView when cashier sets branch — triggers immediate full offline download. */
+    /** Called from WebView when cashier sets branch — background sync; full catalog only if cache missing/stale. */
     fun onBranchIdSetFromWeb(branchId: Int) {
-        Log.i(TAG, "Branch set from web: $branchId — starting full sync")
-        posService?.let { ensureSyncEngineAndPullFull(it) }
+        Log.i(TAG, "Branch set from web: $branchId — starting background sync")
+        posService?.let { ensureSyncEngineAndPull(it, forceFullCatalog = false) }
     }
 
     /** WebView session cookies are scoped to the cashier URL scheme (usually HTTPS). */
@@ -118,7 +118,7 @@ class MainActivity : AppCompatActivity() {
             .firstOrNull()
     }
 
-    private fun ensureSyncEngineAndPullFull(service: PosService) {
+    private fun ensureSyncEngineAndPull(service: PosService, forceFullCatalog: Boolean) {
         if (!syncEngineStarted) {
             service.startSyncEngine(connectivity, ::syncSessionCookies)
             syncEngineStarted = true
@@ -130,13 +130,32 @@ class MainActivity : AppCompatActivity() {
             }
             service.syncEngine?.onDownloadProgress = { progress ->
                 runOnUiThread {
-                    statusText.text = progress.message
+                    if (!pageLoaded) {
+                        statusText.text = progress.message
+                    }
                     updateSyncBadge()
                 }
             }
         }
-        service.syncEngine?.syncNowFull()
+        val engine = service.syncEngine ?: return
+        if (forceFullCatalog || needsFullCatalogPull(service, session.branchId ?: 0)) {
+            engine.syncNowFull()
+        } else {
+            engine.syncNowIncremental()
+        }
         updateSyncBadge()
+    }
+
+    private fun needsFullCatalogPull(service: PosService, branchId: Int): Boolean {
+        if (branchId <= 0) return true
+        val db = service.offlineDb ?: return true
+        if (db.getProducts().length() == 0) return true
+        val readyBranch = db.getSetting("cache_ready_branch_id")?.toIntOrNull()
+        if (readyBranch != branchId) return true
+        val syncedAt = db.getSetting("catalog_synced_at")
+            ?: db.getSetting("catalog_last_sync")
+            ?: db.getSetting("cache_ready_at")
+        return syncedAt.isNullOrBlank()
     }
 
     private val usbPermissionReceiver = object : BroadcastReceiver() {
@@ -506,7 +525,12 @@ class MainActivity : AppCompatActivity() {
                         return
                     }
 
-                    showOffline()
+                    Log.w(TAG, "Main frame load failed — retrying from WebView cache if available")
+                    webView.settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                    val cached = session.lastUrl
+                    if (!cached.isNullOrBlank() && isAuthenticatedPosPath(cached)) {
+                        handler.post { webView.loadUrl(cached) }
+                    }
                 } else {
                     Log.w(TAG, "WebView subresource error code=$code url=$url desc=$desc")
                 }
@@ -693,8 +717,12 @@ class MainActivity : AppCompatActivity() {
                     updateSyncBadge()
                 }
             }
-            if (session.branchId != null) {
-                service.syncEngine?.syncNowFull()
+            session.branchId?.let { branchId ->
+                if (needsFullCatalogPull(service, branchId)) {
+                    service.syncEngine?.syncNowFull()
+                } else {
+                    service.syncEngine?.syncNowIncremental()
+                }
             }
             updateSyncBadge()
         }, 2_000)
@@ -702,6 +730,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadPosUrl() {
         allowSuperAdminPanel = false
+        if (!connectivity.isConnected()) {
+            webView.settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+        } else {
+            webView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+        }
         if (shouldStartAtLogin()) {
             loadLoginUrl()
             return
@@ -821,23 +854,15 @@ class MainActivity : AppCompatActivity() {
             onOnline = {
                 Log.i(TAG, "Network online")
                 updateSyncBadge()
-                posService?.syncEngine?.syncNow()
-                if (isOfflineShown) {
-                    handler.postDelayed({
-                        if (connectivity.isConnected()) {
-                            hideOffline()
-                            webView.reload()
-                        }
-                    }, 2000)
-                }
+                posService?.syncEngine?.syncNowIncremental()
+                if (isOfflineShown) hideOffline()
                 webView.evaluateJavascript(
                     "if(window.onINSAPOSConnectivity) window.onINSAPOSConnectivity(true);", null
                 )
             },
             onOffline = {
-                Log.w(TAG, "Network offline")
+                Log.w(TAG, "Network offline — cashier continues on local cache")
                 updateSyncBadge()
-                showOffline()
                 webView.evaluateJavascript(
                     "if(window.onINSAPOSConnectivity) window.onINSAPOSConnectivity(false);", null
                 )
@@ -850,7 +875,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showOffline() {
         isOfflineShown = true
-        offlineOverlay.visibility = View.VISIBLE
+        offlineOverlay.visibility = View.GONE
         updateOfflineStats()
     }
 

@@ -182,11 +182,13 @@ class PrinterManager(private val context: Context) {
         return if (BuiltInPrinter.isAvailable(context)) BuiltInPrinter(context) else null
     }
 
-    fun scanAll(): List<Printer> {
+    fun scanAll(includeBluetooth: Boolean = false): List<Printer> {
         val all = mutableListOf<Printer>()
         scanBuiltInPrinter()?.let { all.add(it) }
-        all.addAll(scanAllBluetoothDevices())
         all.addAll(scanUsbPrinters())
+        if (includeBluetooth) {
+            all.addAll(scanAllBluetoothDevices())
+        }
         return all
     }
 

@@ -24,6 +24,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class PosService : Service() {
 
@@ -84,12 +86,21 @@ class PosService : Service() {
         }
     }
 
-    /** Lazily creates [PrinterManager]. Safe from background HTTP threads; defers on main thread. */
+    /** Lazily creates [PrinterManager]. Print paths init on a worker thread so deferred startup does not block receipts. */
     fun ensurePrinterManagerReady(): PrinterManager? {
         printerManager?.let { return it }
         synchronized(printerInitLock) {
             printerManager?.let { return it }
-            scheduleDeferredPrinterInit()
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                val latch = CountDownLatch(1)
+                var ready: PrinterManager? = null
+                scope.launch {
+                    ready = initPrinterBlocking()
+                    latch.countDown()
+                }
+                latch.await(12, TimeUnit.SECONDS)
+                return ready
+            }
             return initPrinterBlocking()
         }
     }
@@ -110,12 +121,20 @@ class PosService : Service() {
         }
     }
 
+    /** Initialize printer stack when settings/print is used (avoids slow BT scan on sale path). */
+    fun requestPrinterManager(): PrinterManager? {
+        synchronized(printerInitLock) {
+            printerInitScheduled = true
+            return initPrinterBlocking()
+        }
+    }
+
     private fun scheduleDeferredPrinterInit() {
         if (printerInitScheduled || printerManager != null) return
         printerInitScheduled = true
         scope.launch {
-            delay(45_000)
-            initPrinterBlocking()
+            delay(120_000)
+            if (printerManager == null) initPrinterBlocking()
         }
     }
 

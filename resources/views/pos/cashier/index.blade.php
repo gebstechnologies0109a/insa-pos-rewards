@@ -89,7 +89,7 @@
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/terminal-session.js') }}"></script>
     <script src="{{ asset('js/insabuddy.js') }}"></script>
-    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.11"></script>
+    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.14"></script>
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden insapos-alpine-pending" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
@@ -3121,6 +3121,7 @@ function posApp() {
             if (!this.canProceed) return;
             if (!this.activeShift) { this.showToast('No active shift. Please open a shift first.', 'error'); this.screen = 'pos'; return; }
             const db = window.INSADB;
+            const nativeEngine = this.useNativeEngine();
             const tendered = this.paymentMethod === 'cash' ? this.amountTendered : this.cartTotal;
             const localId = db ? db.generateUUID() : crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
             const txData = {
@@ -3130,18 +3131,24 @@ function posApp() {
                 subtotal: this.cartSubtotal, discount_total: this.cartDiscount, order_discount: this.orderDiscountApplied,
                 total: this.cartTotal, change_due: Math.max(0, tendered - this.cartTotal), status: 'pending', created_at: new Date().toISOString(),
             };
-            if (db) { await db.transactions.add(txData); await db.syncQueue.add({ type: 'transaction_push', ref: localId }); this.pendingSyncCount++; }
             const receiptData = {
                 local_tx_id: localId, sale_number: null, store_name: '{{ $brandName }}', branch_name: '{{ auth()->user()->branch?->name ?? "" }}',
                 cashier: '{{ auth()->user()->name }}', items: txData.items, subtotal: txData.subtotal, discount: txData.discount_total,
                 total: txData.total, payment_method: txData.payment_method, amount_tendered: txData.amount_tendered,
                 change_due: txData.change_due, customer: this.selectedCustomer?.name || null,
             };
-            if (db) await db.receipts.add(receiptData);
             let serverSale = null;
             let localSaleOk = false;
 
-            if (this.useNativeEngine()) {
+            const queueBackgroundSync = () => {
+                if (typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.triggerLocalSync === 'function') {
+                    try { window.INSAPOS.triggerLocalSync(); } catch (e) { console.warn('[pos] background sync:', e); }
+                } else if (window.SyncEngine) {
+                    SyncEngine.pushTransactions().catch(() => {});
+                }
+            };
+
+            if (nativeEngine) {
                 try {
                     const payload = JSON.stringify({
                         local_id: localId,
@@ -3167,44 +3174,52 @@ function posApp() {
                     if (data.ok) {
                         localSaleOk = true;
                         serverSale = data.sale;
-                        if (typeof window.INSAPOS.triggerLocalSync === 'function') {
-                            window.INSAPOS.triggerLocalSync();
-                        }
+                        queueBackgroundSync();
                     } else {
                         this.showToast(data.error || 'Local sale failed', 'error');
                         return;
                     }
                 } catch (e) {
-                    console.warn('[pos] native sale failed, falling back to cloud:', e);
+                    console.warn('[pos] native sale failed:', e);
+                    this.showToast('Could not complete sale locally. Check storage and try again.', 'error');
+                    return;
+                }
+            } else if (db) {
+                await db.transactions.add(txData);
+                await db.syncQueue.add({ type: 'transaction_push', ref: localId });
+                await db.receipts.add(receiptData);
+                this.pendingSyncCount++;
+            }
+
+            if (!localSaleOk && !nativeEngine) {
+                try {
+                    const res = await fetch('/api/pos/sales', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({
+                        branch_id: txData.branch_id, shift_id: txData.shift_id, cashier_id: txData.cashier_id, member_id: txData.member_id,
+                        payment_method: txData.payment_method, payment_ref: txData.payment_ref, amount_tendered: txData.amount_tendered,
+                        items: txData.items,
+                        subtotal: txData.subtotal,
+                        discount_total: txData.discount_total,
+                        order_discount: txData.order_discount,
+                        total: txData.total,
+                    }) });
+                    const data = await res.json();
+                    if (data.success) {
+                        serverSale = data.sale;
+                        if (db) {
+                            await db.transactions.markSynced(localId, data.sale.id);
+                            this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1);
+                        }
+                    } else {
+                        queueBackgroundSync();
+                    }
+                } catch {
+                    queueBackgroundSync();
                 }
             }
 
-            if (!localSaleOk) try {
-                const res = await fetch('/api/pos/sales', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({
-                    branch_id: txData.branch_id, shift_id: txData.shift_id, cashier_id: txData.cashier_id, member_id: txData.member_id,
-                    payment_method: txData.payment_method, payment_ref: txData.payment_ref, amount_tendered: txData.amount_tendered,
-                    items: txData.items,
-                    subtotal: txData.subtotal,
-                    discount_total: txData.discount_total,
-                    order_discount: txData.order_discount,
-                    total: txData.total,
-                }) });
-                const data = await res.json();
-                if (data.success) {
-                    serverSale = data.sale;
-                    if (db) {
-                        await db.transactions.markSynced(localId, data.sale.id);
-                        this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1);
-                    }
-                } else if (window.SyncEngine) {
-                    SyncEngine.pushTransactions().catch(() => {});
-                }
-            } catch {
-                if (window.SyncEngine) SyncEngine.pushTransactions().catch(() => {});
-            }
-            if (!serverSale && !localSaleOk && window.SyncEngine) {
+            if (localSaleOk && !serverSale) {
                 this.syncStatus = 'partial';
-            } else if (localSaleOk && !serverSale) {
+            } else if (!serverSale && !localSaleOk && window.SyncEngine) {
                 this.syncStatus = 'partial';
             }
             this.lastSale = serverSale || { local_id: localId, sale_number: null, total: txData.total, amount_tendered: txData.amount_tendered, change_due: txData.change_due, payment_method: txData.payment_method, offline: !serverSale || localSaleOk, _cart: txData.items };
