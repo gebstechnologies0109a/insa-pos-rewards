@@ -22,6 +22,7 @@ class PurgeDeviceTestSales extends Command
         {--since=2026-05-28 : Include device-synced sales created on/after this date}
         {--local-id-only : Match any sale with local_id set (ignores --since)}
         {--reference-pattern= : Extra filter: sale_number LIKE pattern (e.g. S20260528%)}
+        {--sale-day= : Purge by sale_number day token only (e.g. 20260528); ignores local_id requirement}
         {--limit=0 : Max sales to process (0 = unlimited)}
         {--chunk=250 : Sales processed per batch}
         {--yes : Skip confirmation prompt (use with --force on servers)}';
@@ -142,7 +143,10 @@ class PurgeDeviceTestSales extends Command
     {
         $query = PosSale::query()->where('branch_id', $branchId);
 
-        if ($this->option('local-id-only')) {
+        $saleDay = trim((string) $this->option('sale-day'));
+        if ($saleDay !== '') {
+            $query->where('sale_number', 'like', '%' . $saleDay . '%');
+        } elseif ($this->option('local-id-only')) {
             $query->whereNotNull('local_id');
         } else {
             $since = Carbon::parse((string) $this->option('since'))->startOfDay();
@@ -154,7 +158,7 @@ class PurgeDeviceTestSales extends Command
         }
 
         $pattern = trim((string) $this->option('reference-pattern'));
-        if ($pattern !== '') {
+        if ($pattern !== '' && $saleDay === '') {
             $query->where('sale_number', 'like', $pattern);
         }
 
@@ -177,7 +181,9 @@ class PurgeDeviceTestSales extends Command
     {
         $parts = ['branch=' . $this->option('branch')];
 
-        if ($this->option('local-id-only')) {
+        if ($saleDay = trim((string) $this->option('sale-day'))) {
+            $parts[] = "sale_number contains {$saleDay}";
+        } elseif ($this->option('local-id-only')) {
             $parts[] = 'local_id IS NOT NULL';
         } else {
             $parts[] = 'local_id IS NOT NULL';
