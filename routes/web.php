@@ -118,6 +118,8 @@ Route::middleware(['auth', 'role:owner,admin,manager', 'audit:backoffice'])->gro
         ->name('readings.x.show');
     Route::get('/backoffice/readings/z', [ReadingController::class, 'showZReading'])
         ->name('readings.z');
+    Route::post('/backoffice/readings/z/generate', [ReadingController::class, 'storeZReading'])
+        ->name('readings.z.generate');
     Route::get('/backoffice/readings/x/export/csv', [ReadingController::class, 'exportXReadingCsv'])
         ->name('readings.x.export.csv');
     Route::get('/backoffice/readings/z/export/csv', [ReadingController::class, 'exportZReadingCsv'])

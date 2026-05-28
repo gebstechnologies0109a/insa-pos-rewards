@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\POS\PosSale;
 use App\Models\POS\PosXReading;
 use App\Models\POS\PosZReading;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class ReadingService
@@ -64,26 +65,50 @@ class ReadingService
      */
     public function generateZReading($user): PosZReading
     {
-        return DB::transaction(function () use ($user) {
-            $lastZ = PosZReading::where('branch_id', $user->branch_id)->max('z_count') ?? 0;
+        return $this->generateZReadingForBranch(
+            $user->branch_id,
+            $user->id,
+            $user->terminal_id ?? null,
+        );
+    }
+
+    /**
+     * Count sales not yet included in any Z-reading for a branch.
+     * When $salesOnDate is set, only sales sold on that calendar day (app timezone).
+     */
+    public function countUntaggedSales(int $branchId, ?string $salesOnDate = null): int
+    {
+        return $this->untaggedSalesQuery($branchId, $salesOnDate)->count();
+    }
+
+    /**
+     * Generate a Z-reading for a branch (POS cashier or backoffice / artisan).
+     *
+     * @param  string|null  $salesOnDate  Y-m-d — limit to sales on that day (backfill). Null = all untagged sales.
+     * @param  Carbon|null  $generatedAt  Timestamp stored on the Z record (defaults to now).
+     */
+    public function generateZReadingForBranch(
+        int $branchId,
+        int $cashierId,
+        ?int $terminalId = null,
+        ?Carbon $generatedAt = null,
+        ?string $salesOnDate = null,
+    ): PosZReading {
+        return DB::transaction(function () use ($branchId, $cashierId, $terminalId, $generatedAt, $salesOnDate) {
+            $lastZ = PosZReading::where('branch_id', $branchId)->max('z_count') ?? 0;
             $zCount = $lastZ + 1;
 
-            $completedSales = PosSale::where('branch_id', $user->branch_id)
-                ->whereNull('z_reading_id')
-                ->where('status', 'completed')
-                ->get();
+            $baseQuery = $this->untaggedSalesQuery($branchId, $salesOnDate);
 
-            $voidedSales = PosSale::where('branch_id', $user->branch_id)
-                ->whereNull('z_reading_id')
-                ->where('status', 'voided')
-                ->get();
+            $completedSales = (clone $baseQuery)->where('status', 'completed')->get();
+            $voidedSales = (clone $baseQuery)->where('status', 'voided')->get();
 
             $z = PosZReading::create([
-                'branch_id'         => $user->branch_id,
-                'terminal_id'       => $user->terminal_id ?? null,
-                'cashier_id'        => $user->id,
+                'branch_id'         => $branchId,
+                'terminal_id'       => $terminalId,
+                'cashier_id'        => $cashierId,
                 'z_count'           => $zCount,
-                'generated_at'      => now(),
+                'generated_at'      => $generatedAt ?? now(),
                 'total_sales'       => $completedSales->sum('total'),
                 'transaction_count' => $completedSales->count(),
                 'void_total'        => $voidedSales->sum('total'),
@@ -91,12 +116,20 @@ class ReadingService
                 'payment_breakdown' => $this->paymentBreakdown($completedSales),
             ]);
 
-            // Mark all untagged sales as included in this Z-reading
-            PosSale::where('branch_id', $user->branch_id)
-                ->whereNull('z_reading_id')
-                ->update(['z_reading_id' => $z->id]);
+            (clone $baseQuery)->update(['z_reading_id' => $z->id]);
 
             return $z;
         });
+    }
+
+    private function untaggedSalesQuery(int $branchId, ?string $salesOnDate = null)
+    {
+        $query = PosSale::where('branch_id', $branchId)->whereNull('z_reading_id');
+
+        if ($salesOnDate !== null) {
+            $query->whereDate('sold_at', $salesOnDate);
+        }
+
+        return $query;
     }
 }
