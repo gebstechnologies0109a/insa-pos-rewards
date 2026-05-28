@@ -1,0 +1,297 @@
+﻿--------- beginning of main
+05-28 11:29:08.384 18678 18678 I ADB_SERVICES: for fd 21, revents = 2011
+05-28 11:29:08.469 18678 11743 I ADB_SERVICES: post waitpid (pid=11742) status=0000
+05-28 11:29:08.469 18678 18678 I ADB_SERVICES: for fd 28, revents = 2011
+05-28 11:29:08.469 18678 18678 I ADB_SERVICES: for fd 28, revents = 2011
+05-28 11:29:08.493 18678 18678 I ADB_SERVICES: service_to_fd shell,v2,TERM=dumb,raw:am start -n com.sarismarthub.app/.MainActivity
+--------- beginning of system
+05-28 11:29:08.567  1023  5493 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.sarismarthub.app/.MainActivity} from uid 2000
+05-28 11:29:08.583   351  1148 I hwcomposer: [HWC] (0) displayGetActiveConfig config:0  
+05-28 11:29:08.586   365   412 I power@1.3-impl: powerHintInternal hint:8, data:1
+05-28 11:29:08.588   365   411 I libPowerHal: 8: legacy set freq: 1001000 -1 1508000 -1
+05-28 11:29:08.599   365   411 I libPowerHal: 8: legacy set: 4 -1 4 -1
+05-28 11:29:08.605 18678 11745 I ADB_SERVICES: post waitpid (pid=11744) status=0000
+05-28 11:29:08.605 18678 18678 I ADB_SERVICES: for fd 28, revents = 2011
+05-28 11:29:08.605 18678 18678 I ADB_SERVICES: for fd 28, revents = 2011
+05-28 11:29:08.605  1023  1046 I WindowManager: Relayout Window{a0d6c8c u0 SnapshotStartingWindow for taskId=425}: oldVis=8 newVis=0 focusMayChange = true
+05-28 11:29:08.615   385   453 I BufferQueue: [unnamed-385-2759](this:0x73cb4a5000,id:2759,api:0,p:-1,c:-1) BufferQueue core=(385:/system/bin/surfaceflinger)
+05-28 11:29:08.618   385   453 I BufferQueueConsumer: [unnamed-385-2759](this:0x73cb4a5000,id:2759,api:0,p:-1,c:385) connect(C): consumer=(385:/system/bin/surfaceflinger) controlledByApp=false
+05-28 11:29:08.619   385   453 I BufferQueueConsumer: [unnamed-385-2759](this:0x73cb4a5000,id:2759,api:0,p:-1,c:385) setConsumerName: unnamed-385-2759
+05-28 11:29:08.619   385   453 I BufferQueueConsumer: [SnapshotStartingWindow for taskId=425#0](this:0x73cb4a5000,id:2759,api:0,p:-1,c:385) setConsumerName: SnapshotStartingWindow for taskId=425#0
+05-28 11:29:08.619   385   453 I BufferQueueConsumer: [SnapshotStartingWindow for taskId=425#0](this:0x73cb4a5000,id:2759,api:0,p:-1,c:385) setDefaultBufferSize: width=1280 height=800
+05-28 11:29:08.619   351  1148 I hwcomposer: [HWCDisplay] [Display_0 (type:1)] fps:1.322328,dur:1512.48,max:1496.35,min:16.13  
+05-28 11:29:08.621  1023  1046 E         : [onConstructor]: an error ged handle
+05-28 11:29:08.622  1023  1046 E GraphicExt: GraphicExtModuleLoader::CreateGraphicExtInstance false
+05-28 11:29:08.623   385   453 I BufferQueueProducer: [SnapshotStartingWindow for taskId=425#0](this:0x73cb4a5000,id:2759,api:2,p:1023,c:385) connect(P): api=2 producer=(1023:system_server) producerControlledByApp=false
+05-28 11:29:08.642   385   453 I BufferQueueProducer: [SnapshotStartingWindow for taskId=425#0](this:0x73cb4a5000,id:2759,api:2,p:1023,c:385) disconnect(P): api 2
+05-28 11:29:08.650   365   411 I libPowerHal: [perfNotifyAppState] foreground:com.sarismarthub.app, pid:11275, uid:10189
+05-28 11:29:08.650   365   411 E UxUtility: notifyAppState error = NULL
+05-28 11:29:08.650   365   411 I powerd  : [powerd_req] POWER_MSG_NOTIFY_STATE, pc:0, com.android.launcher3 => com.sarismarthub.app
+05-28 11:29:08.691   385   453 I BufferQueueProducer: [StatusBar#0](this:0x73cb533000,id:4,api:1,p:1404,c:385) queueBuffer: fps=1.25 dur=1595.40 max=1579.58 min=15.83
+05-28 11:29:08.694  1023  1023 E AmsExtImpl: check result:true
+05-28 11:29:08.702  1023  5500 I WindowManager: Relayout Window{e3db6d4 u0 com.sarismarthub.app/com.sarismarthub.app.MainActivity}: oldVis=4 newVis=0 focusMayChange = true
+05-28 11:29:08.705   385   453 I BufferQueue: [unnamed-385-2760](this:0x73cb531800,id:2760,api:0,p:-1,c:-1) BufferQueue core=(385:/system/bin/surfaceflinger)
+05-28 11:29:08.705   385   453 I BufferQueueConsumer: [unnamed-385-2760](this:0x73cb531800,id:2760,api:0,p:-1,c:385) connect(C): consumer=(385:/system/bin/surfaceflinger) controlledByApp=false
+05-28 11:29:08.705   385   453 I BufferQueueConsumer: [unnamed-385-2760](this:0x73cb531800,id:2760,api:0,p:-1,c:385) setConsumerName: unnamed-385-2760
+05-28 11:29:08.705   385   453 I BufferQueueConsumer: [com.sarismarthub.app/com.sarismarthub.app.MainActivity#0](this:0x73cb531800,id:2760,api:0,p:-1,c:385) setConsumerName: com.sarismarthub.app/com.sarismarthub.app.MainActivity#0
+05-28 11:29:08.705   385   453 I BufferQueueConsumer: [com.sarismarthub.app/com.sarismarthub.app.MainActivity#0](this:0x73cb531800,id:2760,api:0,p:-1,c:385) setDefaultBufferSize: width=1280 height=800
+05-28 11:29:08.710 11275 11275 E         : [onConstructor]: an error ged handle
+05-28 11:29:08.711 11275 11275 E GraphicExt: GraphicExtModuleLoader::CreateGraphicExtInstance false
+05-28 11:29:08.712   385   453 I BufferQueueProducer: [com.sarismarthub.app/com.sarismarthub.app.MainActivity#0](this:0x73cb531800,id:2760,api:1,p:11275,c:385) connect(P): api=1 producer=(11275:com.sarismarthub.app) producerControlledByApp=false
+05-28 11:29:08.712   664  2669 I netd    : firewallSetUidRule(2, 10128, 1) <14.87ms>
+05-28 11:29:08.720   385   385 I BufferQueueProducer: [FramebufferSurface](this:0x73b57fc000,id:0,api:1,p:385,c:385) queueBuffer: fps=0.04 dur=342406.34 max=342198.15 min=14.98
+05-28 11:29:08.722  1023  1052 I ActivityManager: Start proc 11749:com.google.android.apps.messaging/u0a128 for service {com.google.android.apps.messaging/androidx.work.impl.background.systemjob.SystemJobService}
+05-28 11:29:08.791   350   451 W [Gralloc-Warning]: alloc_from_ion_heap:306 alloc_from_ion_heap: size=4096000, heap_mask=1024, flags=0, heap_type=10
+05-28 11:29:08.817   350   451 I chatty  : uid=1000(system) HwBinder:350_2 identical 2 lines
+05-28 11:29:08.822   350   451 W [Gralloc-Warning]: alloc_from_ion_heap:306 alloc_from_ion_heap: size=4096000, heap_mask=1024, flags=0, heap_type=10
+05-28 11:29:08.833   385  1180 I BufferQueueProducer: [com.android.launcher3/com.android.searchlauncher.SearchLauncher#1](this:0x73b207f000,id:2758,api:1,p:3181,c:385) disconnect(P): api 1
+05-28 11:29:08.836   385   453 I BufferQueueProducer: [com.android.launcher3/com.android.searchlauncher.SearchLauncher#1](this:0x73b207f000,id:2758,api:1,p:-1,c:385) disconnect(P): api 1
+05-28 11:29:08.836   385   453 E BufferQueueProducer: [com.android.launcher3/com.android.searchlauncher.SearchLauncher#1](this:0x73b207f000,id:2758,api:1,p:-1,c:385) disconnect: not connected (req=1)
+05-28 11:29:08.836  3181  3274 W libEGL  : EGLNativeWindowType 0x74fb6bd310 disconnect failed
+05-28 11:29:08.840   385  1180 I BufferQueueProducer: [com.android.launcher3/com.android.searchlauncher.SearchLauncher#0](this:0x73cb5a3800,id:2757,api:1,p:1662,c:385) disconnect(P): api 1
+05-28 11:29:08.845   385  1180 I BufferQueueProducer: [com.android.launcher3/com.android.searchlauncher.SearchLauncher#0](this:0x73cb5a3800,id:2757,api:1,p:-1,c:385) disconnect(P): api 1
+05-28 11:29:08.845   385  1180 E BufferQueueProducer: [com.android.launcher3/com.android.searchlauncher.SearchLauncher#0](this:0x73cb5a3800,id:2757,api:1,p:-1,c:385) disconnect: not connected (req=1)
+05-28 11:29:08.845  1662  2497 W libEGL  : EGLNativeWindowType 0x754ebb5a90 disconnect failed
+05-28 11:29:08.847   385  1180 I BufferQueueProducer: [NavigationBar0#0](this:0x73b2053800,id:2703,api:1,p:1404,c:385) queueBuffer: fps=0.06 dur=304142.87 max=303874.54 min=4.52
+05-28 11:29:08.854   351   479 I hwcomposer: [OVL] (0) Overlay input(0) was used with queue previously  
+05-28 11:29:08.854   351   479 I hwcomposer: [DBQ] (q2:0x7951e44b00) Buffer queue is destroyed  
+05-28 11:29:08.854   351   479 I hwcomposer: [DBQ] (q2:0x7951e44b00) Free Slot(0), handle=0x7951f74140, 4096000 -> 0  
+05-28 11:29:08.855   351   479 I hwcomposer: [DBQ] (q2:0x7951e44b00) Free Slot(1), handle=0x7951f748c0, 4096000 -> 0  
+05-28 11:29:08.855   351   479 I hwcomposer: [DBQ] (q2:0x7951e44b00) Free Slot(2), handle=0x7951f757c0, 4096000 -> 0  
+05-28 11:29:08.871   365   412 I power@1.3-impl: powerHintInternal hint:8, data:0
+05-28 11:29:08.877   365   411 I libPowerHal: 32: legacy set: -1 -1 -1 -1
+05-28 11:29:08.877   365   411 I libPowerHal: 32: legacy set freq: -1 -1 -1 -1
+05-28 11:29:08.904   385   385 I BufferQueue: [com.android.launcher3/com.android.searchlauncher.SearchLauncher#0](this:0x73cb5a3800,id:2757,api:1,p:-1,c:-1) ~BufferQueueCore
+05-28 11:29:08.905   385   385 I BufferQueue: [com.android.launcher3/com.android.searchlauncher.SearchLauncher#1](this:0x73b207f000,id:2758,api:1,p:-1,c:-1) ~BufferQueueCore
+05-28 11:29:08.953  3181 11051 I PBSessionCacheImpl: Deleted sessionId[13991965834462283] from persistence.
+05-28 11:29:08.966  7470  7470 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():2259 
+05-28 11:29:08.970  7470  7470 I Module  : DeviceLockedStatusModuleProvider$Module.updateDeviceLockedStatus():103 repeatCheckTimes = 0, locked = false
+05-28 11:29:08.991  7470  7470 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1446 onStartInput(EditorInfo{EditorInfo{packageName=com.sarismarthub.app, inputType=0, inputTypeString=NULL, enableLearning=false, autoCorrection=false, autoComplete=false, imeOptions=0, privateImeOptions=null, actionName=UNSPECIFIED, actionLabel=null, initialSelStart=-1, initialSelEnd=-1, initialCapsMode=0, label=null, fieldId=-1, fieldName=null, extras=null, hintText=null, hintLocales=[]}}, false)
+05-28 11:29:08.993  7470  7470 I Module  : DeviceLockedStatusModuleProvider$Module.updateDeviceLockedStatus():103 repeatCheckTimes = 1, locked = false
+05-28 11:29:08.994  3181  3215 W SearchServiceCore: Abort, client detached.
+05-28 11:29:08.996  3181  3215 I A       : cleanUpControllerScope(nowcards-15-d62fc20-c3e2)
+05-28 11:29:09.003  3181  3215 I MicroDetectionState: Should stop hotword detection immediately - true
+05-28 11:29:09.132 11749 11749 E .apps.messagin: Unknown bits set in runtime_flags: 0x8000
+05-28 11:29:09.151 11749 11749 E .apps.messagin: Not starting debugger since process cannot load the jdwp agent.
+05-28 11:29:09.225 11749 11749 I .apps.messagin: The ClassLoaderContext is a special shared library.
+05-28 11:29:09.605 11749 11749 W .apps.messagin: JIT profile information will not be recorded: profile file does not exits.
+05-28 11:29:09.606 11749 11749 I chatty  : uid=10128(com.google.android.apps.messaging) identical 1 line
+05-28 11:29:09.606 11749 11749 W .apps.messagin: JIT profile information will not be recorded: profile file does not exits.
+05-28 11:29:09.625   351  1148 I hwcomposer: [HWCDisplay] [Display_0 (type:1)] fps:59.654964,dur:1005.78,max:35.87,min:2.24  
+05-28 11:29:09.990 11749 11749 I evob    : SslGuard completed installation.
+05-28 11:29:10.028 11749 11749 I Bugle   : BugleApplicationBase: Bugle version: messages.android_20260428_00_rc02.phone_dynamic , Bugle version code: 308183063
+05-28 11:29:10.032 11749 11749 I Bugle   : DarkModeManager: setDarkMode: -1
+05-28 11:29:10.075 11749 11789 I stetho  : Listening on @stetho_com.google.android.apps.messaging_devtools_remote
+05-28 11:29:10.149 11749 11788 I Bugle   : DatabaseHelperBasic.doInitializationTraced
+05-28 11:29:10.151 11749 11783 I Bugle   : DatabaseHelperBasic.doInitializationTraced
+05-28 11:29:10.153 11749 11786 I Bugle   : DatabaseHelperBasic.doInitializationTraced
+05-28 11:29:10.176 11749 11786 I Bugle   : DatabaseHelperBasic: sqlite version is 3.22.0
+05-28 11:29:10.178 11749 11788 I Bugle   : DatabaseHelperBasic: sqlite version is 3.22.0
+05-28 11:29:10.179 11749 11787 W ConfigurationContentLdr: ContentProvider query returned null cursor, using default values
+05-28 11:29:10.181 11749 11786 I Bugle   : DatabaseHelperBasic.doInitializationTraced() returned SQLiteDatabase: /data/user/0/com.google.android.apps.messaging/databases/workqueue_db
+05-28 11:29:10.183 11749 11786 I Bugle   : DatabaseHelperBasic.doInitializationTraced returned SQLiteDatabase: /data/user/0/com.google.android.apps.messaging/databases/workqueue_db
+05-28 11:29:10.185 11749 11788 I Bugle   : DatabaseHelperBasic.doInitializationTraced() returned SQLiteDatabase: /data/user/0/com.google.android.apps.messaging/databases/bugle_backup_db
+05-28 11:29:10.186 11749 11788 I Bugle   : DatabaseHelperBasic.doInitializationTraced returned SQLiteDatabase: /data/user/0/com.google.android.apps.messaging/databases/bugle_backup_db
+05-28 11:29:10.188 11749 11787 I .apps.messagin: The ClassLoaderContext is a special shared library.
+05-28 11:29:10.212 11749 11787 I Bugle   : Initializing EmojiCompat
+05-28 11:29:10.219 11749 11787 I CarrierServices: Initializing Carrier Services Library. [CONTEXT thread_id=5213 ]
+05-28 11:29:10.231 27608 29933 I FontLog : (REDACTED) Received query %s, URI %s
+05-28 11:29:10.231 27608 28578 I FontLog : (REDACTED) Received query %s, URI %s
+05-28 11:29:10.231 27608 29933 I FontLog : (REDACTED) Query [%s] resolved to %s
+05-28 11:29:10.231 27608 28578 I FontLog : (REDACTED) Query [%s] resolved to %s
+05-28 11:29:10.244   400   578 I MAL-DATAMNGR:  (           dm_read_event,  114) [DMGR-INF] read_netlink: nlmsg_type = 28
+05-28 11:29:10.250 11749 11787 I CarrierServices: Initializing Carrier Services Logging. [CONTEXT thread_id=5213 ]
+05-28 11:29:10.254 27608 28578 I FontLog : (REDACTED) Fetch %s end status %s
+05-28 11:29:10.255 27608 29933 I FontLog : (REDACTED) Fetch %s end status %s
+05-28 11:29:10.258 27608 28578 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+05-28 11:29:10.261 27608 27645 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+05-28 11:29:10.276 27608 27645 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+05-28 11:29:10.277 11749 11783 I Bugle   : DatabaseHelperBasic: sqlite version is 3.22.0
+05-28 11:29:10.280 27608 27645 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+05-28 11:29:10.291 11749 11787 I LogSaver: LogSaver new instance with filename: carrier_services
+05-28 11:29:10.291 11749 11783 I BugleDataModel: HeavyWorkQueueEmptyObserver: Starting observation of WorkQueueWorkManagerTable
+05-28 11:29:10.323 11749 11783 I BugleJobs: Starting sync data to wearable message observer. [CONTEXT class_name="SyncDataToWearableMessageChangeObserver" ]
+05-28 11:29:10.336 11749 11787 I BugleBackup: Registering preference change listener for "bugle".
+05-28 11:29:10.354 11749 11783 I Bugle   : DatabaseHelperBasic.doInitializationTraced() returned SQLiteDatabase: /data/user/0/com.google.android.apps.messaging/databases/bugle_db
+05-28 11:29:10.355 11749 11783 I Bugle   : DatabaseHelperBasic.doInitializationTraced returned SQLiteDatabase: /data/user/0/com.google.android.apps.messaging/databases/bugle_db
+05-28 11:29:10.381 11749 11788 I Bugle   : TelephonyManagerFactory: Returning per-subscription TelephonyManager (>= N) subscription{id:-1}
+05-28 11:29:10.387 11749 11788 I Bugle   : TelephonySubscriptionInfoAsOfLMR1: getActiveSubscriptionInfo(): empty sub info [CONTEXT ratelimit_period="1 MINUTES" sub_id=-1 ]
+05-28 11:29:10.398   664  2669 I netd    : firewallSetUidRule(2, 10128, 2) <4.97ms>
+05-28 11:29:10.404   664  2669 I netd    : firewallSetUidRule(2, 10128, 1) <4.52ms>
+05-28 11:29:10.412  1023  5493 I ActivityManager: Killing 6200:com.google.process.gapps/u0a107 (adj 975): empty #17
+05-28 11:29:10.466   642   642 I Zygote  : Process 6200 exited due to signal 9 (Killed)
+05-28 11:29:10.494  1023  1053 I libprocessgroup: Successfully killed process cgroup uid 10107 pid 6200 in 80ms
+05-28 11:29:10.546   664  2669 I netd    : firewallSetUidRule(2, 10128, 2) <5.39ms>
+05-28 11:29:10.569 11749 11783 I BugleRcsProvisioning: BugleSystemBindingManager: onBuglePhenotypeFlagChanged
+05-28 11:29:10.574 11749 11749 I BugleContacts: Starting periodic contacts import.
+05-28 11:29:10.587 11749 11783 I BugleTransport: Not kicking off update transport registration because RCS provisioning change has not been received.
+05-28 11:29:10.593 11749 11772 I BugleRcsEngine: SystemBinding enabled: false [CONTEXT log_prefix="SystemBindingManager" thread_id=5200 ]
+05-28 11:29:10.595 11749 11772 I BugleRcsEngine: System Binding updated [CONTEXT thread_id=5200 ]
+05-28 11:29:10.598 11749 11796 I BugleContacts: Unregistering contacts observers
+05-28 11:29:10.628 11749 11796 I BugleContacts: Scheduling contacts import
+05-28 11:29:10.645 11749 11787 W DynamiteModule: Local module descriptor class for com.google.android.gms.providerinstaller.dynamite not found.
+05-28 11:29:10.658 27608 27645 W ProviderHelper: Unknown dynamite feature providerinstaller.dynamite
+05-28 11:29:10.665 11749 11787 I DynamiteModule: Considering local module com.google.android.gms.providerinstaller.dynamite:0 and remote module com.google.android.gms.providerinstaller.dynamite:0
+05-28 11:29:10.666 11749 11787 W ProviderInstaller: Failed to load providerinstaller module: No acceptable module com.google.android.gms.providerinstaller.dynamite found. Local version is 0 and remote version is 0.
+05-28 11:29:10.679  1023  1547 W ActivityManager: Background start not allowed: service Intent { cmp=com.google.android.apps.messaging/com.google.apps.tiktok.concurrent.AndroidFuturesService (has extras) } to com.google.android.apps.messaging/com.google.apps.tiktok.concurrent.AndroidFuturesService from pid=11749 uid=10128 pkg=com.google.android.apps.messaging startFg?=false
+05-28 11:29:10.681 11749 11779 I BugleWorkQueue: unable to attach service -- probably in background already
+05-28 11:29:10.693 11749 11799 I BugleContacts: Successfully scheduled periodic contacts import.
+05-28 11:29:10.771 11749 11799 I BugleDataModel: 2 not running because already up to date, upgradeCommand: EXECUTE_UPGRADE, version: 4
+05-28 11:29:10.778 11749 11799 I BugleDataModel: 8 not running because already up to date, upgradeCommand: EXECUTE_UPGRADE, version: 1
+05-28 11:29:10.783 11749 11799 I BugleDataModel: 4 not running because already up to date, upgradeCommand: EXECUTE_UPGRADE, version: 1
+05-28 11:29:10.786 11749 11796 I BugleContacts: Scheduling 0 deleted contacts sync batches
+05-28 11:29:10.791 11749 11799 I BugleDataModel: 3 not running because already up to date, upgradeCommand: EXECUTE_UPGRADE, version: 2
+05-28 11:29:10.797 11749 11805 I BugleDataModel: 9 not running because already up to date, upgradeCommand: EXECUTE_DOWNGRADE, version: 1
+05-28 11:29:10.811 11749 11787 I .apps.messagin: The ClassLoaderContext is a special shared library.
+05-28 11:29:10.819 11749 11787 I .apps.messagin: The ClassLoaderContext is a special shared library.
+05-28 11:29:10.824 11749 11783 I BugleSatellite: Processing Phenotype flag changes.
+05-28 11:29:10.826 11749 11786 I BugleSatellite: Reporting to Telephony: SMS supported = true
+05-28 11:29:10.826 11749 11777 I WM-WorkerWrapper: Worker result SUCCESS for Work [ id=ca0652b0-e93b-45d4-aac5-f8b204e21387, tags={ com.google.apps.tiktok.contrib.work.TikTokListenableWorker,TikTokWorker#com.google.android.apps.messaging.shared.contacts.sync.ContactsSyncPeriodicWorker } ]
+05-28 11:29:10.959 11749 11805 I BugleContacts: 0 contacts to import
+05-28 11:29:10.966 11749 11805 I BugleContacts: Registering contacts observers
+05-28 11:29:11.022 11749 11801 I WM-WorkerWrapper: Worker result SUCCESS for Work [ id=c4b129a6-0d3a-4822-a0ec-1354f5234455, tags={ com.google.android.apps.messaging.shared.datamodel.workqueue.WorkQueueWorkerShim,data_upgrade- } ]
+05-28 11:29:11.030 11749 11801 I WM-WorkerWrapper: Worker result SUCCESS for Work [ id=7b8e85e5-7595-4f4e-9a85-6fe0705129e4, tags={ com.google.android.apps.messaging.shared.datamodel.workqueue.WorkQueueWorkerShim,schedule_delete_and_import_contacts- } ]
+05-28 11:29:11.076 11749 11801 I WM-WorkerWrapper: Worker result SUCCESS for Work [ id=f08535e6-2848-4999-a99b-4a66f689f6e2, tags={ com.google.android.apps.messaging.shared.datamodel.workqueue.WorkQueueWorkerShim,schedule_contacts_import- } ]
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: Failed to get service from broker. 
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: java.lang.SecurityException: Unknown calling package name 'com.google.android.gms'.
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at android.os.Parcel.createException(Parcel.java:2071)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at android.os.Parcel.readException(Parcel.java:2039)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at android.os.Parcel.readException(Parcel.java:1987)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at bhkb.a(:com.google.android.gms@261833013@26.18.33 (100400-913931251):36)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at bhhx.z(:com.google.android.gms@261833013@26.18.33 (100400-913931251):150)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at bgnt.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):42)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at android.os.Handler.handleCallback(Handler.java:883)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at android.os.Handler.dispatchMessage(Handler.java:100)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at cwal.ms(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at cwal.dispatchMessage(:com.google.android.gms@261833013@26.18.33 (100400-913931251):5)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at android.os.Looper.loop(Looper.java:214)
+05-28 11:29:11.128 11749 11808 E GoogleApiManager: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+05-28 11:29:11.133 11749 11809 I .apps.messagin: Waiting for a blocking GC ClassLinker
+05-28 11:29:11.133 11749 11808 W GoogleApiManager: Not showing notification since connectionResult is not user-facing: ConnectionResult{statusCode=DEVELOPER_ERROR, resolution=null, message=null, clientMethodKey=null}
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: Failed to register com.google.android.gms.providerinstaller#com.google.android.apps.messaging
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: fhak: 17: 17: API: Phenotype.API is not available on this device. Connection failed with: ConnectionResult{statusCode=DEVELOPER_ERROR, resolution=null, message=null, clientMethodKey=null}
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at fham.a(:com.google.android.gms@261833013@26.18.33 (100400-913931251):13)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at gecj.d(:com.google.android.gms@261833013@26.18.33 (100400-913931251):3)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at gecl.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):139)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at geet.execute(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at gect.f(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at gect.m(:com.google.android.gms@261833013@26.18.33 (100400-913931251):101)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at gect.q(:com.google.android.gms@261833013@26.18.33 (100400-913931251):16)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at eyug.hI(:com.google.android.gms@261833013@26.18.33 (100400-913931251):35)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at enjm.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):12)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at geet.execute(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at enjn.b(:com.google.android.gms@261833013@26.18.33 (100400-913931251):18)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at enkc.b(:com.google.android.gms@261833013@26.18.33 (100400-913931251):34)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at enke.d(:com.google.android.gms@261833013@26.18.33 (100400-913931251):22)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at bgla.e(:com.google.android.gms@261833013@26.18.33 (100400-913931251):9)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at bgnr.q(:com.google.android.gms@261833013@26.18.33 (100400-913931251):48)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at bgnr.d(:com.google.android.gms@261833013@26.18.33 (100400-913931251):10)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at bgnr.g(:com.google.android.gms@261833013@26.18.33 (100400-913931251):191)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at bgnr.onConnectionFailed(:com.google.android.gms@261833013@26.18.33 (100400-913931251):2)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at bgnt.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):70)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at android.os.Handler.handleCallback(Handler.java:883)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at android.os.Handler.dispatchMessage(Handler.java:100)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at cwal.ms(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at cwal.dispatchMessage(:com.google.android.gms@261833013@26.18.33 (100400-913931251):5)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at android.os.Looper.loop(Looper.java:214)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: Caused by: bgjf: 17: API: Phenotype.API is not available on this device. Connection failed with: ConnectionResult{statusCode=DEVELOPER_ERROR, resolution=null, message=null, clientMethodKey=null}
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at bhhj.a(:com.google.android.gms@261833013@26.18.33 (100400-913931251):15)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at bgld.a(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	at bgla.e(:com.google.android.gms@261833013@26.18.33 (100400-913931251):5)
+05-28 11:29:11.137 11749 11807 W FlagRegistrar: 	... 11 more
+05-28 11:29:11.143 11749 11787 I .apps.messagin: Waiting for a blocking GC ClassLinker
+05-28 11:29:11.172  1023  1194 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+05-28 11:29:11.177   351  1148 I hwcomposer: [HWC] (0) displayGetActiveConfig config:0  
+05-28 11:29:11.198   385   538 I BufferQueueProducer: [StatusBar#0](this:0x73cb533000,id:4,api:1,p:1404,c:385) queueBuffer: fps=1.99 dur=2506.72 max=2445.67 min=12.83
+05-28 11:29:11.201   351  1148 I hwcomposer: [HWCDisplay] [Display_0 (type:1)] fps:0.634513,dur:1576.01,max:1576.01,min:1576.01  
+05-28 11:29:11.318 11749 11809 I .apps.messagin: WaitForGcToComplete blocked ClassLinker on ClassLinker for 185.235ms
+05-28 11:29:11.323 11749 11787 I .apps.messagin: WaitForGcToComplete blocked ClassLinker on ClassLinker for 179.337ms
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: Failed to get service from broker. 
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: java.lang.SecurityException: Unknown calling package name 'com.google.android.gms'.
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at android.os.Parcel.createException(Parcel.java:2071)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at android.os.Parcel.readException(Parcel.java:2039)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at android.os.Parcel.readException(Parcel.java:1987)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at bhkb.a(:com.google.android.gms@261833013@26.18.33 (100400-913931251):36)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at bhhx.z(:com.google.android.gms@261833013@26.18.33 (100400-913931251):150)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at bgnt.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):42)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at android.os.Handler.handleCallback(Handler.java:883)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at android.os.Handler.dispatchMessage(Handler.java:100)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at cwal.ms(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at cwal.dispatchMessage(:com.google.android.gms@261833013@26.18.33 (100400-913931251):5)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at android.os.Looper.loop(Looper.java:214)
+05-28 11:29:11.340 11749 11808 E GoogleApiManager: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: Failed to get service from broker. 
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: java.lang.SecurityException: Unknown calling package name 'com.google.android.gms'.
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at android.os.Parcel.createException(Parcel.java:2071)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at android.os.Parcel.readException(Parcel.java:2039)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at android.os.Parcel.readException(Parcel.java:1987)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at bhkb.a(:com.google.android.gms@261833013@26.18.33 (100400-913931251):36)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at bhhx.z(:com.google.android.gms@261833013@26.18.33 (100400-913931251):150)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at bgnt.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):42)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at android.os.Handler.handleCallback(Handler.java:883)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at android.os.Handler.dispatchMessage(Handler.java:100)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at cwal.ms(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at cwal.dispatchMessage(:com.google.android.gms@261833013@26.18.33 (100400-913931251):5)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at android.os.Looper.loop(Looper.java:214)
+05-28 11:29:11.347 11749 11808 E GoogleApiManager: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+05-28 11:29:11.348 11749 11808 W GoogleApiManager: Not showing notification since connectionResult is not user-facing: ConnectionResult{statusCode=DEVELOPER_ERROR, resolution=null, message=null, clientMethodKey=null}
+05-28 11:29:11.360 11749 11809 W FlagStore: Unable to update local snapshot for com.google.android.gms.providerinstaller#com.google.android.apps.messaging, may result in stale flags.
+05-28 11:29:11.360 11749 11809 W FlagStore: java.util.concurrent.ExecutionException: fhak: 17: 17: API: Phenotype.API is not available on this device. Connection failed with: ConnectionResult{statusCode=DEVELOPER_ERROR, resolution=null, message=null, clientMethodKey=null}
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at gect.j(:com.google.android.gms@261833013@26.18.33 (100400-913931251):21)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at gedc.t(:com.google.android.gms@261833013@26.18.33 (100400-913931251):24)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at gect.get(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at gehh.a(:com.google.android.gms@261833013@26.18.33 (100400-913931251):2)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at gefx.s(:com.google.android.gms@261833013@26.18.33 (100400-913931251):10)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at fhfy.d(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at fhfc.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):5)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:462)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:301)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1167)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:641)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at java.lang.Thread.run(Thread.java:919)
+05-28 11:29:11.360 11749 11809 W FlagStore: Caused by: fhak: 17: 17: API: Phenotype.API is not available on this device. Connection failed with: ConnectionResult{statusCode=DEVELOPER_ERROR, resolution=null, message=null, clientMethodKey=null}
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at fham.a(:com.google.android.gms@261833013@26.18.33 (100400-913931251):13)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at gecj.d(:com.google.android.gms@261833013@26.18.33 (100400-913931251):3)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at gecl.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):139)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at geet.execute(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at gect.f(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at gect.m(:com.google.android.gms@261833013@26.18.33 (100400-913931251):101)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at gect.q(:com.google.android.gms@261833013@26.18.33 (100400-913931251):16)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at eyug.hI(:com.google.android.gms@261833013@26.18.33 (100400-913931251):35)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at enjm.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):12)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at geet.execute(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at enjn.b(:com.google.android.gms@261833013@26.18.33 (100400-913931251):18)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at enkc.b(:com.google.android.gms@261833013@26.18.33 (100400-913931251):34)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at enkj.B(:com.google.android.gms@261833013@26.18.33 (100400-913931251):17)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at enje.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):60)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at geet.execute(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at enjf.b(:com.google.android.gms@261833013@26.18.33 (100400-913931251):8)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at enkc.b(:com.google.android.gms@261833013@26.18.33 (100400-913931251):34)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at enke.d(:com.google.android.gms@261833013@26.18.33 (100400-913931251):22)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at bgla.e(:com.google.android.gms@261833013@26.18.33 (100400-913931251):9)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at bgnr.q(:com.google.android.gms@261833013@26.18.33 (100400-913931251):48)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at bgnr.d(:com.google.android.gms@261833013@26.18.33 (100400-913931251):10)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at bgnr.g(:com.google.android.gms@261833013@26.18.33 (100400-913931251):191)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at bgnr.onConnectionFailed(:com.google.android.gms@261833013@26.18.33 (100400-913931251):2)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at bgnt.run(:com.google.android.gms@261833013@26.18.33 (100400-913931251):70)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at android.os.Handler.handleCallback(Handler.java:883)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at android.os.Handler.dispatchMessage(Handler.java:100)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at cwal.ms(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at cwal.dispatchMessage(:com.google.android.gms@261833013@26.18.33 (100400-913931251):5)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at android.os.Looper.loop(Looper.java:214)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at android.os.HandlerThread.run(HandlerThread.java:67)
+05-28 11:29:11.360 11749 11809 W FlagStore: Caused by: bgjf: 17: API: Phenotype.API is not available on this device. Connection failed with: ConnectionResult{statusCode=DEVELOPER_ERROR, resolution=null, message=null, clientMethodKey=null}
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at bhhj.a(:com.google.android.gms@261833013@26.18.33 (100400-913931251):15)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at bgld.a(:com.google.android.gms@261833013@26.18.33 (100400-913931251):1)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	at bgla.e(:com.google.android.gms@261833013@26.18.33 (100400-913931251):5)
+05-28 11:29:11.360 11749 11809 W FlagStore: 	... 11 more
+05-28 11:29:11.426 11749 11787 I ProviderInstaller: Installed default security provider GmsCore_OpenSSL
+05-28 11:29:11.450 11749 11787 I WM-WorkerWrapper: Worker result SUCCESS for Work [ id=e6360f3c-4099-458b-a30e-637b126406f0, tags={ com.google.android.libraries.notifications.platform.entrypoints.job.GnpWorker,GNP_SDK_JOB } ]
+05-28 11:29:12.159 27608 27745 I NearbyDiscovery: (REDACTED) BloomFilterAdvManager: Detected bloom filter but too far away, ignoring. %sm, %s
+05-28 11:29:12.472   400   574 I MAL-Daemon:  (      mfi_task_bootstrap,  421) mfi_task_bootstrap(): an event EVENT_ATMNGR_URC(18) with seq(-2) and len(4108) incoming from FD 29!!
+05-28 11:29:12.473   400   604 I MAL-RDS :  (         rds_ru_urc_hdlr, 2528) [RDS-I][RDS][rds_ru_urc_hdlr] get URC data: +ECSQ: 17,34,1,1,1,-46,-427,7,58,1
+05-28 11:29:12.473   400   604 E MAL-RDS :  (  rds_ru_3gpp_status_ind, 2081) [RDS-E][RU][EVENT_RU_DM_3GPP_STATUS_IND] Invalid u43gpp_status:0x8 sim:0
+05-28 11:29:12.473   400   604 I MAL-RDS :  (  ru_ims_ctrl_send_atcmd, 1617) [RDS-I][RU][ru_ims_ctrl_send_atcmd] (old:new) => wfc(0:0), volte(1:1), video(0:0), opid(0) | system property(0,1,0)
+05-28 11:29:12.473   400   604 I MAL-RDS :  (          rds_ru_rpl_gen, 8950) [RDS-I][RU][rds_ru_rpl_gen][RDS] Current policy: fgimsolte_en<1>, fgwfc_en<0>, erdspolicy<3>,||Threshold i4wifirssih<-75>, i4wifirssil<-85>, i4wifirssih_ho<-78>, i4wifirssil_ho<-88>, i4wifisnrh<10>, i4wifisnrl<6>||Threshold i4ltersrph<-106>, i4ltersrpm<-111>, i4ltersrpl<-116>, i4ltersrqh<5>, i4ltersrqm<3>, i4ltersrql<1>||Threshold i43grscph<-85>, i43grscpl<-105>, i42grssih<-83>, i42grssil<-103>, i4lterssnrl<-3>, i43gecnol<-15>||current rds ru status: i4wifirssi<-48>, i4wifisnr<60>, i4ltersrp<-107>, i4ltersrq<17>, u4active_ran<1>, i4lterssnr<14>, i43grscp<-141>, i43gecno<-24>, i42grssi<-70>, u4sig_reg_status<7>, flight_mode_activating<0>||current wifi backhaul : rtp_plr<0>, rtp_jitter<0>, ping_ind<0>, ltecsr_ind<0>, ||pcscf acc stat : volte<1>, wfc<1> || wifi acc_ctrl:<0>, || current MD stat : MD1 roam <0>, ||Call stat : IR92<0>, IR94<0>, SMS over IP<0>, IPME<0>, sim<0>
