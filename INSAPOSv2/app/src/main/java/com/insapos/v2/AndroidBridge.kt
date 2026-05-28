@@ -171,7 +171,7 @@ class AndroidBridge(private val activity: MainActivity) {
     @JavascriptInterface
     fun triggerSync(): String = prefetchCatalog()
 
-    /** Full catalog + stock + customers download into native SQLite (after setBranchId). */
+    /** Background sync into native SQLite (catalog only when cache is empty for branch). */
     @JavascriptInterface
     fun prefetchCatalog(): String {
         return try {
@@ -179,14 +179,14 @@ class AndroidBridge(private val activity: MainActivity) {
             if (branchId != null && branchId > 0) {
                 activity.runOnUiThread { activity.onBranchIdSetFromWeb(branchId) }
             } else {
-                val url = "http://127.0.0.1:${PosLocalServer.PORT}/offline/sync/now"
+                val url = "http://127.0.0.1:${PosLocalServer.PORT}/local/sync/now"
                 val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.connectTimeout = 3000
                 conn.inputStream.bufferedReader().use { it.readText() }
                 conn.disconnect()
             }
-            JSONObject().put("ok", true).put("triggered", true).put("full", true).toString()
+            JSONObject().put("ok", true).put("triggered", true).toString()
         } catch (e: Exception) {
             Log.e(TAG, "prefetchCatalog failed", e)
             JSONObject().put("ok", false).put("error", e.message).toString()

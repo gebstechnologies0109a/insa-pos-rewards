@@ -1925,9 +1925,8 @@ function posApp() {
         },
 
         useLocalPosEngine() {
-            return this.hasNativeBridge && this.androidLocalUp &&
+            return this.hasNativeBridge &&
                 typeof window.INSAPOS !== 'undefined' &&
-                typeof window.INSAPOS.getLocalProducts === 'function' &&
                 typeof window.INSAPOS.createLocalSale === 'function';
         },
 
@@ -1937,17 +1936,20 @@ function posApp() {
 
         applyNativeSyncStatus(detail) {
             this.nativeSyncDetail = detail;
-            const st = (detail.engine_status || detail.status || '').toLowerCase();
-            if (st === 'pushing') this.syncStatus = 'pushing';
-            else if (st === 'pulling') this.syncStatus = 'syncing';
-            else if (st === 'partial') this.syncStatus = 'partial';
-            else if (st === 'error') this.syncStatus = 'error';
-            else if (st === 'idle' && detail.unsynced_count > 0) this.syncStatus = 'partial';
-            else if (detail.online === false) this.syncStatus = 'offline';
-            else this.syncStatus = 'synced';
             if (typeof detail.unsynced_count === 'number') {
                 this.pendingSyncCount = detail.unsynced_count + (detail.sync_queue_count || 0);
             }
+            if (detail.online === false) {
+                this.syncStatus = detail.unsynced_count > 0 ? 'partial' : 'offline';
+                this.offlineBanner = true;
+                return;
+            }
+            const st = (detail.engine_status || detail.status || '').toLowerCase();
+            if (st === 'pushing') this.syncStatus = 'pushing';
+            else if (st === 'pulling' && !this.posReady) this.syncStatus = 'syncing';
+            else if (st === 'partial' || (st === 'idle' && detail.unsynced_count > 0)) this.syncStatus = 'partial';
+            else if (st === 'error') this.syncStatus = 'error';
+            else if (st === 'idle') this.syncStatus = detail.unsynced_count > 0 ? 'partial' : 'synced';
         },
 
         renderExpiryBadge(product) {
@@ -2011,7 +2013,9 @@ function posApp() {
                 this.storeDownload.percent = 100;
                 return;
             }
-            this.syncStatus = 'downloading';
+            if (!this.posReady) {
+                this.syncStatus = 'downloading';
+            }
             this.storeDownload.message = p.message || 'Downloading store data…';
             if (typeof p.percent === 'number') this.storeDownload.percent = p.percent;
         },
@@ -2035,12 +2039,10 @@ function posApp() {
                     this.showToast('Store data ready (' + count + ' products)', 'success', 2500);
                 }
             }
-            if (this.hasNativeBridge && typeof window.INSAPOS !== 'undefined') {
+            if (this.hasNativeBridge && typeof window.INSAPOS !== 'undefined' && result && result.online === true) {
                 try {
-                    if (typeof window.INSAPOS.prefetchCatalog === 'function') {
-                        window.INSAPOS.prefetchCatalog();
-                    } else if (typeof window.INSAPOS.triggerSync === 'function') {
-                        window.INSAPOS.triggerSync();
+                    if (typeof window.INSAPOS.triggerLocalSync === 'function') {
+                        window.INSAPOS.triggerLocalSync();
                     }
                 } catch (e) {}
             }
@@ -2156,11 +2158,16 @@ function posApp() {
         initBuddy() {
             if (typeof INSABuddy === 'undefined') return;
             INSABuddy.detectV2();
-            const pollMs = this.hasNativeBridge ? 90000 : 45000;
-            const startDelay = this.hasNativeBridge ? 3000 : 0;
+            if (this.hasNativeBridge) {
+                this.buddyConnected = true;
+            }
+            const pollMs = this.hasNativeBridge ? 120000 : 45000;
+            const startDelay = this.hasNativeBridge ? 8000 : 0;
             setTimeout(() => {
                 INSABuddy.detectV2();
-                INSABuddy.startPolling(pollMs, (c) => { this.buddyConnected = c; });
+                INSABuddy.startPolling(pollMs, (c) => {
+                    this.buddyConnected = this.hasNativeBridge || c;
+                });
             }, startDelay);
         },
 
@@ -2233,7 +2240,7 @@ function posApp() {
             this.printerList = [];
             this.printerSelectedIndex = -1;
             try {
-                const data = await INSABuddy.listPrinters();
+                const data = await INSABuddy.listPrinters(true);
                 this.printerList = INSABuddy.parsePrinterList(data);
                 if (this.printerList.length === 0) {
                     this.printerStatusMessage = 'No printers found. Ensure Bluetooth is on and devices are paired.';
@@ -2259,6 +2266,7 @@ function posApp() {
             this.printerTesting = true;
             this.printerStatusMessage = `Connecting to ${printer.name}...`;
             try {
+                await this.savePrinterLayoutSettings();
                 const selectResult = await INSABuddy.selectPrinter(printer.type, printer.name);
                 const selected = INSABuddy.isSuccessResponse(selectResult)
                     || selectResult?.ok === true
@@ -3191,7 +3199,7 @@ function posApp() {
                 this.pendingSyncCount++;
             }
 
-            if (!localSaleOk && !nativeEngine) {
+            if (!localSaleOk && !nativeEngine && this.browserOnline) {
                 try {
                     const res = await fetch('/api/pos/sales', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({
                         branch_id: txData.branch_id, shift_id: txData.shift_id, cashier_id: txData.cashier_id, member_id: txData.member_id,
@@ -3218,8 +3226,8 @@ function posApp() {
             }
 
             if (localSaleOk && !serverSale) {
-                this.syncStatus = 'partial';
-            } else if (!serverSale && !localSaleOk && window.SyncEngine) {
+                this.syncStatus = this.browserOnline ? 'partial' : 'offline';
+            } else if (!serverSale && !localSaleOk) {
                 this.syncStatus = 'partial';
             }
             this.lastSale = serverSale || { local_id: localId, sale_number: null, total: txData.total, amount_tendered: txData.amount_tendered, change_due: txData.change_due, payment_method: txData.payment_method, offline: !serverSale || localSaleOk, _cart: txData.items };

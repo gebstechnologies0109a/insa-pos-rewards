@@ -220,8 +220,9 @@ const INSABuddy = {
     /**
      * List all available printers detected by INSABuddy.
      */
-    async listPrinters() {
-        return this._get('/printer/list');
+    async listPrinters(includeBluetooth = true) {
+        const q = includeBluetooth ? '?bluetooth=1' : '';
+        return this._get(`/printer/list${q}`);
     },
 
     /**

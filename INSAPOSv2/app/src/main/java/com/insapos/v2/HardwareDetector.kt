@@ -55,15 +55,43 @@ object HardwareDetector {
             .sortedBy { it.name.lowercase() }
     }
 
+    fun detectPrinters(context: Context): List<IoDevice> {
+        val printers = mutableListOf<IoDevice>()
+        try {
+            val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return printers
+            for (device in usbManager.deviceList.values) {
+                for (i in 0 until device.interfaceCount) {
+                    if (device.getInterface(i).interfaceClass == UsbConstants.USB_CLASS_PRINTER) {
+                        val label = device.productName ?: device.deviceName ?: "USB Printer"
+                        printers.add(
+                            IoDevice(
+                                id = "usb:${device.deviceId}",
+                                name = label,
+                                type = "printer",
+                                vendorId = device.vendorId,
+                                productId = device.productId,
+                            )
+                        )
+                        break
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return printers.distinctBy { it.id }
+    }
+
     fun scanAll(context: Context): JSONObject {
         val keyboards = detectKeyboards(context)
         val mice = detectMice(context)
         val scanners = detectBarcodeScanners(context)
+        val printers = detectPrinters(context)
         return JSONObject().apply {
             put("ok", true)
             put("keyboards", devicesToJson(keyboards))
             put("mice", devicesToJson(mice))
             put("scanners", devicesToJson(scanners))
+            put("printers", devicesToJson(printers))
         }
     }
 

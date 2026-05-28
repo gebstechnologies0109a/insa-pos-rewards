@@ -69,7 +69,7 @@
         const prev = _branchId;
         _branchId = branchId;
         if (_initialized && prev !== branchId) {
-            downloadAll({ force: true, silent: false }).catch(() => {});
+            downloadAll({ force: false, silent: true }).catch(() => {});
         }
     }
 
@@ -174,6 +174,7 @@
             const syncedAt = new Date().toISOString();
             await db.settings.set('products_last_sync', syncedAt);
             await db.settings.set('catalog_last_sync', syncedAt);
+            await db.settings.set('catalog_synced_at', syncedAt);
             return { products: productCount, categories: categoryCount };
         } catch (e) {
             console.error('[sync] pullCatalog failed:', e);
@@ -289,12 +290,11 @@
             const branch = await db.settings.get('cache_ready_branch_id', null);
             if (branch != null && String(branch) !== String(_branchId)) return true;
         }
-        const last = await db.settings.get('catalog_last_sync', null)
+        const syncedAt = await db.settings.get('catalog_synced_at', null)
+            || await db.settings.get('catalog_last_sync', null)
             || await db.settings.get('products_last_sync', null)
             || await db.settings.get('cache_ready_at', null);
-        if (!last) return true;
-        const age = Date.now() - new Date(last).getTime();
-        return !Number.isFinite(age) || age >= FULL_PULL_INTERVAL_MS;
+        return !syncedAt;
     }
 
     // ── Pull from INSABuddy backup ────────────────────────────
@@ -378,16 +378,18 @@
     // ── Update Local Cache ────────────────────────────────────
 
     async function updateLocalCache(forceFull = true) {
-        await pullCatalog(forceFull);
+        const needsCatalog = forceFull || await isCatalogStale();
+        if (needsCatalog) {
+            await pullCatalog(forceFull);
+            await pullCustomers();
+            await pullSettings();
+        }
         await pullInventory(forceFull);
-        await pullCustomers();
-        await pullSettings();
         await markCacheReady();
     }
 
     function shouldRunFullPull(forceFullPull) {
-        if (forceFullPull) return true;
-        return (Date.now() - _lastFullPullAt) >= FULL_PULL_INTERVAL_MS;
+        return forceFullPull === true;
     }
 
     /**
@@ -471,7 +473,7 @@
     // forceFullPull=true: manual / initial sync (always pull catalog)
     // forceFullPull=false: scheduled idle tick (push + occasional pull)
 
-    async function syncNow(forceFullPull = true) {
+    async function syncNow(forceFullPull = false) {
         if (_syncing) return;
         _syncing = true;
         emit('syncStatus', 'syncing');
@@ -543,7 +545,7 @@
 
         if (!skipInitialDownload) {
             const initialDelay = options.deferInitialSync ? 12000 : 400;
-            setTimeout(() => downloadAll({ force: true }), initialDelay);
+            setTimeout(() => downloadAll({ force: false, silent: true }), initialDelay);
         }
 
         const scheduleDelay = options.deferInitialSync ? 12000 + SYNC_INTERVAL_IDLE_MS : SYNC_INTERVAL_IDLE_MS;

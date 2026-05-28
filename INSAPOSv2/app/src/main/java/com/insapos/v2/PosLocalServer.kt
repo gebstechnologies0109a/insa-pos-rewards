@@ -58,7 +58,7 @@ class PosLocalServer(
                 uri == "/print" && method == Method.POST -> handlePrint(session)
                 uri == "/drawer/open" && method == Method.POST -> handleDrawerOpen()
                 uri == "/printer/status" -> handlePrinterStatus()
-                uri == "/printer/list" -> handlePrinterList()
+                uri == "/printer/list" -> handlePrinterList(session)
                 uri == "/printer/select" && method == Method.POST -> handlePrinterSelect(session)
                 uri == "/printer/test" && method == Method.POST -> handlePrinterTest(session)
                 uri == "/printer/settings" && method == Method.GET -> handlePrinterSettingsGet()
@@ -184,11 +184,14 @@ class PosLocalServer(
         })
     }
 
-    private fun handlePrinterList(): Response {
+    private fun handlePrinterList(session: IHTTPSession): Response {
         val pm = getPrinterManager() ?: return jsonOk(
             JSONObject().put("ok", true).put("printers", JSONArray())
         )
-        val list = pm.scanAll()
+        val params = session.parms
+        val includeBt = params["bluetooth"] == "1"
+            || params["bluetooth"]?.equals("true", ignoreCase = true) == true
+        val list = pm.scanAll(includeBluetooth = includeBt)
         val arr = JSONArray()
         for (p in list) {
             arr.put(JSONObject().apply {
