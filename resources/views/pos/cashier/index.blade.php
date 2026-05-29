@@ -1865,6 +1865,8 @@ function posApp() {
         autoPrintReceipt: true,
         androidLocalUp: true,
         _nativeScanPort: 18182,
+        _nativeCategoryStatCount: 0,
+        _categoryEmptyWarned: false,
         _scanning: false,
         saleProcessing: false,
         licenseBlocked: false,
@@ -2543,6 +2545,9 @@ function posApp() {
                     const stats = typeof raw === 'string' ? JSON.parse(raw) : raw;
                     this.productCount = stats.products || 0;
                     this.posSettings.products_cached = this.productCount;
+                    if (typeof stats.categories === 'number') {
+                        this._nativeCategoryStatCount = stats.categories;
+                    }
                     return this.productCount;
                 }
             } catch (e) {
@@ -2552,17 +2557,30 @@ function posApp() {
         },
 
         loadNativeCategories() {
-            if (!this.useNativeEngine()) return;
+            if (!this.useNativeEngine()) return 0;
             try {
                 if (typeof window.INSAPOS.getLocalCategories === 'function') {
                     const raw = window.INSAPOS.getLocalCategories();
                     const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
                     if (data.ok && data.categories && data.categories.length) {
                         this.categories = data.categories;
+                        this._categoryEmptyWarned = false;
+                        return data.categories.length;
                     }
                 }
             } catch (e) {
                 console.warn('[pos] native categories failed:', e);
+            }
+            return this.categories.length || 0;
+        },
+
+        warnIfNativeCategoriesMissing() {
+            if (!this.useNativeEngine() || this.posMode !== 'cafe') return;
+            const loaded = this.categories.length;
+            const statCats = this._nativeCategoryStatCount || 0;
+            if (loaded === 0 && statCats > 0 && !this._categoryEmptyWarned) {
+                this._categoryEmptyWarned = true;
+                this.showToast('Categories are on device but the dropdown is empty — tap Sync or reload the page', 'warning', 5000);
             }
         },
 
@@ -2598,13 +2616,21 @@ function posApp() {
                 const res = await fetch(`http://127.0.0.1:${this._nativeScanPort}/ping`, { signal: controller.signal });
                 return res.ok;
             };
+            const retryCategoriesIfNeeded = () => {
+                if (!this.categories.length) {
+                    this.loadNativeCategories();
+                    this.warnIfNativeCategoriesMissing();
+                }
+            };
             try {
                 if (await ping()) {
                     this.androidLocalUp = true;
+                    retryCategoriesIfNeeded();
                     return;
                 }
                 await new Promise((r) => setTimeout(r, 1500));
                 this.androidLocalUp = (await ping()) || this.hasNativeBridge;
+                if (this.androidLocalUp) retryCategoriesIfNeeded();
             } catch {
                 this.androidLocalUp = this.hasNativeBridge;
             }
@@ -2711,7 +2737,12 @@ function posApp() {
                     if (!this.silentSync) this.pendingSyncCount = d.pendingCount;
                 });
                 SyncEngine.on('conflict', (d) => { this.conflictItems = d.conflict; this.conflictLocalId = d.local_id; this.showConflictModal = true; });
-                SyncEngine.on('productsUpdated', (c) => { if (c > 0) this.refreshProductsFromDB(); });
+                SyncEngine.on('productsUpdated', (c) => {
+                    if (c > 0) {
+                        this.refreshProductsFromDB();
+                        if (this.isStorageCatalog()) this.loadNativeCategories();
+                    }
+                });
                 SyncEngine.on('buddyRecovered', () => { if (!this.silentSync) this.showToast('Recovered offline data from INSABuddy', 'info'); });
                 SyncEngine.on('syncError', (d) => { if (!this.silentSync) this.showToast('Sync error: ' + (d.error || 'Unknown'), 'error'); });
                 if (this.useNativeEngine()) {
@@ -4220,6 +4251,8 @@ function posApp() {
         async refreshProductsFromDB() {
             if (this.isStorageCatalog()) {
                 await this.refreshNativeProductCount();
+                this.loadNativeCategories();
+                this.warnIfNativeCategoriesMissing();
                 this._nativeGridOffset = 0;
                 this.filterProducts();
                 return;
