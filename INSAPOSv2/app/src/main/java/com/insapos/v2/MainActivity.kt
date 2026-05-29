@@ -92,6 +92,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var hidScanner: HidScannerDriver? = null
+    lateinit var customerDisplayManager: CustomerDisplayManager
+        private set
     /** When true, HID keys go to the WebView scan/search field — do not intercept. */
     @Volatile
     private var scanInputFocused: Boolean = false
@@ -100,6 +102,9 @@ class MainActivity : AppCompatActivity() {
     fun notifyScanInputFocused(focused: Boolean) {
         scanInputFocused = focused
     }
+
+    fun isNetworkOnline(): Boolean =
+        if (::connectivity.isInitialized) connectivity.isConnected() else true
 
     /** Called from WebView when cashier sets branch — schedule sync off the main thread. */
     fun onBranchIdSetFromWeb(branchId: Int) {
@@ -215,6 +220,7 @@ class MainActivity : AppCompatActivity() {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val service = (binder as PosService.LocalBinder).getService()
             posService = service
+            service.customerDisplayManager = customerDisplayManager
             service.hidScannerDriver = hidScanner
             service.onCameraScanRequested = { launchCameraScanner() }
             service.onRequestUsbPermission = { deviceId, onResult ->
@@ -249,6 +255,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         session = SessionManager(this)
+        customerDisplayManager = CustomerDisplayManager(this)
         usingHttp = session.useHttp
 
         webView = findViewById(R.id.webView)
@@ -291,6 +298,9 @@ class MainActivity : AppCompatActivity() {
             posService?.ensureLocalServerStarted()
             injectLocalHardwareReady()
         }
+        if (::customerDisplayManager.isInitialized) {
+            customerDisplayManager.showIfAvailable()
+        }
         if (::webView.isInitialized) {
             webView.requestFocus()
         }
@@ -313,6 +323,7 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) { }
             serviceBound = false
         }
+        customerDisplayManager.onActivityDestroy()
         posService = null
         connectivity.stop()
         syncScheduler.shutdownNow()

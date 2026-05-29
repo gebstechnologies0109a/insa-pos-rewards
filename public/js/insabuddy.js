@@ -412,6 +412,94 @@ const INSABuddy = {
     },
 
     /**
+     * Push cart / welcome / thank-you state to the customer-facing display.
+     */
+    updateCustomerDisplay(payload) {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.updateCustomerDisplay === 'function') {
+            try {
+                const raw = window.INSAPOS.updateCustomerDisplay(JSON.stringify(payload));
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native updateCustomerDisplay failed', e);
+            }
+        }
+        return this._post('/customer-display/update', payload);
+    },
+
+    async testCustomerDisplay() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.testCustomerDisplay === 'function') {
+            try {
+                const raw = window.INSAPOS.testCustomerDisplay();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native testCustomerDisplay failed', e);
+            }
+        }
+        return this._post('/customer-display/test', {});
+    },
+
+    async getCustomerDisplayStatus() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.getCustomerDisplayStatus === 'function') {
+            try {
+                const raw = window.INSAPOS.getCustomerDisplayStatus();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native getCustomerDisplayStatus failed', e);
+            }
+        }
+        return this._get('/customer-display/status');
+    },
+
+    async getPosSettingsSummary() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.getPosSettings === 'function') {
+            try {
+                const raw = window.INSAPOS.getPosSettings();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native getPosSettings failed', e);
+            }
+        }
+        const [device, cd, printer] = await Promise.all([
+            this.getDeviceInfo(),
+            this.getCustomerDisplayStatus(),
+            this.getPrinterSettings(),
+        ]);
+        return {
+            ok: true,
+            app_version: device?.version || '',
+            device,
+            customer_display: cd || {},
+            paper_size: printer?.paper_size || '57mm',
+            font_mode: printer?.font_mode || 'paper_size',
+            network_online: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        };
+    },
+
+    async scanHardware() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.scanHardware === 'function') {
+            try {
+                const raw = window.INSAPOS.scanHardware();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native scanHardware failed', e);
+            }
+        }
+        return this._get('/device/hardware/scan');
+    },
+
+    async triggerSync() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.triggerLocalSync === 'function') {
+            try {
+                const raw = window.INSAPOS.triggerLocalSync();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native triggerLocalSync failed', e);
+            }
+        }
+        return this._post('/local/sync/now', {});
+    },
+
+    /**
      * Normalize printer list response from INSABuddy or INSAPOS v3.
      */
     parsePrinterList(data) {

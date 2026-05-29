@@ -89,7 +89,7 @@
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/terminal-session.js') }}"></script>
     <script src="{{ asset('js/insabuddy.js') }}"></script>
-    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.27"></script>
+    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.28"></script>
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden insapos-alpine-pending" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
@@ -290,6 +290,11 @@
 
         <button @click="showHistoryModal = true; loadRecentSales()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Recent Transactions">
             <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </button>
+
+        <!-- POS Settings -->
+        <button @click="openPosSettings()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="POS Settings">
+            <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
         </button>
 
         <!-- Mode Toggle -->
@@ -1393,6 +1398,107 @@
     </div>
 </div>
 
+<!-- POS SETTINGS MODAL -->
+<div x-show="showPosSettingsModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[380px] lg:max-w-lg p-4 lg:p-6 max-h-[90vh] overflow-y-auto" @click.away="showPosSettingsModal = false">
+        <div class="flex items-center justify-between mb-3 lg:mb-4">
+            <h2 class="text-base lg:text-xl font-bold text-gray-800 flex items-center gap-2">
+                <svg class="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                POS Settings
+            </h2>
+            <button @click="showPosSettingsModal = false" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <div x-show="posSettingsLoading" class="text-center py-6 text-sm text-gray-500">Loading settings…</div>
+
+        <div x-show="!posSettingsLoading" class="space-y-4">
+            <!-- Network -->
+            <div class="rounded-xl border p-3" :class="posSettings.network_online ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Network</div>
+                <div class="text-sm font-medium" :class="posSettings.network_online ? 'text-green-800' : 'text-amber-800'"
+                     x-text="posSettings.network_online ? 'Online — sync available' : 'Offline — using cached data'"></div>
+            </div>
+
+            <!-- Customer Display -->
+            <div class="rounded-xl border border-green-200 bg-green-50/50 p-3 space-y-2">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold text-green-900">Customer Display</div>
+                        <div class="text-[10px] lg:text-xs text-green-700"
+                             x-text="posSettings.customer_display_available ? ('Secondary screen: ' + (posSettings.customer_display_name || 'Detected')) : 'No secondary display detected'"></div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer" x-show="hasNativeBridge">
+                        <input type="checkbox" x-model="posSettings.customer_display_enabled" @change="saveCustomerDisplaySetting()" class="sr-only peer">
+                        <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:bg-green-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                </div>
+                <div class="flex gap-2" x-show="hasNativeBridge && posSettings.customer_display_available">
+                    <button @click="testCustomerDisplay()" class="flex-1 py-2 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700">Test Display</button>
+                    <button @click="syncCustomerDisplayCart()" class="flex-1 py-2 text-xs font-medium bg-white border border-green-300 text-green-800 rounded-lg hover:bg-green-50">Mirror Cart</button>
+                </div>
+                <p x-show="!hasNativeBridge" class="text-[10px] text-gray-500">Customer display requires the INSAPOS Android app on dual-screen hardware.</p>
+            </div>
+
+            <!-- Printer -->
+            <div class="rounded-xl border p-3 space-y-2">
+                <div class="text-sm font-semibold text-gray-800">Printer</div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] text-gray-500 mb-1">Paper size</label>
+                        <select x-model="posSettings.paper_size" @change="savePosPaperSettings()" class="w-full p-2 border rounded-lg text-xs">
+                            <option value="57mm">57mm</option>
+                            <option value="87mm">87mm</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-gray-500 mb-1">Font mode</label>
+                        <select x-model="posSettings.font_mode" @change="savePosPaperSettings()" class="w-full p-2 border rounded-lg text-xs">
+                            <option value="paper_size">Standard</option>
+                            <option value="fine_print">Fine print</option>
+                        </select>
+                    </div>
+                </div>
+                <button @click="showPosSettingsModal = false; openPrinterSettings()" x-show="buddyConnected || hasNativeBridge"
+                        class="w-full py-2 text-xs font-medium bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200">Open Printer Setup</button>
+            </div>
+
+            <!-- Sync -->
+            <div class="rounded-xl border p-3 space-y-2">
+                <div class="text-sm font-semibold text-gray-800">Sync</div>
+                <div class="text-[10px] lg:text-xs text-gray-500" x-show="posSettings.last_sync_at">
+                    Last catalog sync: <span class="font-medium text-gray-700" x-text="posSettings.last_sync_at || '—'"></span>
+                </div>
+                <button @click="settingsManualSync()" class="w-full py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">Sync Now</button>
+            </div>
+
+            <!-- Hardware -->
+            <div class="rounded-xl border p-3 space-y-2" x-show="hasNativeBridge">
+                <div class="text-sm font-semibold text-gray-800">Hardware</div>
+                <div class="text-[10px] lg:text-xs text-gray-600" x-text="posSettings.hardware_summary || 'Tap scan to detect USB devices'"></div>
+                <div class="flex gap-2">
+                    <button @click="settingsScanHardware()" class="flex-1 py-2 text-xs font-medium bg-gray-800 text-white rounded-lg hover:bg-gray-900">Scan Devices</button>
+                    <button @click="showPosSettingsModal = false; openIoSettings()" class="flex-1 py-2 text-xs font-medium bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200">I/O Setup</button>
+                </div>
+            </div>
+
+            <!-- About -->
+            <div class="rounded-xl border p-3">
+                <div class="text-sm font-semibold text-gray-800 mb-1">About</div>
+                <div class="text-[10px] lg:text-xs text-gray-600 space-y-0.5">
+                    <div x-text="'App: INSA POS v' + (posSettings.app_version || '—')"></div>
+                    <div x-text="'Device: ' + (posSettings.device_model || '—')"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t">
+            <button @click="showPosSettingsModal = false" class="w-full py-2 lg:py-2.5 bg-gray-200 text-gray-700 rounded-lg text-xs lg:text-base font-medium hover:bg-gray-300">Close</button>
+        </div>
+    </div>
+</div>
+
 <!-- CUSTOMER REWARDS / DIY BIZ REWARDS SCAN MODAL -->
 <div x-show="showRewardsModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[340px] lg:max-w-sm p-4 lg:p-6" @click.away="showRewardsModal = false">
@@ -1536,6 +1642,20 @@ function posApp() {
         printerLayoutHint: '',
 
         showIoModal: false,
+        showPosSettingsModal: false,
+        posSettingsLoading: false,
+        posSettings: {
+            app_version: '',
+            device_model: '',
+            network_online: true,
+            customer_display_enabled: true,
+            customer_display_available: false,
+            customer_display_name: '',
+            last_sync_at: '',
+            paper_size: '57mm',
+            font_mode: 'paper_size',
+            hardware_summary: '',
+        },
         ioMenuView: true,
         ioOption: null,
         ioStep: 1,
@@ -1903,6 +2023,17 @@ function posApp() {
             };
             this.bindScanInputFocusBridge();
             await this.loadIoPreferences();
+            if (this.hasNativeBridge && typeof INSABuddy !== 'undefined') {
+                try {
+                    const cd = await INSABuddy.getCustomerDisplayStatus();
+                    if (cd && cd.ok !== false) {
+                        this.posSettings.customer_display_enabled = cd.enabled !== false;
+                        this.posSettings.customer_display_available = !!cd.available;
+                        this.posSettings.customer_display_name = cd.display_name || '';
+                    }
+                } catch {}
+                this.pushCustomerDisplay('welcome');
+            }
         },
 
         bindScanInputFocusBridge() {
@@ -2253,6 +2384,132 @@ function posApp() {
                     this.buddyConnected = this.hasNativeBridge || c;
                 });
             }, startDelay);
+        },
+
+        async openPosSettings() {
+            this.showPosSettingsModal = true;
+            await this.loadPosSettings();
+        },
+
+        async loadPosSettings() {
+            this.posSettingsLoading = true;
+            try {
+                if (typeof INSABuddy !== 'undefined') INSABuddy.detectV2();
+                let data = null;
+                if (this.hasNativeBridge && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.getPosSettings === 'function') {
+                    const raw = window.INSAPOS.getPosSettings();
+                    data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                } else if (typeof INSABuddy !== 'undefined') {
+                    data = await INSABuddy.getPosSettingsSummary();
+                }
+                if (data && data.ok !== false) {
+                    const cd = data.customer_display || {};
+                    this.posSettings.app_version = data.app_version || '';
+                    this.posSettings.device_model = data.device ? `${data.device.manufacturer || ''} ${data.device.model || ''}`.trim() : '';
+                    this.posSettings.network_online = data.network_online !== false && this.browserOnline;
+                    this.posSettings.customer_display_enabled = cd.enabled !== false;
+                    this.posSettings.customer_display_available = !!cd.available;
+                    this.posSettings.customer_display_name = cd.display_name || '';
+                    this.posSettings.last_sync_at = data.last_sync_at || '';
+                    this.posSettings.paper_size = data.paper_size || this.printerPaperSize || '57mm';
+                    this.posSettings.font_mode = data.font_mode || this.printerFontMode || 'paper_size';
+                    this.printerPaperSize = this.posSettings.paper_size;
+                    this.printerFontMode = this.posSettings.font_mode;
+                }
+            } catch (e) {
+                console.warn('[pos] loadPosSettings', e);
+            } finally {
+                this.posSettingsLoading = false;
+            }
+        },
+
+        async saveCustomerDisplaySetting() {
+            if (!this.hasNativeBridge || typeof window.INSAPOS === 'undefined') return;
+            try {
+                const raw = window.INSAPOS.setCustomerDisplayEnabled(!!this.posSettings.customer_display_enabled);
+                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (data && data.ok !== false) {
+                    this.showToast(this.posSettings.customer_display_enabled ? 'Customer display enabled' : 'Customer display disabled', 'success', 1500);
+                    if (this.posSettings.customer_display_enabled) this.syncCustomerDisplayCart();
+                    else this.pushCustomerDisplay('welcome');
+                }
+            } catch {
+                this.showToast('Could not save customer display setting', 'warning');
+            }
+        },
+
+        async testCustomerDisplay() {
+            if (typeof INSABuddy !== 'undefined') {
+                const result = await INSABuddy.testCustomerDisplay();
+                if (result && result.ok) {
+                    this.showToast('Test sent to customer display', 'success');
+                    return;
+                }
+            }
+            this.showToast('Customer display test failed', 'warning');
+        },
+
+        syncCustomerDisplayCart() {
+            this.pushCustomerDisplay(this.cart.length ? 'cart' : 'welcome');
+        },
+
+        pushCustomerDisplay(mode, extra = {}) {
+            if (!this.hasNativeBridge || !this.posSettings.customer_display_enabled) return;
+            const payload = {
+                mode,
+                store_name: '{{ $brandName }}',
+                items: this.cart.map(i => ({
+                    name: i.product_name,
+                    qty: i.qty,
+                    price: i.price,
+                })),
+                subtotal: this.cartSubtotal,
+                discount: this.cartDiscount,
+                total: this.cartTotal,
+                ...extra,
+            };
+            if (typeof INSABuddy !== 'undefined') {
+                INSABuddy.updateCustomerDisplay(payload);
+            }
+        },
+
+        async savePosPaperSettings() {
+            this.printerPaperSize = this.posSettings.paper_size;
+            this.printerFontMode = this.posSettings.font_mode;
+            if (typeof INSABuddy !== 'undefined') {
+                try {
+                    await INSABuddy.savePrinterSettings(this.printerPaperSize, this.printerFontMode);
+                    this.showToast('Paper settings saved', 'success', 1500);
+                } catch {
+                    this.showToast('Could not save paper settings', 'warning');
+                }
+            }
+        },
+
+        async settingsManualSync() {
+            if (typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.triggerLocalSync === 'function') {
+                try { window.INSAPOS.triggerLocalSync(); } catch (e) {}
+            } else if (typeof INSABuddy !== 'undefined') {
+                try { await INSABuddy.triggerSync(); } catch (e) {}
+            }
+            await this.manualSync();
+            await this.loadPosSettings();
+            this.showToast('Sync triggered', 'info', 1500);
+        },
+
+        async settingsScanHardware() {
+            if (typeof INSABuddy !== 'undefined') {
+                const data = await INSABuddy.scanHardware();
+                if (data && data.ok) {
+                    const kb = (data.keyboards || []).length;
+                    const sc = (data.scanners || []).length;
+                    const pr = (data.printers || []).length;
+                    this.posSettings.hardware_summary = `${kb} keyboard(s), ${sc} scanner(s), ${pr} printer(s)`;
+                    this.showToast('Hardware scan complete', 'success', 1500);
+                    return;
+                }
+            }
+            this.showToast('Hardware scan failed', 'warning');
         },
 
         async openPrinterSettings() {
@@ -3382,6 +3639,7 @@ function posApp() {
                 this.cart.push({ product_id: product.id, product_name: product.name, sku: product.sku, barcode: product.barcode, price: parseFloat(product.price), qty: 1, discount: 0 });
             }
             if (force && product.stock <= 0) this.showToast('Warning: ' + product.name + ' shows 0 stock in system', 'warning', 2500);
+            this.syncCustomerDisplayCart();
             return true;
         },
 
@@ -3389,10 +3647,11 @@ function posApp() {
             const item = this.cart[idx]; const newQty = item.qty + delta;
             if (newQty <= 0) { this.cart.splice(idx, 1); }
             else { const product = this.products.find(p => p.id === item.product_id); if (product && product.stock > 0 && newQty > product.stock) { this.showToast('Not enough stock. Available: ' + product.stock, 'warning'); return; } item.qty = newQty; }
+            this.syncCustomerDisplayCart();
         },
 
-        removeItem(idx) { this.cart.splice(idx, 1); },
-        clearCart() { this.cart = []; this.orderDiscountApplied = 0; this.orderDiscountValue = 0; this.selectedCustomer = null; this.customerSearch = ''; },
+        removeItem(idx) { this.cart.splice(idx, 1); this.syncCustomerDisplayCart(); },
+        clearCart() { this.cart = []; this.orderDiscountApplied = 0; this.orderDiscountValue = 0; this.selectedCustomer = null; this.customerSearch = ''; this.syncCustomerDisplayCart(); },
 
         goToCheckout() { if (this.cart.length === 0) return; this.amountTendered = 0; this.changeAmount = 0; this.paymentMethod = 'cash'; this.paymentRef = ''; this.screen = 'checkout'; },
         calculateChange() { this.changeAmount = (this.amountTendered || 0) - this.cartTotal; },
@@ -3513,6 +3772,12 @@ function posApp() {
             }
             this.lastSale = serverSale || { local_id: localId, sale_number: null, total: txData.total, amount_tendered: txData.amount_tendered, change_due: txData.change_due, payment_method: txData.payment_method, offline: !serverSale || localSaleOk, _cart: txData.items };
             this.showReceipt = true;
+            this.pushCustomerDisplay('thank_you', {
+                total: txData.total,
+                change: txData.change_due,
+                payment_method: txData.payment_method,
+                message: 'Thank you for your purchase!',
+            });
             if (this.canUsePrinter()) {
                 if (nativeEngine && localSaleOk) {
                     this.printReceiptAfterSale(nativeSaleResult, txData, receiptData);
@@ -3528,6 +3793,7 @@ function posApp() {
             this.orderDiscountApplied = 0; this.orderDiscountValue = 0; this.selectedCustomer = null; this.customerSearch = '';
             this.retailScanResult = null; this.setScanFieldValue('retail', '');
             this.screen = 'pos'; this.loadProducts();
+            this.pushCustomerDisplay('welcome');
         },
 
         async openShift() {

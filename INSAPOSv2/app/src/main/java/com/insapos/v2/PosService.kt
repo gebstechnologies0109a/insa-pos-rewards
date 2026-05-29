@@ -50,6 +50,7 @@ class PosService : Service() {
     var syncEngine: SyncEngine? = null
         private set
     var hidScannerDriver: HidScannerDriver? = null
+    var customerDisplayManager: CustomerDisplayManager? = null
     var onCameraScanRequested: (() -> Unit)? = null
     /** Request USB permission from the foreground activity (deviceId, callback). */
     var onRequestUsbPermission: ((deviceId: Int, onResult: (Boolean) -> Unit) -> Unit)? = null
@@ -207,7 +208,8 @@ class PosService : Service() {
                     requestUsbPermission = { deviceId, onResult ->
                         onRequestUsbPermission?.invoke(deviceId, onResult)
                             ?: onResult(false)
-                    }
+                    },
+                    getCustomerDisplayManager = { customerDisplayManager }
                 )
                 localServer?.start()
                 Log.i(TAG, "Local server started on port ${PosLocalServer.PORT}")

@@ -371,6 +371,58 @@ class AndroidBridge(private val activity: MainActivity) {
         JSONObject().put("ok", true).put("triggered", true).toString()
     }
 
+    @JavascriptInterface
+    fun getCustomerDisplayStatus(): String = safeBridge {
+        activity.customerDisplayManager.getStatusJson().toString()
+    }
+
+    @JavascriptInterface
+    fun setCustomerDisplayEnabled(enabled: Boolean): String = safeBridge {
+        activity.customerDisplayManager.enabled = enabled
+        activity.customerDisplayManager.getStatusJson().put("saved", true).toString()
+    }
+
+    @JavascriptInterface
+    fun updateCustomerDisplay(jsonPayload: String): String = safeBridge {
+        activity.customerDisplayManager.update(jsonPayload).toString()
+    }
+
+    @JavascriptInterface
+    fun testCustomerDisplay(): String = safeBridge {
+        activity.customerDisplayManager.testDisplay().toString()
+    }
+
+    @JavascriptInterface
+    fun scanHardware(): String = safeBridge {
+        HardwareDetector.scanAll(activity).toString()
+    }
+
+    @JavascriptInterface
+    fun getPosSettings(): String = safeBridge {
+        val mgr = activity.customerDisplayManager
+        val cdStatus = mgr.getStatusJson()
+        val device = DeviceInfo.toJson(activity)
+        val db = activity.posService?.offlineDb
+        val lastSync = db?.getSetting("catalog_synced_at")
+            ?: db?.getSetting("catalog_last_sync")
+            ?: ""
+        val layout = PrinterSettings(db).layout()
+        JSONObject().apply {
+            put("ok", true)
+            put("app_version", BuildConfig.VERSION_NAME)
+            put("version_code", BuildConfig.VERSION_CODE)
+            put("online", activity.isNetworkOnline())
+            put("network_online", activity.isNetworkOnline())
+            put("customer_display", cdStatus)
+            put("device", device)
+            put("last_sync_at", lastSync)
+            put("paper_size", layout.paperSize)
+            put("font_mode", layout.fontMode)
+            put("char_width", layout.charWidth)
+            put("dot_width", layout.dotWidth)
+        }.toString()
+    }
+
     private fun printViaService(service: PosService, data: String): String {
         val pm = service.printerManager ?: service.waitForPrinterManager(15_000)
             ?: return printerInitializingError()

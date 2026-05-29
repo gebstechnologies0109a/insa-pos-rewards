@@ -26,7 +26,8 @@ class PosLocalServer(
     private val getSessionBranchId: () -> Int = { 0 },
     private val ioPreferences: IoPreferencesStore,
     private val launchCameraScan: (() -> Unit)? = null,
-    private val requestUsbPermission: ((deviceId: Int, onResult: (Boolean) -> Unit) -> Unit)? = null
+    private val requestUsbPermission: ((deviceId: Int, onResult: (Boolean) -> Unit) -> Unit)? = null,
+    private val getCustomerDisplayManager: () -> CustomerDisplayManager? = { null }
 ) : NanoHTTPD("127.0.0.1", PORT) {
 
     companion object {
@@ -75,6 +76,12 @@ class PosLocalServer(
                 uri == "/device/io/status" -> handleIoStatus()
                 uri == "/device/io/save" && method == Method.POST -> handleIoSave(session)
                 uri == "/device/io/test" && method == Method.POST -> handleIoTest(session)
+                uri == "/customer-display/status" -> handleCustomerDisplayStatus()
+                uri == "/customer-display/update" && method == Method.POST -> handleCustomerDisplayUpdate(session)
+                uri == "/customer-display/test" && method == Method.POST -> handleCustomerDisplayTest()
+                uri == "/customer-display/settings" && method == Method.GET -> handleCustomerDisplaySettingsGet()
+                uri == "/customer-display/settings" && method == Method.POST -> handleCustomerDisplaySettingsSave(session)
+                uri == "/device/hardware/scan" -> handleHardwareScan()
                 // Offline data endpoints
                 uri == "/offline/products" -> handleGetProducts(session)
                 uri == "/offline/products/barcode" -> handleProductByBarcode(session)
@@ -489,6 +496,55 @@ class PosLocalServer(
             })
             else -> jsonError("Unknown device type: $type")
         }
+    }
+
+    private fun customerDisplayManager(): CustomerDisplayManager? = getCustomerDisplayManager()
+
+    private fun handleCustomerDisplayStatus(): Response {
+        val mgr = customerDisplayManager()
+            ?: return jsonOk(JSONObject().put("ok", true).put("available", false).put("enabled", false))
+        return jsonOk(mgr.getStatusJson())
+    }
+
+    private fun handleCustomerDisplayUpdate(session: IHTTPSession): Response {
+        val mgr = customerDisplayManager()
+            ?: return jsonError("Customer display not available on this device")
+        val body = readBody(session)
+        return jsonOk(mgr.update(body))
+    }
+
+    private fun handleCustomerDisplayTest(): Response {
+        val mgr = customerDisplayManager()
+            ?: return jsonError("Customer display not available on this device")
+        return jsonOk(mgr.testDisplay())
+    }
+
+    private fun handleCustomerDisplaySettingsGet(): Response {
+        val mgr = customerDisplayManager()
+        return jsonOk(JSONObject().apply {
+            put("ok", true)
+            put("enabled", mgr?.enabled ?: false)
+            put("welcome_message", mgr?.welcomeMessage ?: "")
+            if (mgr != null) {
+                val status = mgr.getStatusJson()
+                put("available", status.optBoolean("available"))
+                put("display_name", status.optString("display_name"))
+            }
+        })
+    }
+
+    private fun handleCustomerDisplaySettingsSave(session: IHTTPSession): Response {
+        val mgr = customerDisplayManager()
+            ?: return jsonError("Customer display not available")
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        if (json.has("enabled")) mgr.enabled = json.optBoolean("enabled", true)
+        if (json.has("welcome_message")) mgr.welcomeMessage = json.optString("welcome_message", "")
+        return jsonOk(mgr.getStatusJson().put("saved", true))
+    }
+
+    private fun handleHardwareScan(): Response {
+        return jsonOk(HardwareDetector.scanAll(context))
     }
 
     // --- Offline data handlers ---
