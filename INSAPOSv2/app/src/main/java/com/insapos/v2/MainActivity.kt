@@ -591,6 +591,7 @@ class MainActivity : AppCompatActivity() {
                 injectBridgeReady()
                 detectSuperAdminFromPage()
                 updateModeToggleFab(url)
+                updateSettingsFabVisibility(url)
                 posService?.let { onPageReadyForService(it) }
             }
 
@@ -924,11 +925,24 @@ class MainActivity : AppCompatActivity() {
     private fun updateModeToggleFab(currentUrl: String?) {
         if (!isSuperAdminFromWeb) {
             fabModeToggle.visibility = View.GONE
+            updateSettingsFabVisibility(currentUrl)
             return
         }
         fabModeToggle.visibility = View.VISIBLE
         val onSuperAdmin = isSuperAdminPath(currentUrl ?: "")
         fabModeToggle.text = if (onSuperAdmin) "POS Mode" else "Super Admin"
+        updateSettingsFabVisibility(currentUrl)
+    }
+
+    /** Hide native settings FAB on cashier — web header has gear beside printer. */
+    private fun updateSettingsFabVisibility(currentUrl: String?) {
+        val onCashier = try {
+            val path = Uri.parse(currentUrl ?: "").path?.lowercase() ?: ""
+            path.startsWith("/pos/cashier")
+        } catch (_: Exception) {
+            false
+        }
+        fabSettings.visibility = if (onCashier) View.GONE else View.VISIBLE
     }
 
     private fun isSuperAdminPath(url: String): Boolean {

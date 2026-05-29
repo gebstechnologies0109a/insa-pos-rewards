@@ -63,7 +63,7 @@
 
     </LinearLayout>
 
-    <!-- POS Settings — always visible (native fallback when WebView toolbar lags) -->
+    <!-- POS Settings — hidden on cashier (web header gear beside printer) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabSettings"
         android:layout_width="wrap_content"
@@ -72,6 +72,7 @@
         android:layout_marginTop="36dp"
         android:layout_marginEnd="12dp"
         android:contentDescription="POS Settings"
+        android:visibility="gone"
         app:backgroundTint="@color/white"
         app:fabSize="mini"
         app:srcCompat="@drawable/ic_settings"
