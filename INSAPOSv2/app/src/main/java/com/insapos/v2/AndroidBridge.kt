@@ -82,6 +82,14 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
+    fun openPrinterSettings() {
+        if (!activityAlive()) return
+        activity.runOnUiThread {
+            if (activityAlive()) activity.openPrinterSettings()
+        }
+    }
+
+    @JavascriptInterface
     fun getAppVersion(): String = BuildConfig.VERSION_NAME
 
     @JavascriptInterface
