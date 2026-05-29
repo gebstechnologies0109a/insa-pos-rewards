@@ -225,6 +225,9 @@ class MainActivity : AppCompatActivity() {
 
             service.ensureLocalServerStarted()
             service.requestPrinterManager()
+            Thread {
+                service.waitForPrinterManager(15_000)
+            }.start()
             service.syncEngine?.let { attachSyncEngineCallbacks(it) }
             injectLocalHardwareReady()
 

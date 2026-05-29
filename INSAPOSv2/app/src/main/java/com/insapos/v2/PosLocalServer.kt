@@ -7,6 +7,7 @@ import com.insapos.v2.posengine.PosEngine
 import com.insapos.v2.printers.PrinterConfig
 import com.insapos.v2.printers.PrinterManager
 import com.insapos.v2.printers.PrinterSettings
+import com.insapos.v2.printers.PrinterType
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import com.insapos.v2.sync.SyncEngine
@@ -106,17 +107,23 @@ class PosLocalServer(
         return jsonOk(DeviceInfo.toJson(context).put("ok", true))
     }
 
+    private fun requirePrinterManager(): PrinterManager? = getPrinterManager()
+
     private fun handlePrint(session: IHTTPSession): Response {
         val body = readBody(session)
-        val pm = getPrinterManager()
-            ?: return jsonError("Printer service not ready")
+        val pm = requirePrinterManager() ?: return jsonError(
+            "Printer service initializing — please wait a moment and try again",
+            reason = "initializing"
+        )
 
         val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
         val data = json.optString("data", "")
         val text = json.optString("text", "")
         val raw = json.optJSONArray("raw")
         val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
-        val type = json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        val type = PrinterType.normalize(
+            json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        )
 
         val usbGranted = ensureUsbPermissionIfNeeded(
             pm,
@@ -163,8 +170,10 @@ class PosLocalServer(
     }
 
     private fun handleDrawerOpen(): Response {
-        val pm = getPrinterManager()
-            ?: return jsonError("Printer service not ready")
+        val pm = requirePrinterManager() ?: return jsonError(
+            "Printer service initializing — please wait a moment and try again",
+            reason = "initializing"
+        )
         val printer = pm.getActivePrinter()
             ?: return jsonError("No printer connected")
         printer.openDrawer()
@@ -172,9 +181,12 @@ class PosLocalServer(
     }
 
     private fun handlePrinterStatus(): Response {
-        val pm = getPrinterManager() ?: return jsonOk(
-            JSONObject().put("ok", true).put("connected", false).put("reason", "Service starting")
-        )
+        val pm = requirePrinterManager()
+        if (pm == null) {
+            return jsonOk(
+                JSONObject().put("ok", true).put("connected", false).put("reason", "initializing")
+            )
+        }
         val p = pm.getActivePrinter()
         return jsonOk(JSONObject().apply {
             put("ok", true)
@@ -186,10 +198,13 @@ class PosLocalServer(
 
     private fun handlePrinterList(session: IHTTPSession): Response {
         parseQueryParameters(session)
-        val pm = getPrinterManager() ?: return jsonOk(
-            JSONObject().put("ok", true).put("printers", JSONArray())
-                .put("reason", "Printer service starting")
-        )
+        val pm = requirePrinterManager()
+        if (pm == null) {
+            return jsonOk(
+                JSONObject().put("ok", true).put("printers", JSONArray())
+                    .put("reason", "initializing")
+            )
+        }
         val params = session.parms ?: emptyMap()
         val includeBt = com.insapos.v2.printers.PrinterScanPolicy.includeBluetoothForDiscovery(
             params["bluetooth"]
@@ -213,8 +228,13 @@ class PosLocalServer(
         val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
         if (name.isBlank()) return jsonError("Printer name required")
 
-        val pm = getPrinterManager() ?: return jsonError("Printer service not ready")
-        val type = json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        val pm = requirePrinterManager() ?: return jsonError(
+            "Printer service initializing — please wait a moment and try again",
+            reason = "initializing"
+        )
+        val type = PrinterType.normalize(
+            json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        )
 
         val usbGranted = ensureUsbPermissionIfNeeded(pm, type, name)
         if (usbGranted == false) {
@@ -238,12 +258,17 @@ class PosLocalServer(
     }
 
     private fun handlePrinterTest(session: IHTTPSession): Response {
-        val pm = getPrinterManager() ?: return jsonError("Printer service not ready")
+        val pm = requirePrinterManager() ?: return jsonError(
+            "Printer service initializing — please wait a moment and try again",
+            reason = "initializing"
+        )
 
         val body = readBody(session)
         val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
         val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
-        val type = json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        val type = PrinterType.normalize(
+            json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        )
 
         val usbGranted = ensureUsbPermissionIfNeeded(
             pm,
@@ -326,8 +351,9 @@ class PosLocalServer(
     private fun ensureUsbPermissionIfNeeded(pm: PrinterManager, type: String?, name: String?): Boolean? {
         val requester = requestUsbPermission ?: return null
         val printerName = name?.takeIf { it.isNotBlank() } ?: return null
+        val normType = PrinterType.normalize(type)
         val usb = pm.findUsbPrinterByName(printerName) ?: return null
-        if (type != null && type.isNotBlank() && type != "usb") return null
+        if (normType.isNotBlank() && normType != PrinterType.USB) return null
         if (usb.hasUsbPermission()) return true
 
         val latch = CountDownLatch(1)
@@ -625,10 +651,14 @@ class PosLocalServer(
     private fun jsonOk(obj: JSONObject): Response =
         newFixedLengthResponse(Response.Status.OK, "application/json", obj.toString())
 
-    private fun jsonError(msg: String): Response =
+    private fun jsonError(msg: String, reason: String? = null): Response =
         newFixedLengthResponse(
             Response.Status.INTERNAL_ERROR, "application/json",
-            JSONObject().put("ok", false).put("error", msg).toString()
+            JSONObject().apply {
+                put("ok", false)
+                put("error", msg)
+                if (!reason.isNullOrBlank()) put("reason", reason)
+            }.toString()
         )
 
     private fun json404(msg: String): Response =

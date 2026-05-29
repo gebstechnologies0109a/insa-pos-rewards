@@ -8,14 +8,19 @@ object PrinterScanPolicy {
         lastSelectedType: String? = null,
         currentType: String? = null
     ): Boolean {
-        if (forType.equals("bluetooth", ignoreCase = true)) return true
-        if (savedType.equals("bluetooth", ignoreCase = true)) return true
-        if (lastSelectedType.equals("bluetooth", ignoreCase = true)) return true
-        if (currentType == "bluetooth") return true
+        if (PrinterType.isBuiltin(forType)) return false
+        if (PrinterType.isBuiltin(savedType)) return false
+        if (PrinterType.isBuiltin(lastSelectedType)) return false
+        if (PrinterType.isBuiltin(currentType)) return false
+        if (PrinterType.normalize(forType) == PrinterType.BLUETOOTH) return true
+        if (PrinterType.normalize(savedType) == PrinterType.BLUETOOTH) return true
+        if (PrinterType.normalize(lastSelectedType) == PrinterType.BLUETOOTH) return true
+        if (PrinterType.normalize(currentType) == PrinterType.BLUETOOTH) return true
         return false
     }
 
     fun includeBluetoothForSelection(type: String, savedType: String?, lastSelectedType: String?, currentType: String?): Boolean {
+        if (PrinterType.isBuiltin(type)) return false
         return shouldIncludeBluetooth(type, savedType, lastSelectedType, currentType) || type.isBlank()
     }
 

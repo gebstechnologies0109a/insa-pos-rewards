@@ -41,4 +41,24 @@ class PrinterManagerBluetoothScanTest {
         assertFalse(PrinterScanPolicy.includeBluetoothForDiscovery("0"))
         assertFalse(PrinterScanPolicy.includeBluetoothForDiscovery("false"))
     }
+
+    @Test
+    fun shouldNotIncludeBluetoothForBuiltinSelection() {
+        assertFalse(
+            PrinterScanPolicy.includeBluetoothForSelection(
+                type = PrinterType.BUILTIN,
+                savedType = null,
+                lastSelectedType = null,
+                currentType = null
+            )
+        )
+        assertFalse(
+            PrinterScanPolicy.shouldIncludeBluetooth(
+                forType = "built-in",
+                savedType = null,
+                lastSelectedType = null,
+                currentType = null
+            )
+        )
+    }
 }

@@ -133,6 +133,25 @@ class PosService : Service() {
         }
     }
 
+    /** Blocks until [PrinterManager] exists or [timeoutMs] elapses. */
+    fun waitForPrinterManager(timeoutMs: Long = 10_000): PrinterManager? {
+        printerManager?.let { return it }
+        synchronized(printerInitLock) {
+            printerInitScheduled = true
+        }
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            initPrinterBlocking()?.let { return it }
+            try {
+                Thread.sleep(100)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                break
+            }
+        }
+        return printerManager
+    }
+
     /** Initialize printer stack when settings/print is used (avoids slow BT scan on sale path). */
     fun requestPrinterManager(): PrinterManager? {
         synchronized(printerInitLock) {
@@ -175,7 +194,7 @@ class PosService : Service() {
             try {
                 localServer = PosLocalServer(
                     context = this,
-                    getPrinterManager = { requestPrinterManager() },
+                    getPrinterManager = { requestPrinterManager() ?: waitForPrinterManager(12_000) },
                     getHidScanner = { hidScannerDriver },
                     getDatabase = { offlineDb },
                     getPosEngine = { posEngine },

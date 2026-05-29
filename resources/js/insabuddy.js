@@ -259,6 +259,15 @@ const INSABuddy = {
      * Select a printer by type and name.
      */
     async selectPrinter(type, name) {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.selectPrinter === 'function') {
+            try {
+                const raw = window.INSAPOS.selectPrinter(type || '', name || '');
+                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (data) return data;
+            } catch (e) {
+                console.warn('[INSABuddy] native selectPrinter failed, falling back to HTTP', e);
+            }
+        }
         return this._post('/printer/select', { type, name });
     },
 
@@ -266,6 +275,15 @@ const INSABuddy = {
      * Send a test print to the selected printer (type/name optional but recommended).
      */
     async testPrint(type, name) {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.testPrint === 'function') {
+            try {
+                const raw = window.INSAPOS.testPrint(type || '', name || '');
+                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (data) return data;
+            } catch (e) {
+                console.warn('[INSABuddy] native testPrint failed, falling back to HTTP', e);
+            }
+        }
         const body = {};
         if (type) body.type = type;
         if (name) body.name = name;
@@ -402,10 +420,16 @@ const INSABuddy = {
      */
     parseApiError(data, fallback = 'Request failed') {
         if (!data) return 'Local hardware service unavailable';
+        if (data.reason === 'initializing') return 'Initializing printer… please wait and try again';
+        if (data.error === 'fetch_failed') return 'Local hardware service unavailable — retrying…';
         if (data.error) return String(data.error);
         if (data.message) return String(data.message);
         if (data.reason) return String(data.reason);
         return fallback;
+    },
+
+    isInitializingResponse(data) {
+        return !!data && (data.reason === 'initializing' || String(data.error || '').toLowerCase().includes('initializing'));
     },
 
     /**
@@ -468,9 +492,19 @@ const INSABuddy = {
                 body: JSON.stringify(body),
                 signal: AbortSignal.timeout(30000),
             });
-            return await res.json();
+            let data = null;
+            try {
+                data = await res.json();
+            } catch {
+                if (!res.ok) {
+                    return { ok: false, error: `HTTP ${res.status}` };
+                }
+            }
+            if (data) return data;
+            if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+            return { ok: false, error: 'empty_response' };
         } catch {
-            return null;
+            return { ok: false, error: 'fetch_failed' };
         }
     },
 };

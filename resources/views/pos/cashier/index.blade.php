@@ -2314,7 +2314,12 @@ function posApp() {
             this.printerStatusMessage = `Connecting to ${printer.name}...`;
             try {
                 await this.savePrinterLayoutSettings();
-                const selectResult = await INSABuddy.selectPrinter(printer.type, printer.name);
+                let selectResult = await INSABuddy.selectPrinter(printer.type, printer.name);
+                if (INSABuddy.isInitializingResponse(selectResult)) {
+                    this.printerStatusMessage = 'Initializing printer…';
+                    await new Promise(r => setTimeout(r, 2000));
+                    selectResult = await INSABuddy.selectPrinter(printer.type, printer.name);
+                }
                 const selected = INSABuddy.isSuccessResponse(selectResult)
                     || selectResult?.ok === true
                     || selectResult?.success === true;
@@ -2325,7 +2330,12 @@ function posApp() {
                     return;
                 }
                 this.printerStatusMessage = 'Sending test print...';
-                const testResult = await INSABuddy.testPrint(printer.type, printer.name);
+                let testResult = await INSABuddy.testPrint(printer.type, printer.name);
+                if (INSABuddy.isInitializingResponse(testResult)) {
+                    this.printerStatusMessage = 'Initializing printer… retrying test print';
+                    await new Promise(r => setTimeout(r, 2000));
+                    testResult = await INSABuddy.testPrint(printer.type, printer.name);
+                }
                 const printed = INSABuddy.isPrintSuccess(testResult);
                 if (printed) {
                     this.printerTestPassed = true;

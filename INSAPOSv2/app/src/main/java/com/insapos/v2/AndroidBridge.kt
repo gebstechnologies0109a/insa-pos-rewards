@@ -3,6 +3,8 @@ package com.insapos.v2
 import android.util.Log
 import android.webkit.JavascriptInterface
 import com.insapos.v2.db.OfflineDatabase
+import com.insapos.v2.printers.PrinterSettings
+import com.insapos.v2.printers.PrinterType
 import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -101,13 +103,65 @@ class AndroidBridge(private val activity: MainActivity) {
 
     @JavascriptInterface
     fun printReceipt(data: String): String = safeBridge {
-        activity.posService?.let { svc ->
-            val pm = svc.requestPrinterManager()
-            if (pm != null) {
-                return@safeBridge printViaService(svc, data)
-            }
+        val svc = activity.posService ?: return@safeBridge serviceBindingError()
+        val pm = svc.waitForPrinterManager(15_000)
+        if (pm != null) {
+            return@safeBridge printViaService(svc, data)
         }
         httpPostJson("/print", data, SALE_HTTP_TIMEOUT_SEC)
+    }
+
+    @JavascriptInterface
+    fun selectPrinter(type: String, name: String): String = safeBridge {
+        val svc = activity.posService ?: return@safeBridge serviceBindingError()
+        val pm = svc.waitForPrinterManager(15_000)
+            ?: return@safeBridge printerInitializingError()
+        val normType = PrinterType.normalize(type)
+        val (ok, err) = pm.selectByTypeAndNameWithMessage(normType, name)
+        if (ok) {
+            val active = pm.getActivePrinter()
+            return@safeBridge JSONObject().apply {
+                put("ok", true)
+                put("success", true)
+                put("selected", name)
+                put("name", active?.name ?: name)
+                put("type", active?.type ?: normType)
+                put("connected", true)
+            }.toString()
+        }
+        return@safeBridge JSONObject().put("ok", false).put("error", err ?: "Could not connect to $name").toString()
+    }
+
+    @JavascriptInterface
+    fun testPrint(type: String, name: String): String = safeBridge {
+        val svc = activity.posService ?: return@safeBridge serviceBindingError()
+        val pm = svc.waitForPrinterManager(15_000)
+            ?: return@safeBridge printerInitializingError()
+        val normType = PrinterType.normalize(type)
+        val (printer, ensureErr) = pm.ensureActivePrinter(
+            normType.ifBlank { null },
+            name.ifBlank { null }
+        )
+        if (printer == null) {
+            return@safeBridge JSONObject().put("ok", false).put("error", ensureErr ?: "No printer connected").toString()
+        }
+        if (!printer.isConnected() && !printer.connect()) {
+            return@safeBridge JSONObject().put("ok", false).put("error", "Printer disconnected").toString()
+        }
+        val db = svc.offlineDb
+        val layout = PrinterSettings(db).layout()
+        val text = buildTestPrintText(layout)
+        val ok = pm.printText(text, layout)
+        if (ok) {
+            return@safeBridge JSONObject().apply {
+                put("ok", true)
+                put("success", true)
+                put("printed", true)
+                put("name", printer.name)
+                put("type", printer.type)
+            }.toString()
+        }
+        return@safeBridge JSONObject().put("ok", false).put("error", "Print failed on ${printer.name}").toString()
     }
 
     @JavascriptInterface
@@ -247,8 +301,8 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     private fun printViaService(service: PosService, data: String): String {
-        val pm = service.printerManager ?: service.requestPrinterManager()
-            ?: return JSONObject().put("ok", false).put("error", "Printer service not ready").toString()
+        val pm = service.printerManager ?: service.waitForPrinterManager(15_000)
+            ?: return printerInitializingError()
         val json = try {
             JSONObject(data)
         } catch (_: Exception) {
@@ -257,7 +311,9 @@ class AndroidBridge(private val activity: MainActivity) {
         val text = json.optString("text", "")
         val raw = json.optJSONArray("raw")
         val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
-        val type = json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        val type = PrinterType.normalize(
+            json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        )
         val (printer, ensureErr) = pm.ensureActivePrinter(type.ifBlank { null }, name.ifBlank { null })
         if (printer == null) {
             return JSONObject().put("ok", false).put("error", ensureErr ?: "No printer connected").toString()
@@ -281,6 +337,30 @@ class AndroidBridge(private val activity: MainActivity) {
             JSONObject().put("ok", false).put("error", "Print failed").toString()
         }
     }
+
+    private fun buildTestPrintText(layout: com.insapos.v2.printers.PrinterConfig.Layout): String {
+        val div = com.insapos.v2.printers.PrinterConfig.divider(layout.charWidth)
+        val title = com.insapos.v2.printers.PrinterConfig.centered("INSAPOS v${BuildConfig.VERSION_NAME}", layout.charWidth)
+        val subtitle = com.insapos.v2.printers.PrinterConfig.centered("Test Print", layout.charWidth)
+        val paperLine = "Paper: ${layout.paperSize} · Font: ${layout.fontMode}".take(layout.charWidth)
+        val widthLine = "Width: ${layout.charWidth} chars / ${layout.dotWidth} dots".take(layout.charWidth)
+        return "$div\n$title\n$subtitle\n$div\n" +
+            "Printer is working correctly!\n" +
+            "$paperLine\n$widthLine\n" +
+            "Date: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\n" +
+            "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n" +
+            "$div\n"
+    }
+
+    private fun serviceBindingError(): String =
+        JSONObject().put("ok", false).put("error", "Hardware service not bound").put("reason", "initializing").toString()
+
+    private fun printerInitializingError(): String =
+        JSONObject()
+            .put("ok", false)
+            .put("error", "Initializing printer — please wait a moment and try again")
+            .put("reason", "initializing")
+            .toString()
 
     @JavascriptInterface
     fun log(level: String, message: String) {
