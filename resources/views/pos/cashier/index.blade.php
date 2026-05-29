@@ -1,4 +1,8 @@
-@php $isEpayPlus = is_epayplus_product(); $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS'; @endphp
+@php
+    $isEpayPlus = is_epayplus_product();
+    $brandName = $isEpayPlus ? 'ePay Plus' : 'INSA POS';
+    $canEditCdSettings = in_array(auth()->user()?->role, ['cashier', 'manager', 'admin', 'owner', 'super_admin'], true);
+@endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1502,7 +1506,7 @@
                             <div class="text-xs font-medium text-gray-800">Promo photo</div>
                             <div x-show="posSettings.customer_display_photo" class="flex items-center gap-2">
                                 <img :src="posSettings.customer_display_photo" alt="Current photo" class="w-14 h-14 object-cover rounded border bg-gray-100"
-                                     @error="$el.style.display='none'">
+                                     x-on:error="$el.style.display='none'">
                                 <div class="min-w-0 flex-1">
                                     <div class="text-[10px] text-green-700 truncate" x-text="cdMediaFilename(posSettings.customer_display_photo)"></div>
                                     <div class="text-[10px] text-gray-400">JPG or PNG, max 5 MB</div>
@@ -1908,7 +1912,7 @@ function posApp() {
             branchId: {{ auth()->user()?->branch_id ?? 'null' }},
             role: @json(auth()->user()?->role),
             canViewShiftTotals: @json(auth()->user()?->canViewShiftTotals() ?? false),
-            canEditCdSettings: @json(in_array(auth()->user()?->role, ['cashier', 'manager', 'admin', 'owner', 'super_admin'], true)),
+            canEditCdSettings: @json($canEditCdSettings),
             cdRoutes: {
                 show: @json(route('pos.customer-display.show')),
                 update: @json(route('pos.customer-display.update')),
