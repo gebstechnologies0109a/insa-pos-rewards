@@ -191,6 +191,7 @@ class PosService : Service() {
     fun ensureLocalServerStarted() {
         synchronized(serverLock) {
             if (localServer != null) return
+            val session = SessionManager(this)
             try {
                 localServer = PosLocalServer(
                     context = this,
@@ -199,6 +200,8 @@ class PosService : Service() {
                     getDatabase = { offlineDb },
                     getPosEngine = { posEngine },
                     getSyncEngine = { syncEngine },
+                    getSessionCashierId = { session.cashierId ?: 0 },
+                    getSessionBranchId = { session.branchId ?: 0 },
                     ioPreferences = ioPreferences,
                     launchCameraScan = { onCameraScanRequested?.invoke() },
                     requestUsbPermission = { deviceId, onResult ->

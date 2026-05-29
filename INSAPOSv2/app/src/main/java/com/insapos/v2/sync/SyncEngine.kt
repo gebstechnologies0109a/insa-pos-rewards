@@ -33,7 +33,7 @@ class SyncEngine(
         private const val MAX_BATCH_PUSH = 25
         private const val PULL_INTERVAL_MS = 300_000L
         private const val STARTUP_PULL_DELAY_MS = 8_000L
-        private const val CATALOG_TTL_MS = 1_800_000L
+        private const val CATALOG_TTL_MS = 3_600_000L
         private const val KEY_CATALOG_LAST_SYNC = "catalog_last_sync"
         private const val KEY_CATALOG_SYNCED_AT = "catalog_synced_at"
     }
@@ -98,7 +98,19 @@ class SyncEngine(
     )
 
     fun start() {
-        scope.launch { refreshCachedCounts() }
+        scope.launch {
+            db.purgePoisonSyncQueueItems()
+            db.getUnsyncedTransactions().let { unsynced ->
+                for (i in 0 until unsynced.length()) {
+                    val txn = unsynced.getJSONObject(i)
+                    val localId = txn.optString("local_id", "")
+                    if (db.isPoisonTransaction(localId, txn)) {
+                        db.abandonPoisonTransaction(localId, "skipped_poison_transaction")
+                    }
+                }
+            }
+            refreshCachedCounts()
+        }
         startPushLoop()
         startPullLoop()
         Log.i(TAG, "Sync engine started")
@@ -190,11 +202,17 @@ class SyncEngine(
                 Log.w(TAG, "Skipping push for $localId — could not build payload (missing branch/items?)")
                 continue
             }
+            if (db.isPoisonTransaction(localId, payload)) {
+                Log.w(TAG, "Abandoning poison transaction $localId")
+                db.abandonPoisonTransaction(localId, "skipped_poison_transaction")
+                continue
+            }
             try {
                 val response = httpPost(
                     "${session.getBaseUrl()}/api/pos/sync/push",
                     payload
                 )
+                val httpStatus = response?.optInt("_http_status", 0) ?: 0
                 if (response != null && response.optBoolean("success")) {
                     val serverId = response.optInt("server_id", response.optJSONObject("sale")?.optInt("id", 0) ?: 0)
                     db.markTransactionSynced(txn.getString("local_id"), serverId)
@@ -205,6 +223,10 @@ class SyncEngine(
                     onConflict?.invoke(response)
                     failures++
                     Log.w(TAG, "Conflict for ${txn.optString("local_id")}")
+                } else if (httpStatus == 422 || httpStatus == 400) {
+                    val err = response?.optString("message") ?: "validation error"
+                    Log.w(TAG, "Abandoning $localId after HTTP $httpStatus: $err")
+                    db.abandonPoisonTransaction(localId, err)
                 } else {
                     failures++
                     Log.w(TAG, "Push failed for ${txn.optString("local_id")}: ${response?.optString("message")}")
@@ -240,6 +262,14 @@ class SyncEngine(
             try {
                 val payload = JSONObject(item.getString("payload"))
                 val action = item.getString("action")
+                val recordId = item.optString("record_id", payload.optString("local_id", ""))
+
+                if (db.isPoisonSyncItem(action, recordId, payload)) {
+                    Log.w(TAG, "Abandoning poison sync_queue #${item.getLong("id")} ($recordId)")
+                    db.abandonSyncItem(item.getLong("id"), "skipped_poison_item")
+                    continue
+                }
+
                 val endpoint = when (action) {
                     "push-transaction", "transaction_push" ->
                         "${session.getBaseUrl()}/api/pos/sync/push"
@@ -255,6 +285,14 @@ class SyncEngine(
                     "shift_open" -> JSONObject().apply {
                         put("opening_cash", payload.optDouble("opening_cash"))
                         if (payload.has("local_id")) put("local_id", payload.optString("local_id"))
+                        val cashierId = payload.optInt("cashier_id", 0).takeIf { it > 0 }
+                            ?: session.cashierId
+                            ?: 0
+                        val branchId = payload.optInt("branch_id", 0).takeIf { it > 0 }
+                            ?: session.branchId
+                            ?: 0
+                        if (cashierId > 0) put("cashier_id", cashierId)
+                        if (branchId > 0) put("branch_id", branchId)
                     }
                     "shift_close" -> JSONObject().apply {
                         put("closing_cash", payload.optDouble("closing_cash"))
@@ -268,6 +306,7 @@ class SyncEngine(
                 }
 
                 val response = httpPost(endpoint, body)
+                val httpStatus = response?.optInt("_http_status", 0) ?: 0
                 if (response != null && (response.optBoolean("success") || response.optBoolean("ok"))) {
                     val localId = body.optString("local_id", item.optString("record_id", ""))
                     if (localId.isNotBlank()) {
@@ -287,24 +326,38 @@ class SyncEngine(
                     }
                     db.markSyncItemDone(item.getLong("id"))
                     processed++
+                } else if (response != null && isDuplicateShiftOpen(action, response)) {
+                    val localId = body.optString("local_id", item.optString("record_id", ""))
+                    response.optJSONObject("shift")?.optInt("id", 0)?.takeIf { it > 0 }?.let { serverId ->
+                        if (localId.isNotBlank()) db.markShiftSynced(localId, serverId)
+                    }
+                    db.markSyncItemDone(item.getLong("id"))
+                    processed++
                 } else if (response != null && SyncConflictResolver.hasBlockingConflicts(response)) {
                     lastConflict = response
                     onConflict?.invoke(response)
                     db.markSyncItemFailed(
                         item.getLong("id"),
-                        response.optString("message", "Price conflicts detected. Please review.")
+                        response.optString("message", "Price conflicts detected. Please review."),
+                        httpStatus,
                     )
                 } else {
                     val err = response?.optString("message")
                         ?: response?.optString("error")
                         ?: "Unknown error"
-                    db.markSyncItemFailed(item.getLong("id"), err)
+                    db.markSyncItemFailed(item.getLong("id"), err, httpStatus)
                 }
             } catch (e: Exception) {
                 db.markSyncItemFailed(item.getLong("id"), e.message ?: "Exception")
             }
         }
         return processed > 0
+    }
+
+    private fun isDuplicateShiftOpen(action: String, response: JSONObject): Boolean {
+        if (action != "shift_open") return false
+        val msg = (response.optString("message", "") + " " + response.optString("error", "")).lowercase()
+        return msg.contains("already open") || msg.contains("duplicate") || msg.contains("active shift")
     }
 
     private suspend fun pullData(fullSync: Boolean, forceCatalog: Boolean = fullSync) {

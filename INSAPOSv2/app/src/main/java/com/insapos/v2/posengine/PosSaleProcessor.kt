@@ -39,11 +39,27 @@ class PosSaleProcessor(
         val tendered = payload.optDouble("amount_tendered", total)
         val change = payload.optDouble("change_due", payload.optDouble("change_amount", (tendered - total).coerceAtLeast(0.0)))
 
+        val activeShift = db.getActiveShift()
+        var shiftId = payload.optInt("shift_id", 0)
+        var cashierId = payload.optInt("cashier_id", 0)
+        var branchId = payload.optInt("branch_id", 0)
+        if (activeShift != null) {
+            if (shiftId <= 0) shiftId = activeShift.optLong("id", 0L).toInt()
+            if (cashierId <= 0) cashierId = activeShift.optInt("cashier_id", 0)
+            if (branchId <= 0) branchId = activeShift.optInt("branch_id", 0)
+        }
+        if (cashierId <= 0) {
+            cashierId = db.getSetting("cashier_id")?.toIntOrNull() ?: 0
+        }
+        if (branchId <= 0) {
+            branchId = db.getSetting("branch_id")?.toIntOrNull() ?: 0
+        }
+
         val txn = JSONObject().apply {
             put("local_id", localId)
-            put("branch_id", payload.optInt("branch_id", 0))
-            put("shift_id", payload.optInt("shift_id", 0))
-            put("cashier_id", payload.optInt("cashier_id", 0))
+            put("branch_id", branchId)
+            put("shift_id", shiftId)
+            put("cashier_id", cashierId)
             put("member_id", payload.optInt("member_id", 0))
             put("items_json", items.toString())
             put("items", items)

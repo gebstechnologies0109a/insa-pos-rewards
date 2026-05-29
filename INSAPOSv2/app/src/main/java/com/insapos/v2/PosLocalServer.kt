@@ -22,6 +22,8 @@ class PosLocalServer(
     private val getDatabase: () -> OfflineDatabase?,
     private val getPosEngine: () -> PosEngine?,
     private val getSyncEngine: () -> SyncEngine?,
+    private val getSessionCashierId: () -> Int = { 0 },
+    private val getSessionBranchId: () -> Int = { 0 },
     private val ioPreferences: IoPreferencesStore,
     private val launchCameraScan: (() -> Unit)? = null,
     private val requestUsbPermission: ((deviceId: Int, onResult: (Boolean) -> Unit) -> Unit)? = null
@@ -31,6 +33,7 @@ class PosLocalServer(
         const val PORT = 18182
         private const val TAG = "INSAPOSv3Server"
         private const val IO_SCAN_CACHE_MS = 30_000L
+        private const val OFFLINE_STATS_CACHE_MS = 5_000L
     }
 
     @Volatile
@@ -38,6 +41,8 @@ class PosLocalServer(
 
     private var cachedIoScan: JSONObject? = null
     private var cachedIoScanAt: Long = 0
+    private var cachedOfflineStats: JSONObject? = null
+    private var cachedOfflineStatsAt: Long = 0
 
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri.trimEnd('/')
@@ -551,9 +556,18 @@ class PosLocalServer(
     }
 
     private fun handleOfflineStats(): Response {
+        val now = System.currentTimeMillis()
+        cachedOfflineStats?.let { cached ->
+            if (now - cachedOfflineStatsAt < OFFLINE_STATS_CACHE_MS) {
+                return jsonOk(JSONObject(cached.toString()).put("ok", true).put("cached", true))
+            }
+        }
+        getSyncEngine()?.suppressCatalogPull(60_000L)
         val db = getDatabase() ?: return jsonError("Database not ready")
         val stats = db.getOfflineStats()
         stats.put("ok", true)
+        cachedOfflineStats = stats
+        cachedOfflineStatsAt = now
         return jsonOk(stats)
     }
 
@@ -607,11 +621,10 @@ class PosLocalServer(
         val engine = getPosEngine() ?: return jsonError("POS engine not ready")
         val body = readBody(session)
         val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
-        return jsonOk(engine.openShift(
-            json.optInt("cashier_id", 0),
-            json.optInt("branch_id", 0),
-            json.optDouble("opening_cash", 0.0)
-        ))
+        val cashierId = json.optInt("cashier_id", 0).takeIf { it > 0 } ?: getSessionCashierId()
+        val branchId = json.optInt("branch_id", 0).takeIf { it > 0 } ?: getSessionBranchId()
+        getSyncEngine()?.suppressCatalogPull(60_000L)
+        return jsonOk(engine.openShift(cashierId, branchId, json.optDouble("opening_cash", 0.0)))
     }
 
     private fun handleLocalShiftClose(session: IHTTPSession): Response {
@@ -622,6 +635,7 @@ class PosLocalServer(
     }
 
     private fun handleLocalShiftStatus(): Response {
+        getSyncEngine()?.suppressCatalogPull(30_000L)
         val engine = getPosEngine() ?: return jsonError("POS engine not ready")
         return jsonOk(engine.getShiftStatus())
     }

@@ -89,7 +89,7 @@
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/terminal-session.js') }}"></script>
     <script src="{{ asset('js/insabuddy.js') }}"></script>
-    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.14"></script>
+    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.27"></script>
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden insapos-alpine-pending" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">

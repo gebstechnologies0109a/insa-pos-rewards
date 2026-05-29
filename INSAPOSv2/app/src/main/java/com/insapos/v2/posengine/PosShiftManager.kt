@@ -9,6 +9,12 @@ class PosShiftManager(private val db: OfflineDatabase) {
     fun getStatus(): JSONObject? = db.getActiveShift()
 
     fun openShift(cashierId: Int, branchId: Int, openingCash: Double): JSONObject {
+        val resolvedCashier = cashierId.takeIf { it > 0 }
+            ?: db.getSetting("cashier_id")?.toIntOrNull()
+            ?: 0
+        val resolvedBranch = branchId.takeIf { it > 0 }
+            ?: db.getSetting("branch_id")?.toIntOrNull()
+            ?: 0
         val existing = db.getActiveShift()
         if (existing != null) {
             return JSONObject().apply {
@@ -19,7 +25,7 @@ class PosShiftManager(private val db: OfflineDatabase) {
         }
 
         val localId = UUID.randomUUID().toString()
-        val shift = db.openLocalShift(localId, branchId, cashierId, openingCash)
+        val shift = db.openLocalShift(localId, resolvedBranch, resolvedCashier, openingCash)
         db.enqueueSyncAction("shift_open", "shifts", localId, shift)
 
         return JSONObject().apply {

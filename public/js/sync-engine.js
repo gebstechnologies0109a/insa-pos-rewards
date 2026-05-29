@@ -6,8 +6,8 @@
 (function () {
     'use strict';
 
-    const SYNC_INTERVAL_IDLE_MS = 120000;
-    const SYNC_INTERVAL_ACTIVE_MS = 60000;
+    const SYNC_INTERVAL_IDLE_MS = 90000;
+    const SYNC_INTERVAL_ACTIVE_MS = 30000;
     const FULL_PULL_INTERVAL_MS = 300000;
     const PING_TIMEOUT_MS = 3000;
 
