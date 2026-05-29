@@ -223,6 +223,8 @@ class MainActivity : AppCompatActivity() {
             val service = (binder as PosService.LocalBinder).getService()
             posService = service
             service.customerDisplayManager = customerDisplayManager
+            customerDisplayManager.refreshDisplays()
+            customerDisplayManager.showWelcome()
             service.hidScannerDriver = hidScanner
             service.onCameraScanRequested = { launchCameraScanner() }
             service.onRequestUsbPermission = { deviceId, onResult ->
@@ -302,7 +304,8 @@ class MainActivity : AppCompatActivity() {
             injectLocalHardwareReady()
         }
         if (::customerDisplayManager.isInitialized) {
-            customerDisplayManager.showIfAvailable()
+            customerDisplayManager.refreshDisplays()
+            customerDisplayManager.showWelcome()
         }
         if (::webView.isInitialized) {
             webView.requestFocus()
@@ -648,6 +651,8 @@ class MainActivity : AppCompatActivity() {
                 if (isCashierPath(url)) {
                     handler.postDelayed({ injectCashierToolbarIfNeeded() }, 500)
                     handler.postDelayed({ injectCashierToolbarIfNeeded() }, 2500)
+                    handler.postDelayed({ injectCashierCustomerDisplayHook() }, 800)
+                    handler.postDelayed({ injectCashierCustomerDisplayHook() }, 3000)
                 }
                 posService?.let { onPageReadyForService(it) }
             }
@@ -1130,6 +1135,56 @@ class MainActivity : AppCompatActivity() {
                     window.posAppInstance.hasNativeBridge = true;
                     window.posAppInstance.buddyConnected = true;
                 }
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(js, null)
+    }
+
+    /**
+     * Fallback when production blade has not yet wired cart → customer display hooks.
+     * Polls Alpine cart state and mirrors via native bridge.
+     */
+    private fun injectCashierCustomerDisplayHook() {
+        if (!isWebViewUsable()) return
+        val storeName = "INSAPOS"
+        val js = """
+            (function() {
+                if (window.__insaposCustomerDisplayHook) return;
+                window.__insaposCustomerDisplayHook = true;
+                var lastJson = '';
+                var storeName = '$storeName';
+                function mirrorCart() {
+                    try {
+                        if (typeof INSAPOS === 'undefined' || typeof INSAPOS.updateCustomerDisplay !== 'function') return;
+                        var app = window.posAppInstance;
+                        if (!app || !Array.isArray(app.cart)) return;
+                        var subtotal = typeof app.cartSubtotal === 'number' ? app.cartSubtotal
+                            : app.cart.reduce(function(s, i) { return s + (i.qty * i.price); }, 0);
+                        var discount = typeof app.cartDiscount === 'number' ? app.cartDiscount : 0;
+                        var total = typeof app.cartTotal === 'number' ? app.cartTotal : Math.max(0, subtotal - discount);
+                        var payload = {
+                            mode: app.cart.length ? 'cart' : 'welcome',
+                            store_name: storeName,
+                            items: app.cart.map(function(i) {
+                                return {
+                                    name: i.product_name || i.name || 'Item',
+                                    qty: i.qty || 1,
+                                    price: i.price || 0,
+                                    lineTotal: (i.qty || 1) * (i.price || 0)
+                                };
+                            }),
+                            subtotal: subtotal,
+                            discount: discount,
+                            total: total
+                        };
+                        var json = JSON.stringify(payload);
+                        if (json === lastJson) return;
+                        lastJson = json;
+                        INSAPOS.updateCustomerDisplay(json);
+                    } catch (e) {}
+                }
+                setInterval(mirrorCart, 500);
+                mirrorCart();
             })();
         """.trimIndent()
         webView.evaluateJavascript(js, null)

@@ -1737,6 +1737,7 @@ function posApp() {
         ioSelectedMouseIndex: -1,
         ioSelectedScannerIndex: -1,
         ioApiAvailable: false,
+        _customerDisplayTimer: null,
         useCameraForScan: localStorage.getItem('insapos_use_camera_for_scan') !== '0',
         _lastNativeScan: null,
         _lastNativeScanTime: 0,
@@ -2124,13 +2125,23 @@ function posApp() {
                 try {
                     const cd = await INSABuddy.getCustomerDisplayStatus();
                     if (cd && cd.ok !== false) {
-                        this.posSettings.customer_display_enabled = cd.enabled !== false;
                         this.posSettings.customer_display_available = !!cd.available;
                         this.posSettings.customer_display_name = cd.display_name || '';
+                        if (cd.available) {
+                            this.posSettings.customer_display_enabled = true;
+                            if (cd.enabled === false && typeof window.INSAPOS.setCustomerDisplayEnabled === 'function') {
+                                try { window.INSAPOS.setCustomerDisplayEnabled(true); } catch (e) {}
+                            }
+                        } else {
+                            this.posSettings.customer_display_enabled = cd.enabled !== false;
+                        }
                     }
                 } catch {}
-                this.pushCustomerDisplay('welcome');
+                this.scheduleCustomerDisplaySync(true);
             }
+            this.$watch('cart', () => this.scheduleCustomerDisplaySync(), { deep: true });
+            this.$watch('orderDiscountApplied', () => this.scheduleCustomerDisplaySync());
+            this.$watch('orderDiscountValue', () => this.scheduleCustomerDisplaySync());
         },
 
         bindScanInputFocusBridge() {
@@ -2560,8 +2571,21 @@ function posApp() {
             this.pushCustomerDisplay(this.cart.length ? 'cart' : 'welcome');
         },
 
+        scheduleCustomerDisplaySync(immediate = false) {
+            if (this._customerDisplayTimer) clearTimeout(this._customerDisplayTimer);
+            if (immediate) {
+                this.syncCustomerDisplayCart();
+                return;
+            }
+            this._customerDisplayTimer = setTimeout(() => {
+                this._customerDisplayTimer = null;
+                this.syncCustomerDisplayCart();
+            }, 75);
+        },
+
         pushCustomerDisplay(mode, extra = {}) {
-            if (!this.hasNativeBridge || !this.posSettings.customer_display_enabled) return;
+            if (!this.hasNativeBridge) return;
+            if (!this.posSettings.customer_display_enabled && !this.posSettings.customer_display_available) return;
             const payload = {
                 mode,
                 store_name: '{{ $brandName }}',
@@ -2569,6 +2593,7 @@ function posApp() {
                     name: i.product_name,
                     qty: i.qty,
                     price: i.price,
+                    lineTotal: i.qty * i.price,
                 })),
                 subtotal: this.cartSubtotal,
                 discount: this.cartDiscount,
@@ -3787,7 +3812,7 @@ function posApp() {
                 this.cart.push({ product_id: product.id, product_name: product.name, sku: product.sku, barcode: product.barcode, price: parseFloat(product.price), qty: 1, discount: 0 });
             }
             if (force && product.stock <= 0) this.showToast('Warning: ' + product.name + ' shows 0 stock in system', 'warning', 2500);
-            this.syncCustomerDisplayCart();
+            this.scheduleCustomerDisplaySync();
             return true;
         },
 
@@ -3795,13 +3820,13 @@ function posApp() {
             const item = this.cart[idx]; const newQty = item.qty + delta;
             if (newQty <= 0) { this.cart.splice(idx, 1); }
             else { const product = this.products.find(p => p.id === item.product_id); if (product && product.stock > 0 && newQty > product.stock) { this.showToast('Not enough stock. Available: ' + product.stock, 'warning'); return; } item.qty = newQty; }
-            this.syncCustomerDisplayCart();
+            this.scheduleCustomerDisplaySync();
         },
 
-        removeItem(idx) { this.cart.splice(idx, 1); this.syncCustomerDisplayCart(); },
-        clearCart() { this.cart = []; this.orderDiscountApplied = 0; this.orderDiscountValue = 0; this.selectedCustomer = null; this.customerSearch = ''; this.syncCustomerDisplayCart(); },
+        removeItem(idx) { this.cart.splice(idx, 1); this.scheduleCustomerDisplaySync(); },
+        clearCart() { this.cart = []; this.orderDiscountApplied = 0; this.orderDiscountValue = 0; this.selectedCustomer = null; this.customerSearch = ''; this.scheduleCustomerDisplaySync(); },
 
-        goToCheckout() { if (this.cart.length === 0) return; this.amountTendered = 0; this.changeAmount = 0; this.paymentMethod = 'cash'; this.paymentRef = ''; this.screen = 'checkout'; },
+        goToCheckout() { if (this.cart.length === 0) return; this.amountTendered = 0; this.changeAmount = 0; this.paymentMethod = 'cash'; this.paymentRef = ''; this.screen = 'checkout'; this.scheduleCustomerDisplaySync(); },
         calculateChange() { this.changeAmount = (this.amountTendered || 0) - this.cartTotal; },
 
         async completeSale() {

@@ -125,35 +125,58 @@ class CustomerDisplayPresentation(
     }
 
     private fun cartLine(item: JSONObject): View {
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 8, 0, 8)
+        val block = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 10, 0, 10)
         }
         val qty = item.optInt("qty", 1)
         val name = item.optString("name", item.optString("product_name", "Item"))
         val price = item.optDouble("price", 0.0)
-        val lineTotal = qty * price
+        val lineTotal = if (item.has("lineTotal")) {
+            item.optDouble("lineTotal", qty * price)
+        } else {
+            qty * price
+        }
 
         val nameView = TextView(context).apply {
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            text = "${qty}x $name"
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            text = name
             textSize = 18f
+            setTypeface(typeface, Typeface.BOLD)
             setTextColor(0xFF111827.toInt())
         }
-        val priceView = TextView(context).apply {
+        val detailRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val detailView = TextView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            text = "$qty × ${formatMoney(price)}"
+            textSize = 16f
+            setTextColor(0xFF4B5563.toInt())
+        }
+        val totalView = TextView(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            text = formatMoney(lineTotal)
+            text = "= ${formatMoney(lineTotal)}"
             textSize = 18f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(0xFF065F46.toInt())
             gravity = Gravity.END
         }
-        row.addView(nameView)
-        row.addView(priceView)
-        return row
+        detailRow.addView(detailView)
+        detailRow.addView(totalView)
+        block.addView(nameView)
+        block.addView(detailRow)
+        return block
     }
 
     private fun emptyLine(text: String): View {

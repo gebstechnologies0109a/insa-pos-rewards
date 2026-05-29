@@ -42,6 +42,17 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
 
     fun refreshDisplays() {
         secondaryDisplay = findSecondaryDisplay()
+        if (secondaryDisplay != null) {
+            autoEnableIfNeeded()
+        }
+    }
+
+    /** Show welcome screen on secondary display when hardware is present. */
+    fun showWelcome() {
+        refreshDisplays()
+        if (secondaryDisplay == null) return
+        autoEnableIfNeeded()
+        updatePayload(welcomePayload())
     }
 
     fun getStatusJson(): JSONObject {
@@ -153,6 +164,14 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
         pres.show()
         presentation = pres
         return pres
+    }
+
+    private fun autoEnableIfNeeded() {
+        if (secondaryDisplay == null) return
+        if (!prefs.getBoolean(KEY_ENABLED, true)) {
+            prefs.edit().putBoolean(KEY_ENABLED, true).apply()
+            Log.i(TAG, "Auto-enabled customer display (secondary screen detected)")
+        }
     }
 
     private fun findSecondaryDisplay(): Display? {
