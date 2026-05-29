@@ -2,62 +2,40 @@
 
 This document records export from the GEBS GitHub remote to a **non-GEBS** GitHub account, and follow-up steps for Forge and CI.
 
-## Migration result (completed 2026-05-30)
-
-| Item | Value |
-|------|--------|
-| **New GitHub account** | **`ronaldo82ba`** (`ronaldo82ba@gmail.com`) — confirmed logged in via Cursor browser |
-| **New remote (primary)** | `https://github.com/ronaldo82ba/insa-pos-rewards.git` |
-| **Local remote name** | `github-new` → points at the new repo above |
-| **Import method** | GitHub **Import repository** (browser), from public GEBS source |
-| **Visibility** | Private on `ronaldo82ba/insa-pos-rewards` |
-| **GitHub CLI auth** | **Active:** `ronaldo82ba` · **Inactive:** `gebstechnologies0109a` |
-
-### Branches on new remote (verified)
-
-| Branch | Tip commit | Notes |
-|--------|------------|--------|
-| `main` | `6486596` | fix: define licenseActive in cashier Alpine state |
-| `deploy/insa` | `6486596` | same as `main` |
-| `deploy/epayplus` | `be335e4` | Fix ePay Plus dashboard and transactions to show all time ranges |
-
-Tags from the GEBS public repo were imported as well (e.g. `insapos-v3.0.47`, `customer-display-v1`).
-
-### Local vs new remote
-
-Local checkout was **behind** the imported repo on `main` and `deploy/insa` at migration time. After switching remotes, run:
-
-```powershell
-cd "c:\laragon\www\ePay Plus"
-git fetch github-new
-git checkout main
-git merge github-new/main
-git checkout deploy/insa
-git merge github-new/deploy/insa
-```
-
-(`deploy/epayplus` already matched at `be335e4`.)
-
-### Extra repo on new account
-
-An empty private repo **`ronaldo82ba/epayplus-platform`** was created during setup. It has **no code**. Safe to delete in GitHub → Settings → Danger Zone, or keep as a future rename target.
-
-### Remotes (current)
-
-| Remote | URL | Role |
-|--------|-----|------|
-| `origin` | `https://github.com/gebstechnologies0109a/insa-pos-rewards.git` | GEBS (unchanged) |
-| `github-new` | `https://github.com/ronaldo82ba/insa-pos-rewards.git` | New account |
-
----
-
-## Current state (local workspace)
+## Migration complete (2026-05-30)
 
 | Item | Value |
 |------|--------|
 | **Local path** | `c:\laragon\www\ePay Plus` |
-| **Local `main` (pre-sync)** | `0d79728` — docs: SariSmartHub device scan and report period guide |
-| **Branches** | `main`, `deploy/epayplus`, `deploy/insa` |
+| **New GitHub username** | `ronaldo82ba` |
+| **Account email** | `ronaldo82ba@gmail.com` (browser session; not exposed via GitHub API) |
+| **New private repo** | [`ronaldo82ba/epayplus-platform`](https://github.com/ronaldo82ba/epayplus-platform) |
+| **New remote URL** | `https://github.com/ronaldo82ba/epayplus-platform.git` |
+| **Previous GEBS `origin`** | `https://github.com/gebstechnologies0109a/insa-pos-rewards.git` (kept as `geb-origin`) |
+| **Latest commit on `main`** | `0d79728` — docs: SariSmartHub device scan and report period guide |
+| **Branches pushed** | `main`, `deploy/epayplus`, `deploy/insa` |
+| **Tags** | none |
+| **GitHub CLI auth** | Active: **`ronaldo82ba`** (scopes: `gist`, `read:org`, `repo`, `workflow`); inactive: `gebstechnologies0109a` |
+
+### Branch commit SHAs (local = remote on `epayplus-platform`)
+
+| Branch | SHA |
+|--------|-----|
+| `main` | `0d797281958ea7d0eeb2d4ca6b87b6bb8ce65c60` |
+| `deploy/epayplus` | `be335e458efec163efdc0d3e0122fa4db292cab8` |
+| `deploy/insa` | `4bb841d0dad91a98ecd1ee9ea4d204e45fddffa4` |
+
+### Remotes (after migration)
+
+```text
+origin     https://github.com/ronaldo82ba/epayplus-platform.git
+geb-origin https://github.com/gebstechnologies0109a/insa-pos-rewards.git
+github-new https://github.com/ronaldo82ba/insa-pos-rewards.git  (legacy; optional to remove)
+```
+
+- **`origin`** — default push/fetch target (`ronaldo82ba/epayplus-platform`).
+- **`geb-origin`** — read-only backup of the old GEBS remote; **not deleted**.
+- **`github-new`** — earlier test push to `insa-pos-rewards`; safe to remove with `git remote remove github-new` if unused.
 
 ## Security check
 
@@ -88,43 +66,11 @@ git branch -a
 
 ---
 
-## Make the new repo default `origin` (recommended next step)
+## Laravel Forge (action required)
 
-Keep GEBS as read-only backup:
+Update **each Forge site** (INSA and ePay Plus):
 
-```powershell
-cd "c:\laragon\www\ePay Plus"
-
-git remote rename origin gebstechnologies
-git remote rename github-new origin
-git fetch origin
-git branch -u origin/main main
-git remote -v
-```
-
-To **stop** using GEBS entirely (only after you confirm):
-
-```powershell
-git remote remove gebstechnologies
-```
-
-### Future pushes (gh CLI now on `ronaldo82ba`)
-
-```powershell
-gh auth status
-git push origin --all
-git push origin --tags
-```
-
-Switch active gh account if needed: `gh auth switch`.
-
----
-
-## Laravel Forge
-
-For **each Forge site** (INSA and ePay Plus):
-
-1. **Site → Git Repository** — change URL to `https://github.com/ronaldo82ba/insa-pos-rewards.git` (or SSH equivalent).
+1. **Site → Git Repository** — change URL to `https://github.com/ronaldo82ba/epayplus-platform.git` (or SSH equivalent).
 2. **Deployment branch** — unchanged: `deploy/insa` or `deploy/epayplus` per site.
 3. Re-run deploy or `git pull` on the server once to confirm access (deploy keys or Forge GitHub app must be authorized on the **new** account/repo).
 
@@ -137,24 +83,28 @@ Workflows live at:
 - `.github/workflows/build-android.yml`
 - `.github/workflows/deploy-branches.yml`
 
-They do **not** hardcode `gebstechnologies0109a/insa-pos-rewards`. Enable **Actions** on the new repo and re-create **secrets** (signing keys, etc.) under **Settings → Secrets and variables → Actions**.
+They do **not** hardcode `gebstechnologies0109a/insa-pos-rewards`. Enable **Actions** on `ronaldo82ba/epayplus-platform` and re-create **secrets** (signing keys, etc.) under **Settings → Secrets and variables → Actions**.
 
 ---
 
 ## References to old repo name in code/docs
 
-Strings like `insa-pos-rewards` appear in **Forge deploy scripts and docs** as **site/path naming**, not as the GitHub remote URL. No workflow files reference the GEBS org. Update Forge git URL only; renaming Forge site folders is optional.
+Strings like `insa-pos-rewards` appear in **Forge deploy scripts and docs** as **site/path naming**, not as the GitHub remote URL. Update Forge git URL only; renaming Forge site folders is optional.
 
 ---
 
 ## Quick checklist
 
-- [x] Identify new GitHub account (`ronaldo82ba`)
-- [x] `gh auth login` with non-GEBS account (active account: `ronaldo82ba`)
-- [x] Create/import repo and verify all deploy branches on new remote
-- [ ] Sync local branches with `github-new` (see above)
-- [ ] Rename remotes (`origin` → new repo)
-- [ ] Update Forge git repository URL(s)
+- [x] `gh auth login` / refresh with non-GEBS account (`ronaldo82ba`, `workflow` scope)
+- [x] Create `ronaldo82ba/epayplus-platform` (private) and push all branches
+- [ ] Update Forge git repository URL(s) to `https://github.com/ronaldo82ba/epayplus-platform.git`
 - [ ] Re-add GitHub Actions secrets on new repo
-- [ ] Optionally delete empty `epayplus-platform` repo
+- [x] Rename remotes (`geb-origin` + new `origin`)
+- [ ] Optionally remove `github-new` remote and `ronaldo82ba/insa-pos-rewards` test repo
 - [ ] Keep bundle `epayplus-repo-export.bundle` as backup until Forge is verified
+
+## Session notes
+
+- **Repo name chosen:** `epayplus-platform` (private) — clearer monorepo name than reusing `insa-pos-rewards`.
+- **Blocker resolved:** initial push rejected without `workflow` OAuth scope; fixed via `gh auth refresh -s workflow`.
+- **GEBS remote:** preserved as `geb-origin`; no pushes made to GEBS during this migration.
