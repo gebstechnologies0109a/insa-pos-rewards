@@ -21,12 +21,13 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         const val MAX_SEARCH_RESULTS = 500
     }
 
-    private val dbLock = Any()
+    private val writeLock = Any()
 
-    /** Single-writer lock — all SQLite access must go through this to avoid pool exhaustion. */
-    private inline fun <T> withDb(block: () -> T): T = synchronized(dbLock) { block() }
+    /** Serialize writes only; WAL allows concurrent reads during catalog sync. */
+    private inline fun <T> withDb(block: () -> T): T = synchronized(writeLock) { block() }
 
-    private inline fun <T> dbOp(block: () -> T): T = withDb(block)
+    /** Read-only queries — no global lock so sales/print stay responsive during sync. */
+    private inline fun <T> dbOp(block: () -> T): T = block()
 
     override fun onConfigure(db: SQLiteDatabase) {
         super.onConfigure(db)

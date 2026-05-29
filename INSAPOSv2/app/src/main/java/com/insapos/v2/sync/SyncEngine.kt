@@ -33,9 +33,15 @@ class SyncEngine(
         private const val MAX_BATCH_PUSH = 25
         private const val PULL_INTERVAL_MS = 300_000L
         private const val STARTUP_PULL_DELAY_MS = 8_000L
+        private const val CATALOG_TTL_MS = 1_800_000L
         private const val KEY_CATALOG_LAST_SYNC = "catalog_last_sync"
         private const val KEY_CATALOG_SYNCED_AT = "catalog_synced_at"
     }
+
+    private val catalogPullLock = Any()
+
+    @Volatile
+    private var catalogPullRunning = false
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pushJob: Job? = null
@@ -331,18 +337,30 @@ class SyncEngine(
     }
 
     private suspend fun pullProductCatalog(branchId: Int) {
-        val url = "${session.getBaseUrl()}/api/pos/products/all?branch_id=" +
-            URLEncoder.encode(branchId.toString(), "UTF-8")
-        val json = httpGet(url) ?: return
-        val products = json.optJSONArray("products") ?: JSONArray()
-        if (products.length() > 0) {
-            val count = db.upsertProducts(products)
-            db.logSync("pull", "products", count, "completed")
-            Log.i(TAG, "Pulled $count products from catalog")
+        if (catalogPullRunning) {
+            Log.d(TAG, "Catalog pull already in progress — skipping duplicate")
+            return
         }
-        val categories = json.optJSONArray("categories") ?: JSONArray()
-        if (categories.length() > 0) {
-            db.upsertCategories(categories)
+        synchronized(catalogPullLock) {
+            if (catalogPullRunning) return
+            catalogPullRunning = true
+        }
+        try {
+            val url = "${session.getBaseUrl()}/api/pos/products/all?branch_id=" +
+                URLEncoder.encode(branchId.toString(), "UTF-8")
+            val json = httpGet(url) ?: return
+            val products = json.optJSONArray("products") ?: JSONArray()
+            if (products.length() > 0) {
+                val count = db.upsertProducts(products)
+                db.logSync("pull", "products", count, "completed")
+                Log.i(TAG, "Pulled $count products from catalog")
+            }
+            val categories = json.optJSONArray("categories") ?: JSONArray()
+            if (categories.length() > 0) {
+                db.upsertCategories(categories)
+            }
+        } finally {
+            catalogPullRunning = false
         }
     }
 
@@ -488,7 +506,19 @@ class SyncEngine(
         val syncedAt = db.getSetting(KEY_CATALOG_SYNCED_AT)
             ?: db.getSetting(KEY_CATALOG_LAST_SYNC)
             ?: db.getSetting("cache_ready_at")
-        return syncedAt.isNullOrBlank()
+        if (syncedAt.isNullOrBlank()) return true
+        val ageMs = catalogAgeMs(syncedAt)
+        return ageMs < 0 || ageMs >= CATALOG_TTL_MS
+    }
+
+    private fun catalogAgeMs(isoTimestamp: String): Long {
+        return try {
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+            fmt.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            System.currentTimeMillis() - (fmt.parse(isoTimestamp)?.time ?: return -1L)
+        } catch (_: Exception) {
+            -1L
+        }
     }
 
     private fun markCacheReady(branchId: Int) {

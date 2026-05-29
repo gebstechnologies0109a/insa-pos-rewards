@@ -314,28 +314,41 @@ class AndroidBridge(private val activity: MainActivity) {
         val type = PrinterType.normalize(
             json.optString("type", "").ifBlank { json.optString("printer_type", "") }
         )
-        val (printer, ensureErr) = pm.ensureActivePrinter(type.ifBlank { null }, name.ifBlank { null })
-        if (printer == null) {
-            return JSONObject().put("ok", false).put("error", ensureErr ?: "No printer connected").toString()
-        }
-        if (!printer.isConnected() && !printer.connect()) {
-            return JSONObject().put("ok", false).put("error", "Printer disconnected").toString()
-        }
-        val db = service.offlineDb
-        val layout = com.insapos.v2.printers.PrinterSettings(db).layout()
-        val ok = when {
-            raw != null -> {
-                val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
-                printer.printRaw(bytes)
+        val layout = com.insapos.v2.printers.PrinterSettings(service.offlineDb).layout()
+        var lastError = "Print failed"
+        repeat(3) { attempt ->
+            val (printer, ensureErr) = pm.ensureActivePrinter(type.ifBlank { null }, name.ifBlank { null })
+            if (printer == null) {
+                lastError = ensureErr ?: "No printer connected"
+                if (attempt < 2) {
+                    Thread.sleep(300L * (attempt + 1))
+                    return@repeat
+                }
+                return JSONObject().put("ok", false).put("error", lastError).toString()
             }
-            text.isNotBlank() -> printer.printText(text, layout)
-            else -> false
+            if (!printer.isConnected() && !printer.connect()) {
+                lastError = "Printer disconnected"
+                if (attempt < 2) {
+                    Thread.sleep(300L * (attempt + 1))
+                    return@repeat
+                }
+                return JSONObject().put("ok", false).put("error", lastError).toString()
+            }
+            val ok = when {
+                raw != null -> {
+                    val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
+                    printer.printRaw(bytes)
+                }
+                text.isNotBlank() -> printer.printText(text, layout)
+                else -> false
+            }
+            if (ok) {
+                return JSONObject().put("ok", true).put("printed", true).toString()
+            }
+            lastError = "Print failed on ${printer.name}"
+            if (attempt < 2) Thread.sleep(400L * (attempt + 1))
         }
-        return if (ok) {
-            JSONObject().put("ok", true).put("printed", true).toString()
-        } else {
-            JSONObject().put("ok", false).put("error", "Print failed").toString()
-        }
+        return JSONObject().put("ok", false).put("error", lastError).toString()
     }
 
     private fun buildTestPrintText(layout: com.insapos.v2.printers.PrinterConfig.Layout): String {

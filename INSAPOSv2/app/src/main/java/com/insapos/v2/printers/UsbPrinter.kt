@@ -20,7 +20,10 @@ class UsbPrinter(
     }
 
     override val type = "usb"
-    override val name: String get() = device.productName ?: "USB Printer (${device.deviceId})"
+    override val name: String get() = PrinterNames.sanitize(
+        device.productName?.takeIf { it.isNotBlank() }
+            ?: "USB Printer (${device.vendorId}:${device.productId})"
+    ).ifBlank { "USB Printer (${device.deviceId})" }
 
     val usbDevice: UsbDevice get() = device
 

@@ -188,10 +188,11 @@ class PosLocalServer(
             )
         }
         val p = pm.getActivePrinter()
+        val live = p?.isConnected() == true
         return jsonOk(JSONObject().apply {
             put("ok", true)
-            put("connected", p != null)
-            put("name", p?.name ?: JSONObject.NULL)
+            put("connected", live)
+            put("name", p?.name?.let { com.insapos.v2.printers.PrinterNames.sanitize(it) } ?: JSONObject.NULL)
             put("type", p?.type ?: JSONObject.NULL)
         })
     }
@@ -212,11 +213,14 @@ class PosLocalServer(
         val list = if (includeBt) pm.scanForUi() else pm.scanAll(includeBluetooth = false)
         Log.i(TAG, "GET /printer/list → ${list.size} printer(s) (bluetooth=$includeBt)")
         val arr = JSONArray()
+        val active = pm.getActivePrinter()
         for (p in list) {
+            val isActive = active != null && p.type == active.type &&
+                com.insapos.v2.printers.PrinterNames.namesMatch(p.name, active.name)
             arr.put(JSONObject().apply {
-                put("name", p.name)
+                put("name", com.insapos.v2.printers.PrinterNames.sanitize(p.name))
                 put("type", p.type)
-                put("connected", p.isConnected())
+                put("connected", p.isConnected() || (isActive && active?.isConnected() == true))
             })
         }
         return jsonOk(JSONObject().put("ok", true).put("printers", arr).put("count", list.size))

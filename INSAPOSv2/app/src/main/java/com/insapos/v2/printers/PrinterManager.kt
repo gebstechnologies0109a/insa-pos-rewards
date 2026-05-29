@@ -38,6 +38,9 @@ class PrinterManager(private val context: Context) {
         if (currentPrinter == null) {
             autoSelectBuiltInIfOnlyOption()
         }
+        if (currentPrinter == null || currentPrinter?.isConnected() != true) {
+            autoSelectPreferredUsb()
+        }
     }
 
     /** On all-in-one POS hardware, persist built-in printer when it is the only option. */
@@ -48,6 +51,17 @@ class PrinterManager(private val context: Context) {
         if (shouldIncludeBluetooth()) return
         if (selectPrinter(builtin)) {
             Log.i(TAG, "Auto-selected built-in printer: ${builtin.name}")
+        }
+    }
+
+    /** Prefer USB micro-printer on Rockchip POS when built-in thermal is unavailable. */
+    private fun autoSelectPreferredUsb() {
+        val usb = scanUsbPrinters()
+        if (usb.isEmpty()) return
+        val preferred = usb.find { it.name.contains("micro", ignoreCase = true) }
+            ?: if (usb.size == 1) usb[0] else null
+        if (preferred != null && selectPrinter(preferred)) {
+            Log.i(TAG, "Auto-selected USB printer: ${preferred.name}")
         }
     }
 
@@ -88,21 +102,27 @@ class PrinterManager(private val context: Context) {
 
     fun selectByName(name: String): Boolean {
         val all = scanAll(includeBluetooth = true)
-        val match = all.find { it.name == name } ?: return false
+        val match = all.find { PrinterNames.namesMatch(it.name, name) } ?: return false
         return selectPrinter(match)
     }
 
     fun selectByTypeAndName(type: String, name: String): Boolean {
         val normType = PrinterType.normalize(type)
         val all = scanForSelection(normType)
-        val match = if (normType.isNotBlank()) {
-            all.find { it.type == normType && it.name == name }
-                ?: all.find { PrinterType.isBuiltin(normType) && it.type == PrinterType.BUILTIN && it.name == name }
-                ?: all.find { it.name == name }
-        } else {
-            all.find { it.name == name }
-        } ?: return false
+        val match = findPrinterMatch(all, normType, name) ?: return false
         return selectPrinter(match)
+    }
+
+    private fun findPrinterMatch(all: List<Printer>, normType: String, name: String): Printer? {
+        if (name.isBlank()) return null
+        if (normType.isNotBlank()) {
+            all.find { it.type == normType && PrinterNames.namesMatch(it.name, name) }?.let { return it }
+            if (PrinterType.isBuiltin(normType)) {
+                all.find { it.type == PrinterType.BUILTIN && PrinterNames.namesMatch(it.name, name) }
+                    ?.let { return it }
+            }
+        }
+        return all.find { PrinterNames.namesMatch(it.name, name) }
     }
 
     /**
@@ -112,13 +132,7 @@ class PrinterManager(private val context: Context) {
         if (name.isBlank()) return false to "Printer name required"
         val normType = PrinterType.normalize(type)
         val all = scanForSelection(normType)
-        val match = if (normType.isNotBlank()) {
-            all.find { it.type == normType && it.name == name }
-                ?: all.find { PrinterType.isBuiltin(normType) && it.type == PrinterType.BUILTIN && it.name == name }
-                ?: all.find { it.name == name }
-        } else {
-            all.find { it.name == name }
-        }
+        val match = findPrinterMatch(all, normType, name)
         if (match == null) {
             return false to "Printer not found: $name"
         }
@@ -160,13 +174,17 @@ class PrinterManager(private val context: Context) {
         if (!savedName.isNullOrBlank()) {
             val (ok, err) = selectByTypeAndNameWithMessage(savedType ?: "", savedName)
             if (ok) return currentPrinter to null
-            return null to (err ?: "Could not reconnect to $savedName")
+            autoSelectPreferredUsb()
+            if (currentPrinter?.isConnected() == true) return currentPrinter to null
+            return null to (err ?: "Could not reconnect to ${PrinterNames.sanitize(savedName)}")
         }
+        autoSelectPreferredUsb()
+        currentPrinter?.takeIf { it.isConnected() }?.let { return it to null }
         return null to "No printer connected — select a printer first"
     }
 
     fun findUsbPrinterByName(name: String): UsbPrinter? {
-        return scanUsbPrinters().find { it.name == name }
+        return scanUsbPrinters().find { PrinterNames.namesMatch(it.name, name) }
     }
 
     @SuppressLint("MissingPermission")
@@ -259,9 +277,10 @@ class PrinterManager(private val context: Context) {
     }
 
     private fun savePrinter(printer: Printer) {
+        val cleanName = PrinterNames.sanitize(printer.name)
         prefs.edit()
             .putString(KEY_PRINTER_TYPE, printer.type)
-            .putString(KEY_PRINTER_ADDRESS, printer.name)
+            .putString(KEY_PRINTER_ADDRESS, cleanName)
             .apply()
     }
 
@@ -308,7 +327,7 @@ class PrinterManager(private val context: Context) {
                     }
                 }
                 PrinterType.USB -> {
-                    scanUsbPrinters().find { it.name == savedAddress }?.let {
+                    scanUsbPrinters().find { PrinterNames.namesMatch(it.name, savedAddress) }?.let {
                         if (it.connect()) {
                             currentPrinter = it
                             lastSelectedType = it.type

@@ -171,19 +171,28 @@ const INSABuddy = {
         return lines.join('\n');
     },
 
-    async printReceipt(receipt) {
+    async printReceipt(receipt, maxAttempts = 3) {
         const settings = await this.getPrinterSettings();
         const text = this.buildReceiptText(receipt, settings);
-        if (typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.printReceipt === 'function') {
-            try {
-                const raw = window.INSAPOS.printReceipt(JSON.stringify({ text }));
-                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                if (data && data.ok) return data;
-            } catch (e) {
-                console.warn('[INSABuddy] native printReceipt failed, falling back to HTTP', e);
+        let lastResult = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.printReceipt === 'function') {
+                try {
+                    const raw = window.INSAPOS.printReceipt(JSON.stringify({ text }));
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (data && data.ok) return data;
+                    lastResult = data;
+                } catch (e) {
+                    console.warn('[INSABuddy] native printReceipt attempt', attempt, e);
+                }
+            }
+            lastResult = await this.printText(text);
+            if (this.isPrintSuccess(lastResult)) return lastResult;
+            if (attempt < maxAttempts) {
+                await new Promise((r) => setTimeout(r, 400 * attempt));
             }
         }
-        return this.printText(text);
+        return lastResult;
     },
 
     /**
