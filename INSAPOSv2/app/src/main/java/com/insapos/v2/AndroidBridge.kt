@@ -429,6 +429,7 @@ class AndroidBridge(private val activity: MainActivity) {
         val lastSync = db?.getSetting("catalog_synced_at")
             ?: db?.getSetting("catalog_last_sync")
             ?: ""
+        val productCount = db?.getProductCount() ?: 0
         val layout = PrinterSettings(db).layout()
         JSONObject().apply {
             put("ok", true)
@@ -439,6 +440,7 @@ class AndroidBridge(private val activity: MainActivity) {
             put("customer_display", cdStatus)
             put("device", device)
             put("last_sync_at", lastSync)
+            put("products_cached", productCount)
             put("paper_size", layout.paperSize)
             put("font_mode", layout.fontMode)
             put("char_width", layout.charWidth)

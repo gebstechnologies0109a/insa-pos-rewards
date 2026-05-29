@@ -645,6 +645,10 @@ class MainActivity : AppCompatActivity() {
                 detectSuperAdminFromPage()
                 updateModeToggleFab(url)
                 updateSettingsFabVisibility(url)
+                if (isCashierPath(url)) {
+                    handler.postDelayed({ injectCashierToolbarIfNeeded() }, 500)
+                    handler.postDelayed({ injectCashierToolbarIfNeeded() }, 2500)
+                }
                 posService?.let { onPageReadyForService(it) }
             }
 
@@ -1020,6 +1024,115 @@ class MainActivity : AppCompatActivity() {
     private fun updateSettingsFabVisibility(currentUrl: String?) {
         val onCashier = isCashierPath(currentUrl)
         fabSettings.visibility = if (onCashier) View.GONE else View.VISIBLE
+    }
+
+    /**
+     * Production cashier pages may lag behind the latest blade.
+     * Inject header gear + fallback settings panel when the web modal is absent.
+     */
+    private fun injectCashierToolbarIfNeeded() {
+        if (!isWebViewUsable()) return
+        val js = """
+            (function() {
+                function openSettings() {
+                    if (window.posAppInstance && window.posAppInstance.openPosSettings) {
+                        window.posAppInstance.openPosSettings();
+                        return;
+                    }
+                    document.dispatchEvent(new CustomEvent('insapos:openSettings'));
+                    setTimeout(function() {
+                        var alpineModal = document.querySelector('[x-show="showPosSettingsModal"]');
+                        if (alpineModal && window.getComputedStyle(alpineModal).display !== 'none') return;
+                        if (window.__insaposShowFallbackSettings) window.__insaposShowFallbackSettings();
+                    }, 300);
+                }
+
+                window.__insaposShowFallbackSettings = function() {
+                    var panel = document.getElementById('insaposFallbackSettings');
+                    if (!panel) {
+                        panel = document.createElement('div');
+                        panel.id = 'insaposFallbackSettings';
+                        panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px';
+                        panel.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:420px;width:100%;max-height:90vh;overflow:auto;padding:16px;font-family:system-ui,sans-serif">'
+                            + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+                            + '<strong style="color:#065f46;font-size:18px">POS Settings</strong>'
+                            + '<button id="insaposFallbackClose" style="border:0;background:transparent;font-size:20px;color:#9ca3af">&times;</button></div>'
+                            + '<div id="insaposFallbackBody" style="font-size:13px;color:#374151">Loading…</div>'
+                            + '<button id="insaposFallbackClose2" style="margin-top:12px;width:100%;padding:10px;border:0;border-radius:8px;background:#e5e7eb;color:#374151;font-weight:600">Close</button></div>';
+                        document.body.appendChild(panel);
+                        panel.addEventListener('click', function(e) { if (e.target === panel) panel.style.display = 'none'; });
+                        document.getElementById('insaposFallbackClose').onclick = function() { panel.style.display = 'none'; };
+                        document.getElementById('insaposFallbackClose2').onclick = function() { panel.style.display = 'none'; };
+                    }
+                    panel.style.display = 'flex';
+                    var body = document.getElementById('insaposFallbackBody');
+                    try {
+                        var raw = (typeof INSAPOS !== 'undefined' && INSAPOS.getPosSettings) ? INSAPOS.getPosSettings() : '{}';
+                        var s = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                        var cd = s.customer_display || {};
+                        var dev = s.device || {};
+                        var online = s.network_online !== false;
+                        body.innerHTML = ''
+                            + section('Network', online ? 'Online — sync available' : 'Offline — using cached data', online ? '#ecfdf5' : '#fffbeb')
+                            + section('Customer Display', cd.available ? ('Secondary: ' + (cd.display_name || 'Detected')) : 'No secondary display', '#ecfdf5')
+                            + section('Printer', 'Paper: ' + (s.paper_size || '57mm') + ' · Font: ' + (s.font_mode || 'paper_size'), '#f9fafb')
+                            + section('Sync', 'Last sync: ' + (s.last_sync_at || '—') + '<br>Catalog: ' + (s.products_cached || 0) + ' products', '#f9fafb')
+                            + section('About', 'App: INSA POS v' + (s.app_version || '—') + '<br>Device: ' + ((dev.manufacturer || '') + ' ' + (dev.model || '')).trim(), '#f9fafb')
+                            + '<div style="margin-top:8px;display:flex;gap:8px">'
+                            + '<button id="insaposFbSync" style="flex:1;padding:8px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:600">Sync Now</button>'
+                            + '<button id="insaposFbPrinter" style="flex:1;padding:8px;border:0;border-radius:8px;background:#f3f4f6;color:#1f2937;font-weight:600">Printer Setup</button></div>';
+                        document.getElementById('insaposFbSync').onclick = function() {
+                            try { if (INSAPOS.triggerLocalSync) INSAPOS.triggerLocalSync(); } catch(e) {}
+                        };
+                        document.getElementById('insaposFbPrinter').onclick = function() {
+                            panel.style.display = 'none';
+                            if (window.posAppInstance && window.posAppInstance.openPrinterSettings) window.posAppInstance.openPrinterSettings();
+                            else document.dispatchEvent(new CustomEvent('insapos:openPrinter'));
+                        };
+                    } catch (e) {
+                        body.textContent = 'Could not load settings.';
+                    }
+                };
+
+                function section(title, html, bg) {
+                    return '<div style="border:1px solid #d1fae5;border-radius:12px;padding:10px;margin-bottom:8px;background:' + bg + '">'
+                        + '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:4px">' + title + '</div>'
+                        + '<div>' + html + '</div></div>';
+                }
+
+                var gear = document.getElementById('posSettingsGear');
+                if (!gear) {
+                    var scanBtn = document.querySelector('[aria-label="Scan"], [title="Scan"], [title*="Scan Product"]');
+                    var toolbar = document.getElementById('posHeaderToolbar');
+                    if (!toolbar && scanBtn) toolbar = scanBtn.parentElement;
+                    if (!toolbar) {
+                        var icons = document.querySelectorAll('.pos-header-icon');
+                        if (icons.length) toolbar = icons[icons.length - 1].parentElement;
+                    }
+                    if (!toolbar) return;
+                    gear = document.createElement('button');
+                    gear.id = 'posSettingsGear';
+                    gear.type = 'button';
+                    gear.className = 'pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200';
+                    gear.title = 'Settings';
+                    gear.setAttribute('aria-label', 'Settings');
+                    gear.style.display = 'flex';
+                    gear.innerHTML = '<svg class="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>';
+                    if (scanBtn && scanBtn.parentElement === toolbar) {
+                        scanBtn.insertAdjacentElement('afterend', gear);
+                    } else {
+                        toolbar.appendChild(gear);
+                    }
+                }
+                gear.onclick = function(e) { e.preventDefault(); openSettings(); };
+
+                if (window.posAppInstance) {
+                    window.posAppInstance.hasNativeBridge = true;
+                    window.posAppInstance.buddyConnected = true;
+                }
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(js, null)
     }
 
     private fun isSuperAdminPath(url: String): Boolean {

@@ -114,8 +114,8 @@
     <script src="https://unpkg.com/dexie@4/dist/dexie.min.js"></script>
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/terminal-session.js') }}"></script>
-    <script src="{{ asset('js/insabuddy.js') }}"></script>
-    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.35"></script>
+    <script src="{{ asset('js/insabuddy.js') }}?v=3.0.37"></script>
+    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.37"></script>
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden insapos-alpine-pending" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
@@ -293,40 +293,34 @@
             <span x-show="selectedCustomer" class="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></span>
         </button>
 
-        <!-- Toolbar: clock, printer, scan, gear, I/O, recent -->
-        <div class="flex items-center gap-0.5 lg:gap-1 flex-shrink-0">
-            <span class="font-mono text-xs lg:text-sm text-gray-700 tabular-nums min-w-[5.5rem] text-center px-1 select-none flex-shrink-0"
-                  x-text="headerClock" aria-live="polite"></span>
+        <!-- Toolbar: clock (recent sales) | printer | scan | gear -->
+        <div id="posHeaderToolbar" class="flex items-center gap-0.5 lg:gap-1 flex-shrink-0 flex-nowrap">
+            <button @click="showHistoryModal = true; loadRecentSales()" type="button"
+                    class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200"
+                    title="Recent sales" aria-label="Recent sales">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </button>
 
             <button x-show="hasNativeBridge || buddyConnected" @click="openPrinterSettings()" type="button"
                     class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200"
-                    title="Printer Settings" aria-label="Printer Settings">
+                    title="Printer" aria-label="Printer">
                 <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
             </button>
 
             <button @click="scanProduct()" type="button"
                     class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200 text-blue-600"
-                    title="Scan Product QR/Barcode" aria-label="Scan Product QR/Barcode" :disabled="_scanning">
+                    title="Scan" aria-label="Scan" :disabled="_scanning">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
             </button>
 
-            <button x-show="hasNativeBridge || buddyConnected" @click="openPosSettings()" type="button"
+            <button id="posSettingsGear" x-show="hasNativeBridge || buddyConnected" @click="openPosSettings()" type="button"
                     class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200"
-                    title="POS Settings" aria-label="POS Settings">
+                    title="Settings" aria-label="Settings">
                 <svg class="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
             </button>
 
-            <button x-show="hasNativeBridge || buddyConnected" @click="openIoSettings()" type="button"
-                    class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200"
-                    title="I/O Settings" aria-label="I/O Settings">
-                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-            </button>
-
-            <button @click="showHistoryModal = true; loadRecentSales()" type="button"
-                    class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200"
-                    title="Recent Transactions" aria-label="Recent Transactions">
-                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            </button>
+            <span class="font-mono text-[10px] lg:text-xs text-gray-500 tabular-nums min-w-[4.5rem] text-center px-0.5 select-none flex-shrink-0 hidden sm:inline"
+                  x-text="headerClock" aria-live="polite"></span>
         </div>
 
         <!-- Mode Toggle -->
@@ -1492,26 +1486,64 @@
                         </select>
                     </div>
                 </div>
-                <button @click="showPosSettingsModal = false; openPrinterSettings()" x-show="buddyConnected || hasNativeBridge"
-                        class="w-full py-2 text-xs font-medium bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200">Open Printer Setup</button>
+                <div class="flex gap-2" x-show="buddyConnected || hasNativeBridge">
+                    <button @click="showPosSettingsModal = false; openPrinterSettings()"
+                            class="flex-1 py-2 text-xs font-medium bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200">Printer Setup</button>
+                    <button @click="settingsTestPrint()" :disabled="settingsTestPrinting"
+                            class="flex-1 py-2 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300">
+                        <span x-text="settingsTestPrinting ? 'Printing…' : 'Test Print'"></span>
+                    </button>
+                </div>
             </div>
 
             <!-- Sync -->
             <div class="rounded-xl border p-3 space-y-2">
                 <div class="text-sm font-semibold text-gray-800">Sync</div>
-                <div class="text-[10px] lg:text-xs text-gray-500" x-show="posSettings.last_sync_at">
-                    Last catalog sync: <span class="font-medium text-gray-700" x-text="posSettings.last_sync_at || '—'"></span>
+                <div class="text-[10px] lg:text-xs text-gray-500 space-y-0.5">
+                    <div x-show="posSettings.last_sync_at">
+                        Last sync: <span class="font-medium text-gray-700" x-text="posSettings.last_sync_at || '—'"></span>
+                    </div>
+                    <div x-show="posSettings.products_cached > 0">
+                        Catalog: <span class="font-medium text-gray-700" x-text="posSettings.products_cached + ' products cached'"></span>
+                    </div>
                 </div>
                 <button @click="settingsManualSync()" class="w-full py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">Sync Now</button>
             </div>
 
             <!-- Hardware -->
-            <div class="rounded-xl border p-3 space-y-2" x-show="hasNativeBridge">
+            <div class="rounded-xl border p-3 space-y-2" x-show="hasNativeBridge || buddyConnected">
                 <div class="text-sm font-semibold text-gray-800">Hardware</div>
                 <div class="text-[10px] lg:text-xs text-gray-600" x-text="posSettings.hardware_summary || 'Tap scan to detect USB devices'"></div>
                 <div class="flex gap-2">
                     <button @click="settingsScanHardware()" class="flex-1 py-2 text-xs font-medium bg-gray-800 text-white rounded-lg hover:bg-gray-900">Scan Devices</button>
                     <button @click="showPosSettingsModal = false; openIoSettings()" class="flex-1 py-2 text-xs font-medium bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200">I/O Setup</button>
+                </div>
+            </div>
+
+            <!-- Display -->
+            <div class="rounded-xl border border-green-200 bg-green-50/40 p-3 space-y-2" x-show="hasNativeBridge">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold text-green-900">Display</div>
+                        <div class="text-[10px] lg:text-xs text-green-700">Allow minimize &amp; show system navigation bars</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" x-model="posSettings.allow_minimize" @change="saveAllowMinimizeSetting()" class="sr-only peer">
+                        <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:bg-green-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Shift -->
+            <div class="rounded-xl border p-3 space-y-2" x-show="canManageShift()">
+                <div class="text-sm font-semibold text-gray-800">Shift</div>
+                <div class="text-[10px] lg:text-xs text-gray-600"
+                     x-text="activeShift ? ('Active since ' + new Date(activeShift.opened_at).toLocaleString()) : 'No active shift'"></div>
+                <div class="flex gap-2">
+                    <button x-show="!activeShift" @click="showPosSettingsModal = false; showShiftOpenModal = true"
+                            class="flex-1 py-2 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700">Open Shift</button>
+                    <button x-show="activeShift" @click="showPosSettingsModal = false; showShiftCloseModal = true"
+                            class="flex-1 py-2 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700">Close Shift</button>
                 </div>
             </div>
 
@@ -1676,6 +1708,7 @@ function posApp() {
         showIoModal: false,
         showPosSettingsModal: false,
         posSettingsLoading: false,
+        settingsTestPrinting: false,
         posSettings: {
             app_version: '',
             device_model: '',
@@ -1684,9 +1717,11 @@ function posApp() {
             customer_display_available: false,
             customer_display_name: '',
             last_sync_at: '',
+            products_cached: 0,
             paper_size: '57mm',
             font_mode: 'paper_size',
             hardware_summary: '',
+            allow_minimize: false,
         },
         ioMenuView: true,
         ioOption: null,
@@ -1754,6 +1789,11 @@ function posApp() {
 
         canViewShiftTotals() {
             return !!this.config.canViewShiftTotals;
+        },
+
+        canManageShift() {
+            const role = this.config.role || '';
+            return ['owner', 'admin', 'manager'].includes(role);
         },
 
         updateHeaderClock() {
@@ -2017,6 +2057,21 @@ function posApp() {
             document.addEventListener('insapos:dashboardData', (e) => this.applyDashboardData(e.detail || {}));
             document.addEventListener('insapos:openSettings', () => this.openPosSettings());
             document.addEventListener('insapos:openPrinter', () => this.openPrinterSettings());
+            document.addEventListener('insapos:ready', () => {
+                this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
+                if (this.hasNativeBridge) {
+                    this.buddyConnected = true;
+                    this.ioApiAvailable = true;
+                    if (typeof INSABuddy !== 'undefined') INSABuddy.detectV2();
+                }
+            });
+            document.addEventListener('insapos:hardwareReady', () => {
+                this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
+                if (this.hasNativeBridge) {
+                    this.buddyConnected = true;
+                    this.ioApiAvailable = true;
+                }
+            });
             this.updateHeaderClock();
             this._clockTimer = setInterval(() => this.updateHeaderClock(), 1000);
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
@@ -2144,6 +2199,9 @@ function posApp() {
 
         applyDashboardData(detail) {
             this.dashboardData = detail;
+            if (detail && detail.products_cached) {
+                this.posSettings.products_cached = detail.products_cached;
+            }
         },
 
         applyNativeSyncStatus(detail) {
@@ -2455,8 +2513,15 @@ function posApp() {
                     this.posSettings.last_sync_at = data.last_sync_at || '';
                     this.posSettings.paper_size = data.paper_size || this.printerPaperSize || '57mm';
                     this.posSettings.font_mode = data.font_mode || this.printerFontMode || 'paper_size';
+                    this.posSettings.allow_minimize = !!data.allow_minimize;
+                    this.posSettings.products_cached = data.products_cached
+                        || this.dashboardData?.products_cached
+                        || 0;
                     this.printerPaperSize = this.posSettings.paper_size;
                     this.printerFontMode = this.posSettings.font_mode;
+                }
+                if (this.dashboardData?.products_cached) {
+                    this.posSettings.products_cached = this.dashboardData.products_cached;
                 }
             } catch (e) {
                 console.warn('[pos] loadPosSettings', e);
@@ -2552,6 +2617,47 @@ function posApp() {
                 }
             }
             this.showToast('Hardware scan failed', 'warning');
+        },
+
+        async saveAllowMinimizeSetting() {
+            if (!this.hasNativeBridge || typeof window.INSAPOS === 'undefined') return;
+            try {
+                const raw = window.INSAPOS.setAllowMinimize(!!this.posSettings.allow_minimize);
+                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (data && data.ok !== false) {
+                    this.showToast(this.posSettings.allow_minimize ? 'System bars enabled' : 'Kiosk mode restored', 'success', 1500);
+                }
+            } catch {
+                this.showToast('Could not save display setting', 'warning');
+            }
+        },
+
+        async settingsTestPrint() {
+            if (!this.buddyConnected && !this.hasNativeBridge) {
+                this.showToast('Printer requires INSAPuddy or Android app', 'warning');
+                return;
+            }
+            if (typeof INSABuddy === 'undefined') return;
+            this.settingsTestPrinting = true;
+            try {
+                await this.savePosPaperSettings();
+                const status = await INSABuddy.getPrinterStatus();
+                const parsed = INSABuddy.parsePrinterStatus(status);
+                if (!parsed.connected || !parsed.name) {
+                    this.showToast('No printer connected — open Printer Setup first', 'warning');
+                    return;
+                }
+                const result = await INSABuddy.testPrint(parsed.type || '', parsed.name || '');
+                if (result && (result.ok || result.success)) {
+                    this.showToast('Test print sent', 'success');
+                } else {
+                    this.showToast(INSABuddy.parseApiError(result, 'Test print failed'), 'error');
+                }
+            } catch {
+                this.showToast('Test print failed', 'error');
+            } finally {
+                this.settingsTestPrinting = false;
+            }
         },
 
         async openPrinterSettings() {
