@@ -2,198 +2,83 @@ package com.insapos.v2
 
 import android.app.Presentation
 import android.content.Context
-import android.graphics.Typeface
 import android.os.Bundle
+import android.util.Log
 import android.view.Display
-import android.view.Gravity
-import android.view.View
-import android.widget.LinearLayout
-import android.widget.TextView
-import org.json.JSONArray
+import android.webkit.WebSettings
+import android.webkit.WebView
 import org.json.JSONObject
-import java.text.NumberFormat
-import java.util.Locale
 
 class CustomerDisplayPresentation(
     context: Context,
     display: Display,
+    private val manager: CustomerDisplayManager,
+    private val bridge: CustomerDisplayBridge,
 ) : Presentation(context, display) {
 
-    private lateinit var titleView: TextView
-    private lateinit var subtitleView: TextView
-    private lateinit var itemsContainer: LinearLayout
-    private lateinit var scrollItems: View
-    private lateinit var totalsPanel: View
-    private lateinit var discountRow: View
-    private lateinit var subtotalView: TextView
-    private lateinit var discountView: TextView
-    private lateinit var totalView: TextView
-    private lateinit var paymentInfoView: TextView
-    private lateinit var footerMessageView: TextView
-
-    private val currency = NumberFormat.getCurrencyInstance(Locale("en", "PH")).apply {
-        currency = java.util.Currency.getInstance("PHP")
+    companion object {
+        private const val TAG = "INSAPOSCustomerDisplay"
+        private const val ASSET_URL = "file:///android_asset/customer-display/index.html"
     }
+
+    private lateinit var webView: WebView
+    private var pendingPayload: JSONObject? = null
+    private var pageReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.presentation_customer_display)
-        titleView = findViewById(R.id.tvDisplayTitle)
-        subtitleView = findViewById(R.id.tvDisplaySubtitle)
-        itemsContainer = findViewById(R.id.itemsContainer)
-        scrollItems = findViewById(R.id.scrollItems)
-        totalsPanel = findViewById(R.id.totalsPanel)
-        discountRow = findViewById(R.id.discountRow)
-        subtotalView = findViewById(R.id.tvSubtotal)
-        discountView = findViewById(R.id.tvDiscount)
-        totalView = findViewById(R.id.tvTotal)
-        paymentInfoView = findViewById(R.id.tvPaymentInfo)
-        footerMessageView = findViewById(R.id.tvFooterMessage)
-        renderWelcome()
+        webView = findViewById(R.id.customerDisplayWebView)
+        setupWebView()
+        webView.loadUrl(ASSET_URL)
+    }
+
+    private fun setupWebView() {
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            allowFileAccess = true
+            allowContentAccess = true
+            mediaPlaybackRequiresUserGesture = false
+            cacheMode = WebSettings.LOAD_DEFAULT
+        }
+        webView.addJavascriptInterface(bridge, "INSAPOS_CD")
+        webView.webViewClient = object : android.webkit.WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                pageReady = true
+                reloadSettings()
+                pendingPayload?.let { deliverCart(it) }
+            }
+        }
     }
 
     fun render(payload: JSONObject) {
-        if (!::titleView.isInitialized) return
-        when (payload.optString("mode", "cart")) {
-            "welcome" -> renderWelcome(payload)
-            "thank_you" -> renderThankYou(payload)
-            else -> renderCart(payload)
-        }
+        pendingPayload = payload
+        if (!::webView.isInitialized || !pageReady) return
+        deliverCart(payload)
     }
 
-    private fun renderWelcome(payload: JSONObject = JSONObject()) {
-        titleView.text = payload.optString("store_name", "INSAPOS")
-        subtitleView.text = payload.optString("message", "Welcome to INSAPOS — your order will appear here")
-        scrollItems.visibility = View.GONE
-        totalsPanel.visibility = View.GONE
-        footerMessageView.visibility = View.GONE
+    fun reloadSettings() {
+        if (!::webView.isInitialized || !pageReady) return
+        webView.evaluateJavascript("if (window.loadSettings) loadSettings();", null)
     }
 
-    private fun renderCart(payload: JSONObject) {
-        titleView.text = payload.optString("store_name", "INSAPOS")
-        subtitleView.text = payload.optString("subtitle", "Your order")
-        scrollItems.visibility = View.VISIBLE
-        totalsPanel.visibility = View.VISIBLE
-        footerMessageView.visibility = View.GONE
-
-        itemsContainer.removeAllViews()
-        val items = payload.optJSONArray("items") ?: JSONArray()
-        if (items.length() == 0) {
-            itemsContainer.addView(emptyLine("No items yet"))
-        } else {
-            for (i in 0 until items.length()) {
-                val item = items.optJSONObject(i) ?: continue
-                itemsContainer.addView(cartLine(item))
-            }
-        }
-
-        val subtotal = payload.optDouble("subtotal", 0.0)
-        val discount = payload.optDouble("discount", 0.0)
-        val total = payload.optDouble("total", subtotal - discount)
-        subtotalView.text = formatMoney(subtotal)
-        if (discount > 0) {
-            discountRow.visibility = View.VISIBLE
-            discountView.text = "-${formatMoney(discount)}"
-        } else {
-            discountRow.visibility = View.GONE
-        }
-        totalView.text = formatMoney(total)
-        paymentInfoView.visibility = View.GONE
+    private fun deliverCart(payload: JSONObject) {
+        val json = payload.toString()
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+        webView.evaluateJavascript(
+            "if (window.updateCustomerDisplayCart) updateCustomerDisplayCart('$json');",
+            null,
+        )
     }
 
-    private fun renderThankYou(payload: JSONObject) {
-        titleView.text = payload.optString("store_name", "INSAPOS")
-        subtitleView.text = payload.optString("subtitle", "Payment complete")
-        scrollItems.visibility = View.GONE
-        totalsPanel.visibility = View.VISIBLE
-        footerMessageView.visibility = View.VISIBLE
-        footerMessageView.text = payload.optString("message", "Thank you — see you again at INSAPOS!")
-
-        val total = payload.optDouble("total", 0.0)
-        val change = payload.optDouble("change", 0.0)
-        val method = payload.optString("payment_method", "Cash")
-        subtotalView.text = formatMoney(total)
-        discountRow.visibility = View.GONE
-        totalView.text = formatMoney(total)
-
-        val info = buildString {
-            append("Paid via $method")
-            if (change > 0) append(" · Change: ${formatMoney(change)}")
+    override fun onStop() {
+        try {
+            webView.destroy()
+        } catch (t: Throwable) {
+            Log.w(TAG, "WebView destroy: ${t.message}")
         }
-        paymentInfoView.text = info
-        paymentInfoView.visibility = View.VISIBLE
-    }
-
-    private fun cartLine(item: JSONObject): View {
-        val block = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 10, 0, 10)
-        }
-        val qty = item.optInt("qty", 1)
-        val name = item.optString("name", item.optString("product_name", "Item"))
-        val price = item.optDouble("price", 0.0)
-        val lineTotal = if (item.has("lineTotal")) {
-            item.optDouble("lineTotal", qty * price)
-        } else {
-            qty * price
-        }
-
-        val nameView = TextView(context).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            text = name
-            textSize = 18f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFF111827.toInt())
-        }
-        val detailRow = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        }
-        val detailView = TextView(context).apply {
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            text = "$qty × ${formatMoney(price)}"
-            textSize = 16f
-            setTextColor(0xFF4B5563.toInt())
-        }
-        val totalView = TextView(context).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            text = "= ${formatMoney(lineTotal)}"
-            textSize = 18f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFF065F46.toInt())
-            gravity = Gravity.END
-        }
-        detailRow.addView(detailView)
-        detailRow.addView(totalView)
-        block.addView(nameView)
-        block.addView(detailRow)
-        return block
-    }
-
-    private fun emptyLine(text: String): View {
-        return TextView(context).apply {
-            this.text = text
-            textSize = 16f
-            setTextColor(0xFF6B7280.toInt())
-            gravity = Gravity.CENTER
-            setPadding(0, 24, 0, 24)
-        }
-    }
-
-    private fun formatMoney(value: Double): String {
-        return try {
-            currency.format(value)
-        } catch (_: Exception) {
-            "₱${"%.2f".format(Locale.US, value)}"
-        }
+        super.onStop()
     }
 }

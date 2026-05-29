@@ -150,6 +150,9 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 updateSyncBadge()
                 dispatchSyncStatusToWeb(status)
+                if (status == SyncEngine.SyncStatus.IDLE) {
+                    customerDisplayManager.onSettingsSynced()
+                }
             }
         }
         engine.onDownloadProgress = { progress ->
@@ -267,6 +270,8 @@ class MainActivity : AppCompatActivity() {
         setupKioskDisplay()
         setContentView(R.layout.activity_main)
         customerDisplayManager = CustomerDisplayManager(this)
+        customerDisplayManager.dbProvider = { posService?.offlineDb }
+        customerDisplayManager.storeNameProvider = { "INSAPOS" }
         usingHttp = session.useHttp
 
         webView = findViewById(R.id.webView)

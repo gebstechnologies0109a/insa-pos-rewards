@@ -514,6 +514,16 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
+    fun getCustomerDisplaySettings(): String = safeBridge {
+        activity.customerDisplayManager.getSettingsJson().toString()
+    }
+
+    @JavascriptInterface
+    fun updateCustomerDisplayCart(cartJson: String): String = safeBridge {
+        activity.customerDisplayManager.update(cartJson).toString()
+    }
+
+    @JavascriptInterface
     fun scanHardware(): String = safeBridge {
         HardwareDetector.scanAll(activity).toString()
     }

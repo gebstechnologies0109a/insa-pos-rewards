@@ -23,6 +23,7 @@ use App\Http\Controllers\Backoffice\ShiftManagementController;
 use App\Http\Controllers\Backoffice\ShiftVarianceController;
 use App\Http\Controllers\POS\CashierController;
 use App\Http\Controllers\POS\PosSettingsController;
+use App\Http\Controllers\POS\CustomerDisplaySettingsController;
 use App\Http\Controllers\POS\ReadingController;
 use App\Http\Controllers\Admin\PosSessionController;
 use App\Http\Controllers\Stockman\StockmanController;
@@ -196,7 +197,19 @@ Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
 Route::middleware(['auth', 'role:owner,admin'])->group(function () {
     Route::post('/pos/settings', [PosSettingsController::class, 'update'])
         ->name('pos.settings.update');
+
+    Route::post('/settings/customer-display/photo', [CustomerDisplaySettingsController::class, 'uploadPhoto'])
+        ->name('pos.customer-display.photo');
+    Route::post('/settings/customer-display/video', [CustomerDisplaySettingsController::class, 'uploadVideo'])
+        ->name('pos.customer-display.video');
+    Route::post('/settings/customer-display/update', [CustomerDisplaySettingsController::class, 'update'])
+        ->name('pos.customer-display.update');
 });
+
+Route::get('/customer-display/media/{type}/{filename}', [CustomerDisplaySettingsController::class, 'serveMedia'])
+    ->where('type', 'photos|videos')
+    ->where('filename', '[A-Za-z0-9._-]+')
+    ->name('pos.customer-display.media');
 
 // ── Super Admin ──────────────────────────────────
 Route::middleware(['auth', 'role:super_admin', 'audit:super-admin'])->prefix('super-admin')->group(function () {

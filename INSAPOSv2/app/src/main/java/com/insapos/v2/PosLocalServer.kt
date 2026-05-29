@@ -522,10 +522,14 @@ class PosLocalServer(
 
     private fun handleCustomerDisplaySettingsGet(): Response {
         val mgr = customerDisplayManager()
+        val db = getDatabase()
+        val settings = CustomerDisplaySettings.toJson(db)
         return jsonOk(JSONObject().apply {
             put("ok", true)
-            put("enabled", mgr?.enabled ?: false)
+            put("enabled", mgr?.enabled ?: CustomerDisplaySettings.isEnabled(db))
             put("welcome_message", mgr?.welcomeMessage ?: "")
+            put("settings", settings)
+            settings.keys().forEach { key -> put(key, settings.get(key)) }
             if (mgr != null) {
                 val status = mgr.getStatusJson()
                 put("available", status.optBoolean("available"))
@@ -541,6 +545,20 @@ class PosLocalServer(
         val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
         if (json.has("enabled")) mgr.enabled = json.optBoolean("enabled", true)
         if (json.has("welcome_message")) mgr.welcomeMessage = json.optString("welcome_message", "")
+        val db = getDatabase()
+        if (db != null) {
+            fun putIfPresent(settingKey: String, jsonKey: String = settingKey.substringAfterLast('.')) {
+                if (json.has(jsonKey)) {
+                    db.setSetting("pos_$settingKey", json.optString(jsonKey, ""))
+                }
+            }
+            putIfPresent(CustomerDisplaySettings.KEY_ORIENTATION, "orientation")
+            putIfPresent(CustomerDisplaySettings.KEY_ROTATION_MODE, "rotation_mode")
+            putIfPresent(CustomerDisplaySettings.KEY_SHOW_CART, "show_cart")
+            putIfPresent(CustomerDisplaySettings.KEY_PHOTO, "photo")
+            putIfPresent(CustomerDisplaySettings.KEY_VIDEO, "video")
+        }
+        mgr.onSettingsSynced()
         return jsonOk(mgr.getStatusJson().put("saved", true))
     }
 

@@ -18,8 +18,9 @@ class PosSettingsController extends Controller
         $rewards = $this->settings->all('rewards');
         $overrides = $this->settings->all('overrides');
         $printer = $this->settings->all('printer');
+        $customerDisplay = $this->settings->all('customer_display');
 
-        return view('pos.settings.index', compact('rewards', 'overrides', 'printer'));
+        return view('pos.settings.index', compact('rewards', 'overrides', 'printer', 'customerDisplay'));
     }
 
     public function update(Request $request): JsonResponse

@@ -22,6 +22,12 @@ class PosSettingsService
         'vat_inclusive'          => ['label' => 'Prices VAT Inclusive',     'default' => '1',      'group' => 'receipt', 'type' => 'boolean'],
         'printer_paper_size'     => ['label' => 'Paper Size',               'default' => '57mm',   'group' => 'printer', 'type' => 'select'],
         'printer_font_mode'      => ['label' => 'Font Mode',                'default' => 'paper_size', 'group' => 'printer', 'type' => 'select'],
+        'customer_display.enabled'       => ['label' => 'Customer Display Enabled', 'default' => '1',      'group' => 'customer_display', 'type' => 'boolean'],
+        'customer_display.photo'         => ['label' => 'Customer Display Photo',   'default' => '',       'group' => 'customer_display', 'type' => 'text'],
+        'customer_display.video'         => ['label' => 'Customer Display Video',   'default' => '',       'group' => 'customer_display', 'type' => 'text'],
+        'customer_display.orientation'   => ['label' => 'Display Orientation',      'default' => 'auto',   'group' => 'customer_display', 'type' => 'select'],
+        'customer_display.rotation_mode' => ['label' => 'Media Rotation Mode',      'default' => 'mix',    'group' => 'customer_display', 'type' => 'select'],
+        'customer_display.show_cart'     => ['label' => 'Show Cart on Display',     'default' => '1',      'group' => 'customer_display', 'type' => 'boolean'],
     ];
 
     public function get(string $key): string

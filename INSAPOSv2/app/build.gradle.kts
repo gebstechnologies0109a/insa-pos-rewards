@@ -11,8 +11,8 @@ android {
         applicationId = "com.insapos.v2"
         minSdk = 23
         targetSdk = 35
-        versionCode = 64
-        versionName = "3.0.41"
+        versionCode = 65
+        versionName = "3.0.42"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")

@@ -7,12 +7,12 @@ import android.os.Looper
 import android.util.Log
 import android.view.Display
 import androidx.appcompat.app.AppCompatActivity
+import com.insapos.v2.db.OfflineDatabase
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Drives the customer-facing secondary screen via Android Presentation API.
- * On dual-screen POS hardware (e.g. INSA Dual 1b DSI panel), shows cart mirror.
+ * Drives the customer-facing secondary screen via Android Presentation API + WebView assets.
  */
 class CustomerDisplayManager(private val activity: AppCompatActivity) {
 
@@ -28,11 +28,22 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
     private var presentation: CustomerDisplayPresentation? = null
     private var secondaryDisplay: Display? = null
     private var lastPayload: JSONObject? = null
+    private var bridge: CustomerDisplayBridge? = null
+
+    var dbProvider: () -> OfflineDatabase? = { null }
+    var storeNameProvider: () -> String = { "INSAPOS" }
 
     var enabled: Boolean
-        get() = prefs.getBoolean(KEY_ENABLED, true)
+        get() {
+            val db = dbProvider()
+            if (db != null && db.getSetting("pos_${CustomerDisplaySettings.KEY_ENABLED}") != null) {
+                return CustomerDisplaySettings.isEnabled(db)
+            }
+            return prefs.getBoolean(KEY_ENABLED, true)
+        }
         set(value) {
             prefs.edit().putBoolean(KEY_ENABLED, value).apply()
+            dbProvider()?.setSetting("pos_${CustomerDisplaySettings.KEY_ENABLED}", if (value) "1" else "0")
             if (value) showIfAvailable(lastPayload ?: welcomePayload()) else dismiss()
         }
 
@@ -47,7 +58,6 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
         }
     }
 
-    /** Show welcome screen on secondary display when hardware is present. */
     fun showWelcome() {
         refreshDisplays()
         if (secondaryDisplay == null) return
@@ -58,6 +68,7 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
     fun getStatusJson(): JSONObject {
         refreshDisplays()
         val display = secondaryDisplay
+        val settings = CustomerDisplaySettings.toJson(dbProvider(), storeNameProvider())
         return JSONObject().apply {
             put("ok", true)
             put("enabled", enabled)
@@ -66,6 +77,20 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
             put("display_id", display?.displayId ?: -1)
             put("display_name", display?.name ?: "")
             put("welcome_message", welcomeMessage)
+            put("settings", settings)
+            put("orientation", settings.optString("orientation"))
+            put("rotation_mode", settings.optString("rotation_mode"))
+            put("show_cart", settings.optBoolean("show_cart"))
+        }
+    }
+
+    fun getSettingsJson(): JSONObject =
+        CustomerDisplaySettings.toJson(dbProvider(), storeNameProvider())
+
+    fun onSettingsSynced() {
+        handler.post {
+            presentation?.reloadSettings()
+            lastPayload?.let { updatePayload(it) }
         }
     }
 
@@ -93,7 +118,7 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
     fun testDisplay(): JSONObject {
         val sample = JSONObject().apply {
             put("mode", "cart")
-            put("store_name", "INSAPOS")
+            put("store_name", storeNameProvider())
             put("subtitle", "Customer display test")
             put("items", JSONArray().apply {
                 put(JSONObject().apply {
@@ -131,6 +156,7 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
             } catch (_: Exception) {
             }
             presentation = null
+            bridge = null
         }
     }
 
@@ -141,8 +167,12 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
     private fun welcomePayload(): JSONObject {
         return JSONObject().apply {
             put("mode", "welcome")
-            put("store_name", "INSAPOS")
+            put("store_name", storeNameProvider())
             put("message", welcomeMessage)
+            put("items", JSONArray())
+            put("subtotal", 0.0)
+            put("discount", 0.0)
+            put("total", 0.0)
         }
     }
 
@@ -160,7 +190,12 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
             existing?.dismiss()
         } catch (_: Exception) {
         }
-        val pres = CustomerDisplayPresentation(activity, display)
+        val cdBridge = bridge ?: CustomerDisplayBridge(
+            manager = this,
+            dbProvider = dbProvider,
+            storeNameProvider = storeNameProvider,
+        ).also { bridge = it }
+        val pres = CustomerDisplayPresentation(activity, display, this, cdBridge)
         pres.show()
         presentation = pres
         return pres
