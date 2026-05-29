@@ -10,8 +10,8 @@ body {
     padding: 0;
     width: 100%;
     height: 100%;
-    background: #000;
-    color: #fff;
+    background: #f8fafc;
+    color: #1e293b;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     overflow: hidden;
 }
@@ -26,7 +26,7 @@ body {
     width: 100vw;
     height: 100vh;
     height: 100dvh;
-    background: #000;
+    background: #ffffff;
 }
 
 .cd-header {
@@ -35,7 +35,8 @@ body {
     align-items: center;
     gap: 12px;
     padding: 10px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .cd-logo {
@@ -48,12 +49,14 @@ body {
     font-size: 1.1rem;
     font-weight: 700;
     letter-spacing: 0.02em;
+    color: #1e293b;
 }
 
 .cd-media {
     flex: 0 0 60%;
     min-height: 0;
     padding: 8px 12px;
+    background: #f8fafc;
 }
 
 .cd-media-stage {
@@ -62,7 +65,8 @@ body {
     height: 100%;
     border-radius: 12px;
     overflow: hidden;
-    background: #111;
+    background: #f5f7fa;
+    border: 1px solid #e2e8f0;
 }
 
 .cd-photo,
@@ -87,7 +91,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #9ca3af;
+    color: #94a3b8;
     font-size: 1.25rem;
 }
 
@@ -97,14 +101,15 @@ body {
     display: flex;
     flex-direction: column;
     padding: 8px 16px 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
 }
 
 .cd-cart-header h2 {
     margin: 0 0 8px;
     font-size: 1rem;
     font-weight: 600;
-    color: #d1d5db;
+    color: #475569;
 }
 
 .cd-cart-items {
@@ -114,6 +119,7 @@ body {
     flex: 1 1 auto;
     overflow-y: auto;
     scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
 }
 
 .cd-cart-items li {
@@ -121,18 +127,19 @@ body {
     grid-template-columns: 1fr auto;
     gap: 4px 12px;
     padding: 8px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid #f1f5f9;
     animation: fadeIn 0.3s ease;
 }
 
 .cd-item-name {
     font-weight: 600;
     font-size: 0.95rem;
+    color: #1e293b;
 }
 
 .cd-item-meta {
     grid-column: 1;
-    color: #9ca3af;
+    color: #64748b;
     font-size: 0.85rem;
 }
 
@@ -142,13 +149,13 @@ body {
     align-self: center;
     font-weight: 700;
     font-size: 0.95rem;
-    color: #6ee7b7;
+    color: #2563eb;
 }
 
 .cd-cart-totals {
     margin-top: 8px;
     padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-top: 2px solid #e2e8f0;
 }
 
 .cd-row {
@@ -156,20 +163,22 @@ body {
     justify-content: space-between;
     padding: 4px 0;
     font-size: 0.95rem;
+    color: #334155;
 }
 
 .cd-total {
     margin-top: 6px;
     font-size: 1.35rem;
     font-weight: 800;
+    color: #1e293b;
 }
 
 .cd-total span:last-child {
-    color: #34d399;
+    color: #2563eb;
 }
 
 .cd-discount span:last-child {
-    color: #fbbf24;
+    color: #d97706;
 }
 
 .cart-hidden .cd-cart {
@@ -203,7 +212,7 @@ body.orientation-landscape .cd-cart {
     flex: 1 1 45%;
     height: calc(100% - 56px);
     border-top: none;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 1px solid #e2e8f0;
 }
 
 @keyframes fadeIn {

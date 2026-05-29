@@ -114,8 +114,8 @@
     <script src="https://unpkg.com/dexie@4/dist/dexie.min.js"></script>
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/terminal-session.js') }}"></script>
-    <script src="{{ asset('js/insabuddy.js') }}?v=3.0.40"></script>
-    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.40"></script>
+    <script src="{{ asset('js/insabuddy.js') }}?v=3.0.45"></script>
+    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.45"></script>
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden insapos-alpine-pending" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
@@ -232,6 +232,14 @@
      :class="browserOnline && !offlineBanner ? 'online border-emerald-200' : 'offline border-amber-200 bg-amber-50 text-amber-900'">
     <span class="font-medium" x-text="browserOnline ? 'Offline mode' : 'No network'"></span>
     <span> — using cached store data. Sales sync when connected.</span>
+</div>
+
+<!-- CATALOG BACKGROUND IMPORT (native SQLite) -->
+<div x-show="hasNativeBridge && catalogImport.active" x-cloak
+     class="border-b border-blue-200 bg-blue-50 px-3 py-1 text-center text-xs text-blue-800 flex-shrink-0">
+    <span class="font-medium" x-text="catalogImport.message || 'Catalog updating…'"></span>
+    <span x-show="catalogImport.progress > 0" x-text="' (' + catalogImport.progress + '%)'"></span>
+    <span> — sales continue from local cache.</span>
 </div>
 
 <!-- HEADER -->
@@ -1425,8 +1433,8 @@
 </div>
 
 <!-- POS SETTINGS MODAL -->
-<div x-show="showPosSettingsModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50" x-transition>
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[380px] lg:max-w-lg p-4 lg:p-6 max-h-[90vh] overflow-y-auto" @click.away="showPosSettingsModal = false">
+<div x-show="showPosSettingsModal" class="fixed inset-0 bg-black/50 modal-overlay flex items-center justify-center z-50 p-2 sm:p-4" x-transition>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[380px] sm:max-w-xl lg:max-w-2xl p-4 lg:p-6 max-h-[90vh] overflow-y-auto" @click.away="showPosSettingsModal = false">
         <div class="flex items-center justify-between mb-3 lg:mb-4">
             <h2 class="text-base lg:text-xl font-bold text-gray-800 flex items-center gap-2">
                 <svg class="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
@@ -1448,28 +1456,116 @@
             </div>
 
             <!-- Customer Display -->
-            <div class="rounded-xl border border-green-200 bg-green-50/50 p-3 space-y-2">
-                <div class="flex items-center justify-between">
-                    <div>
+            <div class="rounded-xl border border-green-200 bg-green-50/50 p-3 space-y-3">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="min-w-0">
                         <div class="text-sm font-semibold text-green-900">Customer Display</div>
-                        <div class="text-[10px] lg:text-xs text-green-700"
-                             x-text="posSettings.customer_display_available ? ('Secondary screen: ' + (posSettings.customer_display_name || 'Detected')) : 'No secondary display detected'"></div>
+                        <div class="text-[10px] lg:text-xs text-green-700 truncate"
+                             x-text="posSettings.customer_display_available ? ('Secondary screen: ' + (posSettings.customer_display_name || 'Detected')) : 'No secondary display detected on this device'"></div>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer" x-show="hasNativeBridge">
-                        <input type="checkbox" x-model="posSettings.customer_display_enabled" @change="saveCustomerDisplaySetting()" class="sr-only peer">
+                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0" x-show="config.canEditCdSettings">
+                        <input type="checkbox" x-model="posSettings.customer_display_enabled" @change="saveCustomerDisplayEnabled()" class="sr-only peer">
                         <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:bg-green-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
                     </label>
                 </div>
+
+                <template x-if="config.canEditCdSettings">
+                    <div class="space-y-3 border-t border-green-200/80 pt-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] text-gray-500 mb-1">Layout orientation</label>
+                                <select x-model="posSettings.customer_display_orientation" class="w-full p-2 border rounded-lg text-xs bg-white">
+                                    <option value="auto">Auto</option>
+                                    <option value="portrait">Portrait</option>
+                                    <option value="landscape">Landscape</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-gray-500 mb-1">Media rotation</label>
+                                <select x-model="posSettings.customer_display_rotation_mode" class="w-full p-2 border rounded-lg text-xs bg-white">
+                                    <option value="mix">Mix (photos + videos)</option>
+                                    <option value="loop_photos">Loop photos</option>
+                                    <option value="loop_videos">Loop videos</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-gray-500 mb-1">Cart visibility</label>
+                            <select x-model="posSettings.customer_display_show_cart" class="w-full p-2 border rounded-lg text-xs bg-white">
+                                <option value="1">Show cart</option>
+                                <option value="0">Hide cart</option>
+                            </select>
+                        </div>
+
+                        <!-- Photo upload -->
+                        <div class="rounded-lg border border-green-100 bg-white p-2 space-y-2">
+                            <div class="text-xs font-medium text-gray-800">Promo photo</div>
+                            <div x-show="posSettings.customer_display_photo" class="flex items-center gap-2">
+                                <img :src="posSettings.customer_display_photo" alt="Current photo" class="w-14 h-14 object-cover rounded border bg-gray-100"
+                                     @error="$el.style.display='none'">
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-[10px] text-green-700 truncate" x-text="cdMediaFilename(posSettings.customer_display_photo)"></div>
+                                    <div class="text-[10px] text-gray-400">JPG or PNG, max 5 MB</div>
+                                </div>
+                            </div>
+                            <div x-show="!posSettings.customer_display_photo" class="text-[10px] text-gray-400">No photo uploaded yet</div>
+                            <div class="flex gap-2 items-center">
+                                <input type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" @change="onCdPhotoSelected($event)"
+                                       class="flex-1 text-[10px] file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:bg-gray-100 file:text-gray-700">
+                                <button type="button" @click="uploadCdPhoto()" :disabled="!cdPhotoFile || cdPhotoUploading"
+                                        class="px-3 py-1.5 text-xs font-medium bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:bg-gray-300">
+                                    <span x-text="cdPhotoUploading ? 'Uploading…' : 'Upload'"></span>
+                                </button>
+                            </div>
+                            <img x-show="cdPhotoPreview" :src="cdPhotoPreview" alt="Preview" class="w-full max-h-24 object-contain rounded border bg-gray-50">
+                        </div>
+
+                        <!-- Video upload -->
+                        <div class="rounded-lg border border-green-100 bg-white p-2 space-y-2">
+                            <div class="text-xs font-medium text-gray-800">Promo video</div>
+                            <div x-show="posSettings.customer_display_video">
+                                <div class="text-[10px] text-green-700 truncate" x-text="cdMediaFilename(posSettings.customer_display_video)"></div>
+                                <div class="text-[10px] text-gray-400">MP4, max 50 MB</div>
+                            </div>
+                            <div x-show="!posSettings.customer_display_video" class="text-[10px] text-gray-400">No video uploaded yet</div>
+                            <div class="flex gap-2 items-center">
+                                <input type="file" accept="video/mp4,.mp4" @change="onCdVideoSelected($event)"
+                                       class="flex-1 text-[10px] file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:bg-gray-100 file:text-gray-700">
+                                <button type="button" @click="uploadCdVideo()" :disabled="!cdVideoFile || cdVideoUploading"
+                                        class="px-3 py-1.5 text-xs font-medium bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:bg-gray-300">
+                                    <span x-text="cdVideoUploading ? 'Uploading…' : 'Upload'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="button" @click="saveCustomerDisplaySettings()" :disabled="cdSaving"
+                                class="w-full py-2 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300">
+                            <span x-text="cdSaving ? 'Saving…' : 'Save Customer Display Settings'"></span>
+                        </button>
+                    </div>
+                </template>
+                <p x-show="!config.canEditCdSettings" class="text-[10px] text-gray-500">Contact an admin to change customer display settings.</p>
+
                 <div class="flex gap-2" x-show="hasNativeBridge && posSettings.customer_display_available">
                     <button @click="testCustomerDisplay()" class="flex-1 py-2 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700">Test Display</button>
                     <button @click="syncCustomerDisplayCart()" class="flex-1 py-2 text-xs font-medium bg-white border border-green-300 text-green-800 rounded-lg hover:bg-green-50">Mirror Cart</button>
                 </div>
-                <p x-show="!hasNativeBridge" class="text-[10px] text-gray-500">Customer display requires the INSAPOS Android app on dual-screen hardware.</p>
+                <p x-show="!hasNativeBridge" class="text-[10px] text-gray-500">Customer display preview requires the INSAPOS Android app on dual-screen hardware.</p>
             </div>
 
             <!-- Printer -->
             <div class="rounded-xl border p-3 space-y-2">
                 <div class="text-sm font-semibold text-gray-800">Printer</div>
+                <div class="flex items-center justify-between py-1">
+                    <div>
+                        <div class="text-xs text-gray-700">Auto-print receipt</div>
+                        <div class="text-[10px] text-gray-400">Print after each completed sale</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                        <input type="checkbox" x-model="autoPrintReceipt" @change="saveAutoPrintSetting()" class="sr-only peer">
+                        <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:bg-green-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div>
                         <label class="block text-[10px] text-gray-500 mb-1">Paper size</label>
@@ -1716,6 +1812,12 @@ function posApp() {
         showPosSettingsModal: false,
         posSettingsLoading: false,
         settingsTestPrinting: false,
+        cdSaving: false,
+        cdPhotoUploading: false,
+        cdVideoUploading: false,
+        cdPhotoFile: null,
+        cdVideoFile: null,
+        cdPhotoPreview: null,
         posSettings: {
             app_version: '',
             device_model: '',
@@ -1723,6 +1825,11 @@ function posApp() {
             customer_display_enabled: true,
             customer_display_available: false,
             customer_display_name: '',
+            customer_display_orientation: 'auto',
+            customer_display_rotation_mode: 'mix',
+            customer_display_show_cart: '1',
+            customer_display_photo: '',
+            customer_display_video: '',
             last_sync_at: '',
             products_cached: 0,
             paper_size: '57mm',
@@ -1775,6 +1882,12 @@ function posApp() {
             message: 'Downloading catalog…',
             percent: 0,
         },
+        catalogImport: {
+            active: false,
+            progress: 0,
+            message: '',
+            _wasActive: false,
+        },
         showConflictModal: false,
         conflictItems: [],
         conflictLocalId: null,
@@ -1793,6 +1906,13 @@ function posApp() {
             branchId: {{ auth()->user()?->branch_id ?? 'null' }},
             role: @json(auth()->user()?->role),
             canViewShiftTotals: @json(auth()->user()?->canViewShiftTotals() ?? false),
+            canEditCdSettings: @json(in_array(auth()->user()?->role, ['cashier', 'manager', 'admin', 'owner', 'super_admin'], true)),
+            cdRoutes: {
+                show: @json(route('pos.customer-display.show')),
+                update: @json(route('pos.customer-display.update')),
+                photo: @json(route('pos.customer-display.photo')),
+                video: @json(route('pos.customer-display.video')),
+            },
         },
 
         canViewShiftTotals() {
@@ -2077,6 +2197,7 @@ function posApp() {
             window.addEventListener('online', () => { this.browserOnline = true; this.updateOfflineBanner(); });
             window.addEventListener('offline', () => { this.browserOnline = false; this.updateOfflineBanner(); });
             document.addEventListener('insapos:syncStatus', (e) => this.applyNativeSyncStatus(e.detail || {}));
+            document.addEventListener('insapos:catalogImport', (e) => this.applyCatalogImportStatus(e.detail || {}));
             document.addEventListener('insapos:dashboardData', (e) => this.applyDashboardData(e.detail || {}));
             document.addEventListener('insapos:openSettings', () => this.openPosSettings());
             document.addEventListener('insapos:openPrinter', () => this.openPrinterSettings());
@@ -2237,9 +2358,47 @@ function posApp() {
             }
         },
 
+        applyCatalogImportStatus(detail) {
+            if (!detail) return;
+            const state = (detail.state || '').toLowerCase();
+            const wasActive = this.catalogImport._wasActive;
+            this.catalogImport.active = state === 'downloading' || state === 'importing';
+            this.catalogImport.progress = detail.progress || 0;
+            this.catalogImport.message = detail.message || (this.catalogImport.active ? 'Catalog updating…' : '');
+            if (this.catalogImport.active) {
+                this.catalogImport._wasActive = true;
+            }
+            if (wasActive && !this.catalogImport.active && (state === 'ready' || state === 'idle')) {
+                this.catalogImport._wasActive = false;
+                this.refreshNativeProductCount();
+                this.loadNativeCategories();
+                if (this.isStorageCatalog()) {
+                    this.filterProducts();
+                }
+            }
+        },
+
+        async pollCatalogImportStatus() {
+            if (!this.useNativeEngine()) return;
+            try {
+                if (typeof window.INSAPOS.getCatalogImportStatus !== 'function') return;
+                const raw = window.INSAPOS.getCatalogImportStatus();
+                const detail = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (detail) this.applyCatalogImportStatus(detail);
+            } catch (e) {}
+        },
+
         applyNativeSyncStatus(detail) {
             this.nativeSyncDetail = detail;
-            if (this.silentSync) return;
+            if (detail.catalog_import) {
+                this.applyCatalogImportStatus(detail.catalog_import);
+            }
+            if (this.silentSync) {
+                if (typeof detail.unsynced_count === 'number') {
+                    this.pendingSyncCount = detail.unsynced_count + (detail.sync_queue_count || 0);
+                }
+                return;
+            }
             if (typeof detail.unsynced_count === 'number') {
                 this.pendingSyncCount = detail.unsynced_count + (detail.sync_queue_count || 0);
             }
@@ -2472,6 +2631,7 @@ function posApp() {
             this.storeDownload.percent = 100;
             if (this.isStorageCatalog()) {
                 await this.refreshNativeProductCount();
+                this.loadNativeCategories();
                 const count = this.productCount;
                 this.posReady = count > 0 || (result && result.online === false);
             } else {
@@ -2560,6 +2720,7 @@ function posApp() {
                     if (nativeReady) {
                         this.posReady = true;
                         this.syncStatus = 'synced';
+                        this._catalogPollTimer = setInterval(() => this.pollCatalogImportStatus(), 8000);
                         if (typeof window.INSAPOS.triggerLocalSync === 'function') {
                             setTimeout(() => {
                                 try { window.INSAPOS.triggerLocalSync(); } catch (e) {}
@@ -2668,7 +2829,16 @@ function posApp() {
                         || 0;
                     this.printerPaperSize = this.posSettings.paper_size;
                     this.printerFontMode = this.posSettings.font_mode;
+                    const cdSettings = cd.settings || cd;
+                    if (cdSettings.orientation) this.posSettings.customer_display_orientation = cdSettings.orientation;
+                    if (cdSettings.rotation_mode) this.posSettings.customer_display_rotation_mode = cdSettings.rotation_mode;
+                    if (cdSettings.show_cart !== undefined) {
+                        this.posSettings.customer_display_show_cart = cdSettings.show_cart === true || cdSettings.show_cart === '1' ? '1' : '0';
+                    }
+                    if (cdSettings.photo) this.posSettings.customer_display_photo = cdSettings.photo;
+                    if (cdSettings.video) this.posSettings.customer_display_video = cdSettings.video;
                 }
+                await this.loadCustomerDisplayServerSettings();
                 if (this.dashboardData?.products_cached) {
                     this.posSettings.products_cached = this.dashboardData.products_cached;
                 }
@@ -2679,12 +2849,171 @@ function posApp() {
             }
         },
 
-        async saveCustomerDisplaySetting() {
-            if (!this.hasNativeBridge || typeof window.INSAPOS === 'undefined') return;
+        async loadCustomerDisplayServerSettings() {
             try {
-                const raw = window.INSAPOS.setCustomerDisplayEnabled(!!this.posSettings.customer_display_enabled);
-                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                if (data && data.ok !== false) {
+                const res = await fetch(this.config.cdRoutes.show, {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data.success || !data.settings) return;
+                const s = data.settings;
+                this.posSettings.customer_display_enabled = s.enabled === '1' || s.enabled === true;
+                this.posSettings.customer_display_orientation = s.orientation || 'auto';
+                this.posSettings.customer_display_rotation_mode = s.rotation_mode || 'mix';
+                this.posSettings.customer_display_show_cart = (s.show_cart === '0' || s.show_cart === false) ? '0' : '1';
+                if (s.photo) this.posSettings.customer_display_photo = s.photo;
+                if (s.video) this.posSettings.customer_display_video = s.video;
+            } catch (e) {
+                console.warn('[pos] loadCustomerDisplayServerSettings', e);
+            }
+        },
+
+        cdMediaFilename(url) {
+            if (!url) return '';
+            try {
+                const part = String(url).split('/').pop() || '';
+                return decodeURIComponent(part.split('?')[0]);
+            } catch {
+                return String(url);
+            }
+        },
+
+        onCdPhotoSelected(event) {
+            const file = event.target.files?.[0] || null;
+            this.cdPhotoFile = file;
+            this.cdPhotoPreview = file ? URL.createObjectURL(file) : null;
+        },
+
+        onCdVideoSelected(event) {
+            this.cdVideoFile = event.target.files?.[0] || null;
+        },
+
+        async uploadCdPhoto() {
+            if (!this.cdPhotoFile || !this.config.canEditCdSettings) return;
+            this.cdPhotoUploading = true;
+            try {
+                const fd = new FormData();
+                fd.append('photo', this.cdPhotoFile);
+                const res = await fetch(this.config.cdRoutes.photo, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    body: fd,
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    this.showToast(data.message || 'Photo upload failed', 'error');
+                    return;
+                }
+                if (data.url) this.posSettings.customer_display_photo = data.url;
+                this.cdPhotoFile = null;
+                this.cdPhotoPreview = null;
+                this.showToast(data.message || 'Photo uploaded', 'success');
+                await this.reloadCustomerDisplayAfterSave();
+            } catch {
+                this.showToast('Photo upload failed', 'error');
+            } finally {
+                this.cdPhotoUploading = false;
+            }
+        },
+
+        async uploadCdVideo() {
+            if (!this.cdVideoFile || !this.config.canEditCdSettings) return;
+            this.cdVideoUploading = true;
+            try {
+                const fd = new FormData();
+                fd.append('video', this.cdVideoFile);
+                const res = await fetch(this.config.cdRoutes.video, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    body: fd,
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    this.showToast(data.message || 'Video upload failed', 'error');
+                    return;
+                }
+                if (data.url) this.posSettings.customer_display_video = data.url;
+                this.cdVideoFile = null;
+                this.showToast(data.message || 'Video uploaded', 'success');
+                await this.reloadCustomerDisplayAfterSave();
+            } catch {
+                this.showToast('Video upload failed', 'error');
+            } finally {
+                this.cdVideoUploading = false;
+            }
+        },
+
+        async saveCustomerDisplaySettings() {
+            if (!this.config.canEditCdSettings) return;
+            this.cdSaving = true;
+            try {
+                const payload = {
+                    enabled: !!this.posSettings.customer_display_enabled,
+                    orientation: this.posSettings.customer_display_orientation,
+                    rotation_mode: this.posSettings.customer_display_rotation_mode,
+                    show_cart: this.posSettings.customer_display_show_cart === '1',
+                };
+                const res = await fetch(this.config.cdRoutes.update, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    this.showToast(data.message || 'Could not save customer display settings', 'error');
+                    return;
+                }
+                if (data.settings) {
+                    const s = data.settings;
+                    this.posSettings.customer_display_enabled = s.enabled === '1' || s.enabled === true;
+                    this.posSettings.customer_display_orientation = s.orientation || this.posSettings.customer_display_orientation;
+                    this.posSettings.customer_display_rotation_mode = s.rotation_mode || this.posSettings.customer_display_rotation_mode;
+                    this.posSettings.customer_display_show_cart = (s.show_cart === '0' || s.show_cart === false) ? '0' : '1';
+                }
+                if (this.hasNativeBridge && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.setCustomerDisplayEnabled === 'function') {
+                    try {
+                        window.INSAPOS.setCustomerDisplayEnabled(!!this.posSettings.customer_display_enabled);
+                    } catch (e) {}
+                }
+                await this.reloadCustomerDisplayAfterSave();
+                this.showToast('Customer display settings saved', 'success', 2000);
+            } catch {
+                this.showToast('Could not save customer display settings', 'error');
+            } finally {
+                this.cdSaving = false;
+            }
+        },
+
+        async saveCustomerDisplayEnabled() {
+            if (!this.config.canEditCdSettings) return;
+            if (this.hasNativeBridge && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.setCustomerDisplayEnabled === 'function') {
+                try {
+                    const raw = window.INSAPOS.setCustomerDisplayEnabled(!!this.posSettings.customer_display_enabled);
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (data && data.ok === false) {
+                        this.showToast('Could not update customer display on device', 'warning');
+                    }
+                } catch {
+                    this.showToast('Could not update customer display on device', 'warning');
+                }
+            }
+            try {
+                const res = await fetch(this.config.cdRoutes.update, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify({ enabled: !!this.posSettings.customer_display_enabled }),
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
                     this.showToast(this.posSettings.customer_display_enabled ? 'Customer display enabled' : 'Customer display disabled', 'success', 1500);
                     if (this.posSettings.customer_display_enabled) this.syncCustomerDisplayCart();
                     else this.pushCustomerDisplay('welcome');
@@ -2692,6 +3021,28 @@ function posApp() {
             } catch {
                 this.showToast('Could not save customer display setting', 'warning');
             }
+        },
+
+        async reloadCustomerDisplayAfterSave() {
+            if (typeof INSABuddy !== 'undefined') {
+                try {
+                    const result = await INSABuddy.reloadCustomerDisplaySettings();
+                    if (result && result.ok) return;
+                } catch (e) {}
+            }
+            if (typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.triggerLocalSync === 'function') {
+                try { window.INSAPOS.triggerLocalSync(); } catch (e) {}
+            } else if (typeof INSABuddy !== 'undefined') {
+                try { await INSABuddy.triggerSync(); } catch (e) {}
+            }
+            if (this.posSettings.customer_display_enabled) {
+                setTimeout(() => this.syncCustomerDisplayCart(), 500);
+            }
+        },
+
+        saveAutoPrintSetting() {
+            localStorage.setItem('insapos_auto_print_receipt', this.autoPrintReceipt ? '1' : '0');
+            this.showToast(this.autoPrintReceipt ? 'Auto-print enabled' : 'Auto-print disabled', 'success', 1500);
         },
 
         async testCustomerDisplay() {

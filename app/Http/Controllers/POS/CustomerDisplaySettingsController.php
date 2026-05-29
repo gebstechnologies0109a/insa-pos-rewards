@@ -14,6 +14,14 @@ class CustomerDisplaySettingsController extends Controller
         protected PosSettingsService $settings,
     ) {}
 
+    public function show(): JsonResponse
+    {
+        return response()->json([
+            'success'  => true,
+            'settings' => $this->customerDisplayMap(),
+        ]);
+    }
+
     public function uploadPhoto(Request $request): JsonResponse
     {
         $request->validate([

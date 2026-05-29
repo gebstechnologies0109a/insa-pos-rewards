@@ -445,7 +445,7 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     fun upsertProducts(products: JSONArray): Int {
         var count = 0
-        val batchSize = 50
+        val batchSize = 500
         var i = 0
         while (i < products.length()) {
             val end = minOf(i + batchSize, products.length())
@@ -487,6 +487,8 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             cursor.close()
         }
     }
+
+    fun getCategoryCount(): Int = dbOp { countTable("categories") }
 
     fun getProductCountForCategory(categoryId: Int): Int = dbOp {
         val cursor = readableDatabase.rawQuery(
@@ -1444,6 +1446,7 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         val shiftTotals = active?.let { aggregateShiftSales(it) }
         JSONObject().apply {
             put("products", countTable("products"))
+            put("categories", countTable("categories"))
             put("customers", countTable("customers"))
             put("transactions", getTransactionCount())
             put("unsynced_transactions", getUnsyncedCount())

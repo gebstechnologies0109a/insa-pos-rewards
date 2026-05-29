@@ -105,8 +105,12 @@ class SyncEngine(
             put("consecutive_failures", consecutivePushFailures)
             put("last_conflict", lastConflict ?: JSONObject.NULL)
             put("online", connectivity.isConnected())
+            put("catalog_import", catalogDownloadManager.getStatus().toJson())
         }
     }
+
+    fun getCatalogImportJson(): JSONObject =
+        catalogDownloadManager.getStatus().toJson().put("ok", true)
 
     data class DownloadProgress(
         val phase: String,
@@ -144,14 +148,22 @@ class SyncEngine(
         syncNowIncremental()
     }
 
-    /** Push + pull in background — catalog only when empty DB, branch change, or stale TTL. */
+    /** Push + pull in background — forces catalog refresh when stale or branch changed. */
     fun syncNowFull() {
         scope.launch {
             syncFlightMutex.withLock {
                 pushTransactions()
                 pushSyncQueue()
-                pullData(fullSync = false, forceCatalog = false)
+                pullData(fullSync = false, forceCatalog = true)
             }
+        }
+    }
+
+    /** Background full catalog download (disk → SQLite) without blocking inventory delta. */
+    fun forceCatalogRefresh() {
+        val branchId = session.branchId ?: return
+        scope.launch {
+            pullProductCatalog(branchId)
         }
     }
 
@@ -416,14 +428,15 @@ class SyncEngine(
 
             val catalogSuppressed = System.currentTimeMillis() < catalogPullSuppressedUntilMs || saleInProgress
             val needsCatalog = !catalogSuppressed && (forceCatalog || isCatalogStale(branchId))
+            val hasLocalCatalog = db.getProductCount() > 0
             if (needsCatalog) {
-                pullProductCatalog(branchId)
-                val syncedAt = now()
-                db.setSetting(KEY_CATALOG_LAST_SYNC, syncedAt)
-                db.setSetting(KEY_CATALOG_SYNCED_AT, syncedAt)
-                db.setSetting(KEY_CATALOG_SYNCED_SESSION, branchId.toString())
-                pullCustomers()
-                catalogPulled = true
+                if (hasLocalCatalog) {
+                    // Background refresh — sales/UI keep using existing SQLite rows.
+                    scope.launch { pullProductCatalog(branchId) }
+                } else {
+                    pullProductCatalog(branchId)
+                    catalogPulled = db.getProductCount() > 0
+                }
             } else if (BuildConfig.DEBUG) {
                 Log.d(TAG, "Skipping product catalog pull — already synced for branch $branchId")
             }
@@ -465,18 +478,45 @@ class SyncEngine(
             catalogPullRunning = true
         }
         try {
-            val url = "${session.getBaseUrl()}/api/pos/products/all?branch_id=" +
-                URLEncoder.encode(branchId.toString(), "UTF-8")
-            val json = httpGet(url) ?: return
-            val products = json.optJSONArray("products") ?: JSONArray()
-            if (products.length() > 0) {
-                val count = db.upsertProducts(products)
-                db.logSync("pull", "products", count, "completed")
-                Log.i(TAG, "Pulled $count products from catalog")
+            onDownloadProgress?.invoke(
+                DownloadProgress("products", 5, "Downloading catalog to disk…"),
+            )
+            var cacheMarkedEarly = db.getProductCount() > 0
+            val result = catalogDownloadManager.syncCatalog(
+                branchId = branchId,
+                baseUrl = session.getBaseUrl(),
+            ) { status ->
+                val phase = when (status.state) {
+                    "downloading" -> "products"
+                    "importing" -> "products"
+                    else -> "products"
+                }
+                onDownloadProgress?.invoke(
+                    DownloadProgress(phase, status.progress, status.message),
+                )
+                if (!cacheMarkedEarly && status.productsImported > 0) {
+                    markCacheReady(branchId, false)
+                    cacheMarkedEarly = true
+                }
             }
-            val categories = json.optJSONArray("categories") ?: JSONArray()
-            if (categories.length() > 0) {
-                db.upsertCategories(categories)
+            if (result.skipped) {
+                Log.i(TAG, "Catalog unchanged (ETag) — skipped re-import")
+                val syncedAt = now()
+                db.setSetting(KEY_CATALOG_LAST_SYNC, syncedAt)
+                db.setSetting(KEY_CATALOG_SYNCED_AT, syncedAt)
+                db.setSetting(KEY_CATALOG_SYNCED_SESSION, branchId.toString())
+                return
+            }
+            if (result.productsImported > 0) {
+                db.logSync("pull", "products", result.productsImported, "completed")
+                val syncedAt = now()
+                db.setSetting(KEY_CATALOG_LAST_SYNC, syncedAt)
+                db.setSetting(KEY_CATALOG_SYNCED_AT, syncedAt)
+                db.setSetting(KEY_CATALOG_SYNCED_SESSION, branchId.toString())
+                pullCustomers()
+                markCacheReady(branchId, true)
+            } else if (result.readyForUi) {
+                markCacheReady(branchId, false)
             }
         } finally {
             catalogPullRunning = false
@@ -516,6 +556,9 @@ class SyncEngine(
 
     private val payloadBuilder by lazy { SyncPayloadBuilder(db, session) }
     private val merger by lazy { LocalSyncMerger(db) }
+    private val catalogDownloadManager by lazy {
+        CatalogDownloadManager(context, db, cookieProvider)
+    }
 
     private fun buildPushPayload(txn: JSONObject): JSONObject? =
         payloadBuilder.buildFromTransaction(txn)?.toJson()
@@ -622,7 +665,6 @@ class SyncEngine(
         if (db.getProductCount() == 0) return true
         val readyBranch = db.getSetting("cache_ready_branch_id")?.toIntOrNull()
         if (readyBranch != branchId) return true
-        if (db.getSetting(KEY_CATALOG_SYNCED_SESSION) == branchId.toString()) return false
         val syncedAt = db.getSetting(KEY_CATALOG_SYNCED_AT)
             ?: db.getSetting(KEY_CATALOG_LAST_SYNC)
             ?: db.getSetting("cache_ready_at")

@@ -197,7 +197,12 @@ Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
 Route::middleware(['auth', 'role:owner,admin'])->group(function () {
     Route::post('/pos/settings', [PosSettingsController::class, 'update'])
         ->name('pos.settings.update');
+});
 
+// Customer display — editable from cashier gear on POS device
+Route::middleware(['auth', 'role:cashier,manager,admin,owner,super_admin'])->group(function () {
+    Route::get('/settings/customer-display', [CustomerDisplaySettingsController::class, 'show'])
+        ->name('pos.customer-display.show');
     Route::post('/settings/customer-display/photo', [CustomerDisplaySettingsController::class, 'uploadPhoto'])
         ->name('pos.customer-display.photo');
     Route::post('/settings/customer-display/video', [CustomerDisplaySettingsController::class, 'uploadVideo'])

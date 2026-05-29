@@ -156,8 +156,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
         engine.onDownloadProgress = { progress ->
-            // Catalog/inventory sync is background-only — never block cashier UI.
-            runOnUiThread { updateSyncBadge() }
+            runOnUiThread {
+                updateSyncBadge()
+                dispatchCatalogImportToWeb(progress)
+            }
         }
     }
 
@@ -187,7 +189,6 @@ class MainActivity : AppCompatActivity() {
         if (db.getProductCount() == 0) return true
         val readyBranch = db.getSetting("cache_ready_branch_id")?.toIntOrNull()
         if (readyBranch != branchId) return true
-        if (db.getSetting("catalog_synced_session") == branchId.toString()) return false
         val syncedAt = db.getSetting("catalog_synced_at")
             ?: db.getSetting("catalog_last_sync")
             ?: db.getSetting("cache_ready_at")
@@ -243,6 +244,10 @@ class MainActivity : AppCompatActivity() {
             }
             serviceBound = true
             Log.i(TAG, "PosService bound")
+
+            if (session.branchId != null) {
+                scheduleSyncEngineAndPull(service, forceFullCatalog = false)
+            }
 
             service.ensureLocalServerStarted()
             service.requestPrinterManager()
@@ -875,10 +880,10 @@ class MainActivity : AppCompatActivity() {
                 updateSyncBadge()
             }
         }
-        // Defer until after first paint + idle so WebView/Alpine init is not competing with SQLite.
+        // Defer briefly so WebView/Alpine init is not competing with SQLite on first paint.
         webView.post {
             webView.post {
-                handler.postDelayed(startSync, 15_000)
+                handler.postDelayed(startSync, 3_000)
             }
         }
     }
@@ -1275,6 +1280,32 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }.start()
+    }
+
+    private fun dispatchCatalogImportToWeb(progress: SyncEngine.DownloadProgress) {
+        val engine = posService?.syncEngine ?: return
+        syncScheduler.execute {
+            val catalog = engine.getCatalogImportJson()
+            val json = catalog.toString()
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+            val msg = progress.message.replace("'", "\\'")
+            val js = """
+                (function() {
+                    var detail = JSON.parse('$json');
+                    detail.message = '$msg';
+                    detail.progress = ${progress.percent};
+                    document.dispatchEvent(new CustomEvent('insapos:catalogImport', { detail: detail }));
+                    if (window.posAppInstance && window.posAppInstance.applyCatalogImportStatus) {
+                        window.posAppInstance.applyCatalogImportStatus(detail);
+                    }
+                })();
+            """.trimIndent()
+            handler.post {
+                if (!isWebViewUsable()) return@post
+                webView.evaluateJavascript(js, null)
+            }
+        }
     }
 
     private fun dispatchSyncStatusToWeb(status: SyncEngine.SyncStatus) {

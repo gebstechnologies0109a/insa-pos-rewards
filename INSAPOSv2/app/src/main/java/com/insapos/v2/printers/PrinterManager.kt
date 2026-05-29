@@ -26,6 +26,8 @@ class PrinterManager(private val context: Context) {
         Thread(r, "insapos-print").apply { isDaemon = true }
     }
 
+    private val spooler = PrintSpooler(context)
+
     var currentPrinter: Printer? = null
         private set
 
@@ -42,6 +44,7 @@ class PrinterManager(private val context: Context) {
     val onPrinterChanged: MutableList<(PrinterStatus?) -> Unit> = mutableListOf()
 
     fun initialize() = synchronized(initLock) {
+        recoverSpooledJobs()
         restoreSavedPrinter()
         if (shouldPreferBuiltInOnPosTerminal() &&
             (currentPrinter == null || currentPrinter?.type == PrinterType.USB)
@@ -85,10 +88,11 @@ class PrinterManager(private val context: Context) {
 
     fun getActivePrinter(): Printer? = currentPrinter
 
-    fun print(data: ByteArray): Boolean {
-        val printer = currentPrinter ?: return false
-        return printer.send(data)
-    }
+    fun print(data: ByteArray): Boolean = printRawReliable(data).first
+
+    fun pendingPrintJobs(): Int = spooler.pendingJobCount()
+
+    fun printQueueDirectory(): java.io.File = spooler.queueDirectory()
 
     fun printText(text: String, layout: PrinterConfig.Layout = PrinterConfig.resolve(null, null)): Boolean {
         return printTextReliable(text, layout).first
@@ -102,17 +106,46 @@ class PrinterManager(private val context: Context) {
         layout: PrinterConfig.Layout = PrinterConfig.resolve(null, null),
     ): Pair<Boolean, String?> {
         if (text.isBlank()) return false to "No print data"
+        val job = spooler.enqueueText(text, layout)
+            ?: return false to "Print queue full — try again in a moment"
+        return printSpooledReliable(job.file)
+    }
+
+    /** Spool raw ESC/POS bytes to cache, then print from disk (avoids holding payload in RAM). */
+    fun printRawReliable(data: ByteArray): Pair<Boolean, String?> {
+        if (data.isEmpty()) return false to "No print data"
+        val job = spooler.enqueueRaw(data)
+            ?: return false to "Print queue full — try again in a moment"
+        return printSpooledReliable(job.file)
+    }
+
+    private fun printSpooledReliable(file: java.io.File): Pair<Boolean, String?> {
         var lastError = "No printer connected"
         for (candidate in orderedPrintCandidates()) {
-            val (ok, err) = printOnCandidate(candidate, text, layout)
+            val (ok, err) = printOnCandidateFile(candidate, file)
             if (ok) {
+                spooler.deleteJob(file)
                 if (candidate != currentPrinter) selectPrinter(candidate)
                 return true to null
             }
             lastError = err ?: lastError
             Log.w(TAG, "Print fallback from ${candidate.name}: $lastError")
         }
+        spooler.deleteJob(file)
         return false to lastError
+    }
+
+    /** Retry jobs left on disk after a low-memory kill. */
+    private fun recoverSpooledJobs() {
+        val orphans = spooler.recoverableJobs()
+        if (orphans.isEmpty()) return
+        Log.i(TAG, "Recovering ${orphans.size} spooled print job(s)")
+        printExecutor.submit {
+            for (file in orphans) {
+                val (ok, err) = printSpooledReliable(file)
+                if (!ok) Log.w(TAG, "Recovered print job failed: $err")
+            }
+        }
     }
 
     private fun orderedPrintCandidates(): List<Printer> {
@@ -128,24 +161,17 @@ class PrinterManager(private val context: Context) {
         return out.distinctBy { "${it.type}:${it.name}" }
     }
 
-    private fun printOnCandidate(
+    private fun printOnCandidateFile(
         printer: Printer,
-        text: String,
-        layout: PrinterConfig.Layout,
+        spoolFile: java.io.File,
     ): Pair<Boolean, String?> {
-        val future = printExecutor.submit<Pair<Boolean, String?>> {
-            try {
-                if (!printer.isConnected() && !printer.connect()) {
-                    return@submit false to "Could not connect to ${printer.name}"
-                }
-                val ok = printer.printText(text, layout)
-                if (ok) true to null else false to "Print failed on ${printer.name}"
-            } catch (e: Exception) {
-                Log.e(TAG, "Print on ${printer.name} failed", e)
-                if (printer is UsbPrinter) printer.disconnect()
-                false to (e.message ?: "Print error")
-            }
+        val task = java.util.concurrent.Callable {
+            executePrintOnCandidateFile(printer, spoolFile)
         }
+        if (Thread.currentThread().name == "insapos-print") {
+            return task.call()
+        }
+        val future = printExecutor.submit(task)
         return try {
             future.get(PRINT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         } catch (_: TimeoutException) {
@@ -154,6 +180,24 @@ class PrinterManager(private val context: Context) {
             Log.w(TAG, "Print timed out on ${printer.name}")
             false to "Print timed out on ${printer.name}"
         } catch (e: Exception) {
+            false to (e.message ?: "Print error")
+        }
+    }
+
+    private fun executePrintOnCandidateFile(
+        printer: Printer,
+        spoolFile: java.io.File,
+    ): Pair<Boolean, String?> {
+        return try {
+            if (!printer.isConnected() && !printer.connect()) {
+                return false to "Could not connect to ${printer.name}"
+            }
+            val bytes = spoolFile.inputStream().use { it.readBytes() }
+            val ok = printer.printRaw(bytes)
+            if (ok) true to null else false to "Print failed on ${printer.name}"
+        } catch (e: Exception) {
+            Log.e(TAG, "Print on ${printer.name} failed", e)
+            if (printer is UsbPrinter) printer.disconnect()
             false to (e.message ?: "Print error")
         }
     }

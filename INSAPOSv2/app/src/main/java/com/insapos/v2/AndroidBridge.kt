@@ -210,6 +210,12 @@ class AndroidBridge(private val activity: MainActivity) {
     fun getSyncStatus(): String = safeBridge { httpGet("/offline/sync/status", 3000, 3000) }
 
     @JavascriptInterface
+    fun getCatalogImportStatus(): String = safeBridge {
+        activity.posService?.syncEngine?.getCatalogImportJson()?.toString()
+            ?: JSONObject().put("ok", true).put("state", "idle").put("progress", 0).toString()
+    }
+
+    @JavascriptInterface
     fun triggerSync(): String = prefetchCatalog()
 
     @JavascriptInterface
@@ -217,6 +223,7 @@ class AndroidBridge(private val activity: MainActivity) {
         val branchId = session.branchId
         if (branchId != null && branchId > 0) {
             activity.onBranchIdSetFromWeb(branchId)
+            activity.posService?.syncEngine?.forceCatalogRefresh()
         } else {
             httpPostJson("/local/sync/now", null)
         }
@@ -519,6 +526,12 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
+    fun reloadCustomerDisplaySettings(): String = safeBridge {
+        activity.customerDisplayManager.onSettingsSynced()
+        JSONObject().put("ok", true).put("reloaded", true).toString()
+    }
+
+    @JavascriptInterface
     fun updateCustomerDisplayCart(cartJson: String): String = safeBridge {
         activity.customerDisplayManager.update(cartJson).toString()
     }
@@ -587,11 +600,11 @@ class AndroidBridge(private val activity: MainActivity) {
                 return JSONObject().put("ok", false).put("error", ensureErr ?: "No printer connected").toString()
             }
             val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
-            val ok = printer.printRaw(bytes)
+            val (ok, err) = pm.printRawReliable(bytes)
             return if (ok) {
                 JSONObject().put("ok", true).put("printed", true).toString()
             } else {
-                JSONObject().put("ok", false).put("error", "Print failed on ${printer.name}").toString()
+                JSONObject().put("ok", false).put("error", err ?: "Print failed on ${printer.name}").toString()
             }
         }
 

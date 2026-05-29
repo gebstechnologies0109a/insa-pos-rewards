@@ -91,6 +91,7 @@ class PosLocalServer(
                 uri == "/offline/stats" -> handleOfflineStats()
                 uri == "/offline/sync/status" -> handleSyncStatus()
                 uri == "/offline/sync/now" && method == Method.POST -> handleSyncNow()
+                uri == "/offline/catalog/refresh" && method == Method.POST -> handleCatalogRefresh()
                 // Local POS engine endpoints
                 uri == "/local/products" -> handleLocalProducts(session)
                 uri == "/local/categories" -> handleLocalCategories()
@@ -161,19 +162,11 @@ class PosLocalServer(
 
         if (raw != null) {
             val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
-            val future = java.util.concurrent.Executors.newSingleThreadExecutor().submit<Boolean> {
-                printer.printRaw(bytes)
-            }
-            val ok = try {
-                future.get(8, TimeUnit.SECONDS)
-            } catch (_: Exception) {
-                future.cancel(true)
-                false
-            }
+            val (ok, printErr) = pm.printRawReliable(bytes)
             return if (ok) {
                 jsonOk(JSONObject().put("ok", true).put("printed", true))
             } else {
-                jsonError("Print failed on ${printer.name} — check paper, power, and connection")
+                jsonError(printErr ?: "Print failed on ${printer.name} — check paper, power, and connection")
             }
         }
 
@@ -654,6 +647,9 @@ class PosLocalServer(
             put("status", sync?.lastSyncStatus?.name ?: "UNKNOWN")
             put("unsynced_count", db?.getUnsyncedCount() ?: 0)
             put("sync_queue_count", db?.getSyncQueueCount() ?: 0)
+            sync?.getCatalogImportJson()?.let { catalog ->
+                put("catalog_import", catalog)
+            }
         })
     }
 
@@ -661,6 +657,12 @@ class PosLocalServer(
         val sync = getSyncEngine() ?: return jsonError("Sync engine not ready")
         sync.syncNow()
         return jsonOk(JSONObject().put("ok", true).put("triggered", true).put("full", false))
+    }
+
+    private fun handleCatalogRefresh(): Response {
+        val sync = getSyncEngine() ?: return jsonError("Sync engine not ready")
+        sync.forceCatalogRefresh()
+        return jsonOk(JSONObject().put("ok", true).put("triggered", true).put("catalog", true))
     }
 
     // --- Local POS engine handlers ---

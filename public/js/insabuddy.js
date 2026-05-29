@@ -450,6 +450,18 @@ const INSABuddy = {
         return this._get('/customer-display/status');
     },
 
+    async reloadCustomerDisplaySettings() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.reloadCustomerDisplaySettings === 'function') {
+            try {
+                const raw = window.INSAPOS.reloadCustomerDisplaySettings();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native reloadCustomerDisplaySettings failed', e);
+            }
+        }
+        return { ok: false };
+    },
+
     async getPosSettingsSummary() {
         if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.getPosSettings === 'function') {
             try {
