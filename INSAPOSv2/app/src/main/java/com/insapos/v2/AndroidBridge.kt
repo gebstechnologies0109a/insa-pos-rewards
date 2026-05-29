@@ -427,6 +427,7 @@ class AndroidBridge(private val activity: MainActivity) {
             put("font_mode", layout.fontMode)
             put("char_width", layout.charWidth)
             put("dot_width", layout.dotWidth)
+            put("allow_minimize", session.allowMinimize)
         }.toString()
     }
 

@@ -253,10 +253,9 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        session = SessionManager(this)
         setupKioskDisplay()
         setContentView(R.layout.activity_main)
-
-        session = SessionManager(this)
         customerDisplayManager = CustomerDisplayManager(this)
         usingHttp = session.useHttp
 
@@ -294,7 +293,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyImmersiveMode()
+        applyDisplayMode()
         tryEnterLockTaskIfAllowed()
         if (!serviceBound) {
             startPosService()
@@ -312,8 +311,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            applyImmersiveMode()
+        if (hasFocus && !isAllowMinimizeEnabled()) {
+            applyDisplayMode()
         }
     }
 
@@ -367,8 +366,10 @@ class MainActivity : AppCompatActivity() {
 
     // --- Kiosk / immersive fullscreen ---
 
+    private fun isAllowMinimizeEnabled(): Boolean =
+        if (::session.isInitialized) session.allowMinimize else true
+
     private fun setupKioskDisplay() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -376,22 +377,56 @@ class MainActivity : AppCompatActivity() {
             setTurnScreenOn(true)
         }
 
-        applyImmersiveMode()
+        applyDisplayMode()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.decorView.setOnApplyWindowInsetsListener { view, insets ->
-                applyImmersiveMode()
-                view.onApplyWindowInsets(insets)
+        if (!isAllowMinimizeEnabled()) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                window.decorView.setOnApplyWindowInsetsListener { view, insets ->
+                    applyKioskImmersiveMode()
+                    view.onApplyWindowInsets(insets)
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                window.decorView.setOnSystemUiVisibilityChangeListener {
+                    applyKioskImmersiveMode()
+                }
             }
         } else {
-            @Suppress("DEPRECATION")
-            window.decorView.setOnSystemUiVisibilityChangeListener {
-                applyImmersiveMode()
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                window.decorView.setOnApplyWindowInsetsListener(null)
+            } else {
+                @Suppress("DEPRECATION")
+                window.decorView.setOnSystemUiVisibilityChangeListener(null)
             }
         }
     }
 
-    private fun applyImmersiveMode() {
+    /** Applies kiosk immersive or normal system bars based on {@link SessionManager#allowMinimize}. */
+    private fun applyDisplayMode() {
+        if (isAllowMinimizeEnabled()) {
+            applyAllowMinimizeMode()
+        } else {
+            applyKioskImmersiveMode()
+        }
+    }
+
+    /** Status/nav bars visible; edge swipe opens recents/home without sticky re-hide. */
+    private fun applyAllowMinimizeMode() {
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+        controller.show(WindowInsetsCompat.Type.systemBars())
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        }
+    }
+
+    private fun applyKioskImmersiveMode() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         controller.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -410,8 +445,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Uses lock-task when the device allows it (MDM whitelist or active screen pin). */
+    /** Uses lock-task only in strict kiosk mode when the device already pinned the app. */
     private fun tryEnterLockTaskIfAllowed() {
+        if (isAllowMinimizeEnabled()) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
         try {
             val state = getSystemService(ActivityManager::class.java).lockTaskModeState
