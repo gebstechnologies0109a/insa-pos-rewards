@@ -1544,6 +1544,7 @@ function posApp() {
         rewardsResults: [],
         rewardsNoMatch: false,
         hasNativeBridge: false,
+        autoPrintReceipt: true,
         androidLocalUp: true,
         _nativeScanPort: 18182,
         _scanning: false,
@@ -1840,6 +1841,10 @@ function posApp() {
                 this.buddyConnected = true;
                 this.ioApiAvailable = true;
                 try { this._nativeScanPort = window.INSAPOS.getServicePort() || 18182; } catch { this._nativeScanPort = 18182; }
+                try {
+                    const storedAuto = localStorage.getItem('insapos_auto_print_receipt');
+                    if (storedAuto !== null) this.autoPrintReceipt = storedAuto === '1';
+                } catch {}
                 if (this.config.branchId && typeof window.INSAPOS.setBranchId === 'function') {
                     try { window.INSAPOS.setBranchId(this.config.branchId); } catch (e) {}
                 }
@@ -2804,12 +2809,43 @@ function posApp() {
             };
         },
 
-        async sendReceiptToPrinter(payload) {
+        async sendReceiptToPrinter(payload, options = {}) {
             if (!this.canUsePrinter()) {
                 this.showToast('Printer service unavailable', 'error');
                 return false;
             }
+            const receiptText = payload.text || null;
+            const nativeFirst = this.hasNativeBridge && typeof window.INSAPOS !== 'undefined'
+                && typeof window.INSAPOS.printReceipt === 'function';
             try {
+                if (nativeFirst) {
+                    let text = receiptText;
+                    if (!text) {
+                        if (typeof INSABuddy !== 'undefined') {
+                            INSABuddy.detectV2();
+                            const settings = INSABuddy._printerLayoutCache
+                                || INSABuddy.resolvePrinterLayout(this.printerPaperSize, this.printerFontMode);
+                            text = INSABuddy.buildReceiptText(payload, settings);
+                        } else {
+                            text = this.formatNativeReceiptText(payload);
+                        }
+                    }
+                    const result = (typeof INSABuddy !== 'undefined' && INSABuddy.printReceiptNative)
+                        ? INSABuddy.printReceiptNative(text, options.maxAttempts || 3)
+                        : (() => {
+                            const raw = window.INSAPOS.printReceipt(JSON.stringify({ text }));
+                            return typeof raw === 'string' ? JSON.parse(raw) : raw;
+                        })();
+                    if (result && (result.ok || result.printed)) {
+                        if (!options.silent) this.showToast('Receipt sent to printer', 'success', 2000);
+                        return true;
+                    }
+                    const err = (result && (result.error || result.print_error))
+                        || 'Receipt print failed';
+                    console.warn('[pos] native print failed:', err, result);
+                    if (!options.silent) this.showToast(err, 'error');
+                    return false;
+                }
                 if (typeof INSABuddy !== 'undefined') {
                     INSABuddy.detectV2();
                     const result = await INSABuddy.printReceipt(payload);
@@ -2817,24 +2853,15 @@ function posApp() {
                         this.showToast(INSABuddy.parseApiError(result, 'Receipt print failed'), 'error');
                         return false;
                     }
-                } else if (this.hasNativeBridge && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.printReceipt === 'function') {
-                    const text = (typeof INSABuddy !== 'undefined' && INSABuddy.buildReceiptText)
-                        ? INSABuddy.buildReceiptText(payload, { paperSize: '57mm' })
-                        : this.formatNativeReceiptText(payload);
-                    const raw = window.INSAPOS.printReceipt(JSON.stringify({ text }));
-                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                    if (!data || !data.ok) {
-                        this.showToast((data && data.error) || 'Receipt print failed', 'error');
-                        return false;
-                    }
                 } else {
                     this.showToast('Printer service unavailable', 'error');
                     return false;
                 }
-                this.showToast('Receipt sent to printer', 'success', 2000);
+                if (!options.silent) this.showToast('Receipt sent to printer', 'success', 2000);
                 return true;
-            } catch {
-                this.showToast('Receipt print failed — local service unavailable', 'error');
+            } catch (e) {
+                console.warn('[pos] sendReceiptToPrinter failed:', e);
+                if (!options.silent) this.showToast('Receipt print failed — local service unavailable', 'error');
                 return false;
             }
         },
@@ -2891,6 +2918,20 @@ function posApp() {
                 }, timeoutMs);
                 window.__insaposSalePending[requestId] = { resolve, reject, timeout };
             });
+        },
+
+        printReceiptAfterSale(saleResult, txData, receiptData) {
+            if (!this.canUsePrinter() || !this.autoPrintReceipt) return;
+            if (saleResult && saleResult.printed === true) {
+                console.info('[pos] receipt auto-printed by native sale handler');
+                return;
+            }
+            const receiptObj = saleResult && saleResult.receipt;
+            if (receiptObj && receiptObj.text) {
+                this.sendReceiptToPrinter({ text: receiptObj.text }, { silent: false });
+                return;
+            }
+            this.buddyPrintReceipt();
         },
 
         async buddyPrintReceipt() {
@@ -3273,6 +3314,7 @@ function posApp() {
             };
             let serverSale = null;
             let localSaleOk = false;
+            let nativeSaleResult = null;
 
             const queueBackgroundSync = () => {
                 if (typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.triggerLocalSync === 'function') {
@@ -3303,11 +3345,14 @@ function posApp() {
                         branch_name: '{{ auth()->user()->branch?->name ?? "" }}',
                         store_name: '{{ $brandName }}',
                         created_at: txData.created_at,
+                        auto_print: this.autoPrintReceipt !== false,
                     });
                     const data = await this.createLocalSaleWithTimeout(payload);
+                    nativeSaleResult = data;
                     if (data.ok) {
                         localSaleOk = true;
                         serverSale = data.sale;
+                        if (data.receipt) receiptData.receipt_text = data.receipt.text;
                         queueBackgroundSync();
                     } else {
                         this.showToast(data.error || 'Local sale failed', 'error');
@@ -3360,7 +3405,14 @@ function posApp() {
             }
             this.lastSale = serverSale || { local_id: localId, sale_number: null, total: txData.total, amount_tendered: txData.amount_tendered, change_due: txData.change_due, payment_method: txData.payment_method, offline: !serverSale || localSaleOk, _cart: txData.items };
             this.showReceipt = true;
-            if (this.canUsePrinter()) { this.buddyPrintReceipt(); if (typeof INSABuddy !== 'undefined' && SyncEngine) SyncEngine.pushToBuddy(txData, receiptData); }
+            if (this.canUsePrinter()) {
+                if (nativeEngine && localSaleOk) {
+                    this.printReceiptAfterSale(nativeSaleResult, txData, receiptData);
+                } else {
+                    this.buddyPrintReceipt();
+                }
+                if (typeof INSABuddy !== 'undefined' && SyncEngine) SyncEngine.pushToBuddy(txData, receiptData);
+            }
         },
 
         closeReceipt() {

@@ -4,11 +4,18 @@ import android.content.Context
 import android.util.Log
 import java.io.FileOutputStream
 import java.lang.reflect.Method
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 class BuiltInPrinter(private val context: Context) : Printer {
 
     companion object {
         private const val TAG = "BuiltInPrinter"
+        private const val GENERIC_WRITE_TIMEOUT_MS = 3000L
+        private val genericWriteExecutor = Executors.newCachedThreadPool { r ->
+            Thread(r, "builtin-printer-write").apply { isDaemon = true }
+        }
 
         fun isAvailable(context: Context): Boolean {
             return try {
@@ -160,13 +167,13 @@ class BuiltInPrinter(private val context: Context) : Printer {
             add("/dev/usb/lp0")
         }.distinct()
         for (path in paths) {
-            try {
-                FileOutputStream(path).use { it.write(data) }
+            val ok = writeGenericPathWithTimeout(path, data)
+            if (ok) {
                 genericDevicePath = path
+                Log.i(TAG, "Generic print succeeded on $path")
                 return true
-            } catch (e: Exception) {
-                Log.d(TAG, "Generic send failed on $path: ${e.message}")
             }
+            Log.d(TAG, "Generic send failed or timed out on $path")
         }
         Log.e(TAG, "Generic send failed on all device nodes")
         return false
@@ -174,6 +181,28 @@ class BuiltInPrinter(private val context: Context) : Printer {
 
     override fun getStatus(): PrinterStatus {
         return PrinterStatus(connected = isConnected(), type = type, name = name)
+    }
+
+    private fun writeGenericPathWithTimeout(path: String, data: ByteArray): Boolean {
+        val future = genericWriteExecutor.submit<Boolean> {
+            try {
+                FileOutputStream(path).use { stream ->
+                    stream.write(data)
+                    stream.flush()
+                }
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+        return try {
+            future.get(GENERIC_WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            future.cancel(true)
+            false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun detectDeviceBrand(): String {

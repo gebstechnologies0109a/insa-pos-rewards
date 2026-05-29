@@ -172,27 +172,58 @@ const INSABuddy = {
     },
 
     async printReceipt(receipt, maxAttempts = 3) {
-        const settings = await this.getPrinterSettings();
-        const text = this.buildReceiptText(receipt, settings);
+        const settings = this._printerLayoutCache || await this.getPrinterSettings();
+        const text = receipt.text || this.buildReceiptText(receipt, settings);
         let lastResult = null;
+
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            if (typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.printReceipt === 'function') {
-                try {
-                    const raw = window.INSAPOS.printReceipt(JSON.stringify({ text }));
-                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                    if (data && data.ok) return data;
-                    lastResult = data;
-                } catch (e) {
-                    console.warn('[INSABuddy] native printReceipt attempt', attempt, e);
-                }
-            }
+            const nativeResult = this._tryNativePrint(text);
+            if (nativeResult && this.isPrintSuccess(nativeResult)) return nativeResult;
+            if (nativeResult) lastResult = nativeResult;
+
             lastResult = await this.printText(text);
             if (this.isPrintSuccess(lastResult)) return lastResult;
+
             if (attempt < maxAttempts) {
-                await new Promise((r) => setTimeout(r, 400 * attempt));
+                await new Promise((r) => setTimeout(r, 500 * attempt));
             }
         }
         return lastResult;
+    },
+
+    /**
+     * Fire-and-forget friendly native print (sync bridge call with retries).
+     */
+    printReceiptNative(receiptOrText, maxAttempts = 3) {
+        const text = typeof receiptOrText === 'string'
+            ? receiptOrText
+            : (receiptOrText?.text || this.buildReceiptText(
+                receiptOrText,
+                this._printerLayoutCache || this.resolvePrinterLayout('57mm', 'paper_size')
+            ));
+        let lastResult = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            lastResult = this._tryNativePrint(text);
+            if (lastResult && this.isPrintSuccess(lastResult)) return lastResult;
+            if (attempt < maxAttempts) {
+                const start = Date.now();
+                while (Date.now() - start < 500 * attempt) { /* brief backoff */ }
+            }
+        }
+        return lastResult;
+    },
+
+    _tryNativePrint(text) {
+        if (typeof window.INSAPOS === 'undefined' || typeof window.INSAPOS.printReceipt !== 'function') {
+            return null;
+        }
+        try {
+            const raw = window.INSAPOS.printReceipt(JSON.stringify({ text }));
+            return typeof raw === 'string' ? JSON.parse(raw) : raw;
+        } catch (e) {
+            console.warn('[INSABuddy] native printReceipt failed', e);
+            return { ok: false, error: e.message || 'native print failed' };
+        }
     },
 
     /**

@@ -92,8 +92,19 @@ class UsbPrinter(
             if (!connect()) return false
         }
         return try {
-            val sent = connection?.bulkTransfer(endpoint, data, data.size, TIMEOUT_MS) ?: -1
-            sent >= 0
+            var offset = 0
+            val chunkSize = 4096
+            while (offset < data.size) {
+                val len = minOf(chunkSize, data.size - offset)
+                val sent = connection?.bulkTransfer(endpoint, data, offset, len, TIMEOUT_MS) ?: -1
+                if (sent <= 0) {
+                    Log.w(TAG, "bulkTransfer stalled at offset $offset (sent=$sent)")
+                    disconnect()
+                    return false
+                }
+                offset += sent
+            }
+            true
         } catch (e: Exception) {
             Log.e(TAG, "Send failed: ${e.message}")
             disconnect()

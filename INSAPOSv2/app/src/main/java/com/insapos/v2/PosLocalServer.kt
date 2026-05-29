@@ -146,26 +146,36 @@ class PosLocalServer(
             return jsonError("Printer disconnected — could not reconnect to ${printer.name}")
         }
 
-        val ok = when {
-            raw != null -> {
-                val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
+        if (raw != null) {
+            val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
+            val future = java.util.concurrent.Executors.newSingleThreadExecutor().submit<Boolean> {
                 printer.printRaw(bytes)
             }
-            text.isNotBlank() -> {
-                val layout = printerSettings().layout()
-                printer.printText(text, layout)
+            val ok = try {
+                future.get(8, TimeUnit.SECONDS)
+            } catch (_: Exception) {
+                future.cancel(true)
+                false
             }
-            data.isNotBlank() -> {
-                val layout = printerSettings().layout()
-                printer.printText(data, layout)
+            return if (ok) {
+                jsonOk(JSONObject().put("ok", true).put("printed", true))
+            } else {
+                jsonError("Print failed on ${printer.name} — check paper, power, and connection")
             }
+        }
+
+        val payload = when {
+            text.isNotBlank() -> text
+            data.isNotBlank() -> data
             else -> return jsonError("No print data provided")
         }
 
+        val layout = printerSettings().layout()
+        val (ok, printErr) = pm.printTextReliable(payload, layout)
         return if (ok) {
             jsonOk(JSONObject().put("ok", true).put("printed", true))
         } else {
-            jsonError("Print failed on ${printer.name} — check paper, power, and connection")
+            jsonError(printErr ?: "Print failed — check paper, power, and connection")
         }
     }
 
@@ -297,17 +307,17 @@ class PosLocalServer(
 
         val layout = printerSettings().layout()
         val text = buildTestPrintText(layout)
-        val ok = pm.printText(text, layout)
+        val (ok, printErr) = pm.printTextReliable(text, layout)
         return if (ok) {
             jsonOk(JSONObject().apply {
                 put("ok", true)
                 put("success", true)
                 put("printed", true)
-                put("name", printer.name)
-                put("type", printer.type)
+                put("name", pm.getActivePrinter()?.name ?: printer.name)
+                put("type", pm.getActivePrinter()?.type ?: printer.type)
             })
         } else {
-            jsonError("Print failed on ${printer.name} — check paper, power, and connection")
+            jsonError(printErr ?: "Print failed on ${printer.name} — check paper, power, and connection")
         }
     }
 

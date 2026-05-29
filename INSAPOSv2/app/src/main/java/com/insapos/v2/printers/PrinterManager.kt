@@ -8,6 +8,9 @@ import android.content.SharedPreferences
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbManager
 import android.util.Log
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 class PrinterManager(private val context: Context) {
 
@@ -16,6 +19,11 @@ class PrinterManager(private val context: Context) {
         private const val PREFS_NAME = "insaposv2_printers"
         private const val KEY_PRINTER_TYPE = "printer_type"
         private const val KEY_PRINTER_ADDRESS = "printer_address"
+        private const val PRINT_TIMEOUT_MS = 8_000L
+    }
+
+    private val printExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "insapos-print").apply { isDaemon = true }
     }
 
     var currentPrinter: Printer? = null
@@ -35,6 +43,16 @@ class PrinterManager(private val context: Context) {
 
     fun initialize() = synchronized(initLock) {
         restoreSavedPrinter()
+        if (shouldPreferBuiltInOnPosTerminal() &&
+            (currentPrinter == null || currentPrinter?.type == PrinterType.USB)
+        ) {
+            scanBuiltInPrinter()?.let { builtin ->
+                if (selectPrinter(builtin)) {
+                    Log.i(TAG, "POS terminal: using built-in printer (${builtin.name})")
+                    return@synchronized
+                }
+            }
+        }
         if (currentPrinter == null) {
             autoSelectBuiltInIfOnlyOption()
         }
@@ -73,8 +91,80 @@ class PrinterManager(private val context: Context) {
     }
 
     fun printText(text: String, layout: PrinterConfig.Layout = PrinterConfig.resolve(null, null)): Boolean {
-        val printer = currentPrinter ?: return false
-        return printer.printText(text, layout)
+        return printTextReliable(text, layout).first
+    }
+
+    /**
+     * Print with per-printer timeout and automatic fallback (built-in → USB → saved).
+     */
+    fun printTextReliable(
+        text: String,
+        layout: PrinterConfig.Layout = PrinterConfig.resolve(null, null),
+    ): Pair<Boolean, String?> {
+        if (text.isBlank()) return false to "No print data"
+        var lastError = "No printer connected"
+        for (candidate in orderedPrintCandidates()) {
+            val (ok, err) = printOnCandidate(candidate, text, layout)
+            if (ok) {
+                if (candidate != currentPrinter) selectPrinter(candidate)
+                return true to null
+            }
+            lastError = err ?: lastError
+            Log.w(TAG, "Print fallback from ${candidate.name}: $lastError")
+        }
+        return false to lastError
+    }
+
+    private fun orderedPrintCandidates(): List<Printer> {
+        val out = mutableListOf<Printer>()
+        currentPrinter?.let { out.add(it) }
+        if (shouldPreferBuiltInOnPosTerminal()) {
+            scanBuiltInPrinter()?.let { if (it !in out) out.add(it) }
+            scanUsbPrinters().forEach { if (it !in out) out.add(it) }
+        } else {
+            scanUsbPrinters().forEach { if (it !in out) out.add(it) }
+            scanBuiltInPrinter()?.let { if (it !in out) out.add(it) }
+        }
+        return out.distinctBy { "${it.type}:${it.name}" }
+    }
+
+    private fun printOnCandidate(
+        printer: Printer,
+        text: String,
+        layout: PrinterConfig.Layout,
+    ): Pair<Boolean, String?> {
+        val future = printExecutor.submit<Pair<Boolean, String?>> {
+            try {
+                if (!printer.isConnected() && !printer.connect()) {
+                    return@submit false to "Could not connect to ${printer.name}"
+                }
+                val ok = printer.printText(text, layout)
+                if (ok) true to null else false to "Print failed on ${printer.name}"
+            } catch (e: Exception) {
+                Log.e(TAG, "Print on ${printer.name} failed", e)
+                if (printer is UsbPrinter) printer.disconnect()
+                false to (e.message ?: "Print error")
+            }
+        }
+        return try {
+            future.get(PRINT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            future.cancel(true)
+            if (printer is UsbPrinter) printer.disconnect()
+            Log.w(TAG, "Print timed out on ${printer.name}")
+            false to "Print timed out on ${printer.name}"
+        } catch (e: Exception) {
+            false to (e.message ?: "Print error")
+        }
+    }
+
+    private fun shouldPreferBuiltInOnPosTerminal(): Boolean {
+        if (!BuiltInPrinter.isAvailable(context)) return false
+        val manufacturer = android.os.Build.MANUFACTURER.lowercase()
+        return manufacturer.contains("rockchip")
+            || manufacturer.contains("sunmi")
+            || manufacturer.contains("imin")
+            || manufacturer.contains("newland")
     }
 
     fun openDrawer() {
@@ -327,6 +417,18 @@ class PrinterManager(private val context: Context) {
                     }
                 }
                 PrinterType.USB -> {
+                    if (shouldPreferBuiltInOnPosTerminal()) {
+                        scanBuiltInPrinter()?.let { builtin ->
+                            if (builtin.connect()) {
+                                currentPrinter = builtin
+                                lastSelectedType = builtin.type
+                                lastSelectedName = builtin.name
+                                notifyChange(builtin.getStatus())
+                                Log.i(TAG, "Restored built-in instead of saved USB on POS terminal")
+                                return
+                            }
+                        }
+                    }
                     scanUsbPrinters().find { PrinterNames.namesMatch(it.name, savedAddress) }?.let {
                         if (it.connect()) {
                             currentPrinter = it
