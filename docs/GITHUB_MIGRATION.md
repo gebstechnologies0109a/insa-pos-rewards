@@ -12,7 +12,7 @@ This document records export from the GEBS GitHub remote to a **non-GEBS** GitHu
 | **New private repo** | [`ronaldo82ba/epayplus-platform`](https://github.com/ronaldo82ba/epayplus-platform) |
 | **New remote URL** | `https://github.com/ronaldo82ba/epayplus-platform.git` |
 | **Previous GEBS `origin`** | `https://github.com/gebstechnologies0109a/insa-pos-rewards.git` (kept as `geb-origin`) |
-| **Latest commit on `main`** | `0d79728` — docs: SariSmartHub device scan and report period guide |
+| **Latest commit on `main`** | `45fa8b5` — docs: record GitHub migration to ronaldo82ba/epayplus-platform |
 | **Branches pushed** | `main`, `deploy/epayplus`, `deploy/insa` |
 | **Tags** | none |
 | **GitHub CLI auth** | Active: **`ronaldo82ba`** (scopes: `gist`, `read:org`, `repo`, `workflow`); inactive: `gebstechnologies0109a` |
@@ -21,7 +21,7 @@ This document records export from the GEBS GitHub remote to a **non-GEBS** GitHu
 
 | Branch | SHA |
 |--------|-----|
-| `main` | `0d797281958ea7d0eeb2d4ca6b87b6bb8ce65c60` |
+| `main` | `45fa8b56a14f6ef3df5731ba9b2ad9435332b3b3` |
 | `deploy/epayplus` | `be335e458efec163efdc0d3e0122fa4db292cab8` |
 | `deploy/insa` | `4bb841d0dad91a98ecd1ee9ea4d204e45fddffa4` |
 
