@@ -1873,6 +1873,7 @@ function posApp() {
         _categoryEmptyWarned: false,
         _scanning: false,
         saleProcessing: false,
+        licenseActive: @json($licenseActive ?? true),
         licenseBlocked: false,
         licenseBlockMessage: '',
         terminalSessionReady: false,
