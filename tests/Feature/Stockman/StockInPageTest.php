@@ -83,6 +83,42 @@ class StockInPageTest extends TestCase
             ->assertSessionHas('success');
     }
 
+    public function test_stock_in_store_works_when_inventory_batches_missing_supplier_name_column(): void
+    {
+        $branch = Branch::create(['name' => 'Main']);
+        $product = Product::create(['name' => 'Legacy Batch Product', 'sku' => 'TST-5', 'price' => 10, 'active' => true]);
+
+        $stockman = User::create([
+            'name' => 'Stockman',
+            'email' => 'stockin-legacy-batch@test.com',
+            'password' => bcrypt('password'),
+            'role' => 'stockman',
+            'branch_id' => $branch->id,
+        ]);
+
+        if (Schema::hasColumn('inventory_batches', 'supplier_name')) {
+            Schema::table('inventory_batches', function ($table) {
+                $table->dropColumn('supplier_name');
+            });
+        }
+
+        if (Schema::hasColumn('inventory_batches', 'received_at')) {
+            Schema::table('inventory_batches', function ($table) {
+                $table->dropColumn('received_at');
+            });
+        }
+
+        $this->actingAs($stockman)
+            ->post(route('stockman.stock-in.store'), [
+                'supplier_name' => 'Supplier',
+                'items' => [
+                    ['product_id' => $product->id, 'qty' => 3, 'cost' => 12],
+                ],
+            ])
+            ->assertRedirect(route('stockman.inventory'))
+            ->assertSessionHas('success');
+    }
+
     public function test_product_search_endpoint_returns_matches(): void
     {
         $branch = Branch::create(['name' => 'Main']);

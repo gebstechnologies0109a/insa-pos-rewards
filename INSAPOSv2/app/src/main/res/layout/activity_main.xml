@@ -9,7 +9,9 @@
     <WebView
         android:id="@+id/webView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:fitsSystemWindows="false"
+        android:layerType="hardware" />
 
     <!-- Offline overlay: hidden by default -->
     <LinearLayout
@@ -61,6 +63,21 @@
             android:indeterminateTint="@color/accent" />
 
     </LinearLayout>
+
+    <!-- POS Settings FAB — non-cashier pages only; cashier uses web header icons -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabSettings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="36dp"
+        android:layout_marginEnd="12dp"
+        android:contentDescription="POS Settings"
+        android:visibility="gone"
+        app:backgroundTint="@color/white"
+        app:fabSize="mini"
+        app:srcCompat="@drawable/ic_settings"
+        app:tint="@null" />
 
     <!-- Super Admin mode toggle (visible only for super_admin on device) -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
@@ -136,7 +153,7 @@
             android:id="@+id/versionText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="v3.0.0"
+            android:text="v3.0.15"
             android:textColor="@color/offline_text"
             android:textSize="10sp" />
 

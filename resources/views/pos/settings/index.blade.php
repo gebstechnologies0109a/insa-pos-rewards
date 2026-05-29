@@ -103,6 +103,111 @@
                 </div>
             </div>
 
+            <!-- PRINTER SETTINGS -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-lg font-semibold mb-1">Printer Settings</h2>
+                <p class="text-gray-500 text-sm mb-6">Configure thermal receipt paper width and font mode. Syncs to Android POS on next pull.</p>
+
+                <div class="space-y-5">
+                    <div class="flex items-center justify-between border-b pb-4">
+                        <div>
+                            <label for="printer_paper_size" class="font-medium text-gray-800">Paper Size</label>
+                            <p class="text-xs text-gray-400 mt-0.5">57mm (58mm thermal) or 87mm (80mm thermal)</p>
+                        </div>
+                        <select id="printer_paper_size" name="printer_paper_size"
+                                class="p-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="57mm" {{ ($printer['printer_paper_size']['value'] ?? '57mm') === '57mm' ? 'selected' : '' }}>57mm (32 cols / 384 dots)</option>
+                            <option value="87mm" {{ ($printer['printer_paper_size']['value'] ?? '') === '87mm' ? 'selected' : '' }}>87mm (48 cols / 576 dots)</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label for="printer_font_mode" class="font-medium text-gray-800">Font Mode</label>
+                            <p class="text-xs text-gray-400 mt-0.5">Fine print uses smaller font for more characters per line</p>
+                        </div>
+                        <select id="printer_font_mode" name="printer_font_mode"
+                                class="p-2 border rounded text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="paper_size" {{ ($printer['printer_font_mode']['value'] ?? 'paper_size') === 'paper_size' ? 'selected' : '' }}>Paper Size (standard font)</option>
+                            <option value="fine_print" {{ ($printer['printer_font_mode']['value'] ?? '') === 'fine_print' ? 'selected' : '' }}>Fine Print (condensed font)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CUSTOMER DISPLAY -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-lg font-semibold mb-1">Customer Display</h2>
+                <p class="text-gray-500 text-sm mb-6">Configure the secondary customer-facing screen on dual-display POS hardware. Settings sync to Android on next pull.</p>
+
+                <div class="space-y-5">
+                    <div class="flex items-center justify-between border-b pb-4">
+                        <div>
+                            <label class="font-medium text-gray-800">Enable Customer Display</label>
+                            <p class="text-xs text-gray-400 mt-0.5">Show cart and media on the external monitor</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="customer_display_enabled" class="sr-only peer"
+                                   {{ ($customerDisplay['customer_display.enabled']['value'] ?? '1') === '1' ? 'checked' : '' }}>
+                            <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+
+                    <div class="border-b pb-4">
+                        <label class="font-medium text-gray-800">Upload Photo</label>
+                        <p class="text-xs text-gray-400 mt-0.5 mb-2">JPG or PNG, max 5 MB</p>
+                        @if(!empty($customerDisplay['customer_display.photo']['value']))
+                        <p class="text-xs text-green-700 mb-2">Current: {{ $customerDisplay['customer_display.photo']['value'] }}</p>
+                        @endif
+                        <input type="file" id="cd_photo" accept="image/jpeg,image/png,.jpg,.jpeg,.png" class="text-sm">
+                        <button type="button" onclick="uploadCustomerDisplayPhoto()" class="mt-2 px-4 py-2 bg-gray-800 text-white text-sm rounded hover:bg-gray-900">Upload Photo</button>
+                    </div>
+
+                    <div class="border-b pb-4">
+                        <label class="font-medium text-gray-800">Upload Video</label>
+                        <p class="text-xs text-gray-400 mt-0.5 mb-2">MP4, max 50 MB</p>
+                        @if(!empty($customerDisplay['customer_display.video']['value']))
+                        <p class="text-xs text-green-700 mb-2">Current: {{ $customerDisplay['customer_display.video']['value'] }}</p>
+                        @endif
+                        <input type="file" id="cd_video" accept="video/mp4,.mp4" class="text-sm">
+                        <button type="button" onclick="uploadCustomerDisplayVideo()" class="mt-2 px-4 py-2 bg-gray-800 text-white text-sm rounded hover:bg-gray-900">Upload Video</button>
+                    </div>
+
+                    <div class="flex items-center justify-between border-b pb-4">
+                        <div>
+                            <label for="customer_display_orientation" class="font-medium text-gray-800">Layout Orientation</label>
+                        </div>
+                        <select id="customer_display_orientation" class="p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="auto" {{ ($customerDisplay['customer_display.orientation']['value'] ?? 'auto') === 'auto' ? 'selected' : '' }}>Auto</option>
+                            <option value="portrait" {{ ($customerDisplay['customer_display.orientation']['value'] ?? '') === 'portrait' ? 'selected' : '' }}>Portrait</option>
+                            <option value="landscape" {{ ($customerDisplay['customer_display.orientation']['value'] ?? '') === 'landscape' ? 'selected' : '' }}>Landscape</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center justify-between border-b pb-4">
+                        <div>
+                            <label for="customer_display_rotation_mode" class="font-medium text-gray-800">Media Rotation Mode</label>
+                        </div>
+                        <select id="customer_display_rotation_mode" class="p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="mix" {{ ($customerDisplay['customer_display.rotation_mode']['value'] ?? 'mix') === 'mix' ? 'selected' : '' }}>Mix (photos + videos)</option>
+                            <option value="loop_photos" {{ ($customerDisplay['customer_display.rotation_mode']['value'] ?? '') === 'loop_photos' ? 'selected' : '' }}>Loop photos</option>
+                            <option value="loop_videos" {{ ($customerDisplay['customer_display.rotation_mode']['value'] ?? '') === 'loop_videos' ? 'selected' : '' }}>Loop videos</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="font-medium text-gray-800">Cart Visibility</label>
+                            <p class="text-xs text-gray-400 mt-0.5">Show or hide the live cart panel</p>
+                        </div>
+                        <select id="customer_display_show_cart" class="p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="1" {{ ($customerDisplay['customer_display.show_cart']['value'] ?? '1') === '1' ? 'selected' : '' }}>Show cart</option>
+                            <option value="0" {{ ($customerDisplay['customer_display.show_cart']['value'] ?? '') === '0' ? 'selected' : '' }}>Hide cart</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
             <!-- HOW IT WORKS -->
             <div class="bg-white rounded-lg shadow p-6 mb-6">
                 <h2 class="text-lg font-semibold mb-1">How Rewards Work</h2>
@@ -155,6 +260,14 @@ function saveSettings(e) {
         settings.push({ key: input.name, value: input.value });
     });
 
+    settings.push({ key: 'printer_paper_size', value: document.getElementById('printer_paper_size').value });
+    settings.push({ key: 'printer_font_mode', value: document.getElementById('printer_font_mode').value });
+
+    settings.push({ key: 'customer_display.enabled', value: document.getElementById('customer_display_enabled').checked ? '1' : '0' });
+    settings.push({ key: 'customer_display.orientation', value: document.getElementById('customer_display_orientation').value });
+    settings.push({ key: 'customer_display.rotation_mode', value: document.getElementById('customer_display_rotation_mode').value });
+    settings.push({ key: 'customer_display.show_cart', value: document.getElementById('customer_display_show_cart').value });
+
     btn.disabled = true;
     btn.textContent = 'Saving...';
 
@@ -181,6 +294,64 @@ function saveSettings(e) {
     .finally(() => {
         btn.disabled = false;
         btn.textContent = 'Save All Settings';
+    });
+}
+
+function uploadCustomerDisplayPhoto() {
+    const input = document.getElementById('cd_photo');
+    const msg = document.getElementById('saveMessage');
+    if (!input.files || !input.files[0]) {
+        msg.className = 'mb-4 p-3 rounded text-sm bg-red-100 text-red-800';
+        msg.textContent = 'Select a photo first.';
+        msg.classList.remove('hidden');
+        return;
+    }
+    const fd = new FormData();
+    fd.append('photo', input.files[0]);
+    fetch('{{ route("pos.customer-display.photo") }}', {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+        body: fd,
+    })
+    .then(res => res.json())
+    .then(data => {
+        msg.className = 'mb-4 p-3 rounded text-sm bg-green-100 text-green-800';
+        msg.textContent = data.message || 'Photo uploaded.';
+        msg.classList.remove('hidden');
+    })
+    .catch(() => {
+        msg.className = 'mb-4 p-3 rounded text-sm bg-red-100 text-red-800';
+        msg.textContent = 'Photo upload failed.';
+        msg.classList.remove('hidden');
+    });
+}
+
+function uploadCustomerDisplayVideo() {
+    const input = document.getElementById('cd_video');
+    const msg = document.getElementById('saveMessage');
+    if (!input.files || !input.files[0]) {
+        msg.className = 'mb-4 p-3 rounded text-sm bg-red-100 text-red-800';
+        msg.textContent = 'Select a video first.';
+        msg.classList.remove('hidden');
+        return;
+    }
+    const fd = new FormData();
+    fd.append('video', input.files[0]);
+    fetch('{{ route("pos.customer-display.video") }}', {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+        body: fd,
+    })
+    .then(res => res.json())
+    .then(data => {
+        msg.className = 'mb-4 p-3 rounded text-sm bg-green-100 text-green-800';
+        msg.textContent = data.message || 'Video uploaded.';
+        msg.classList.remove('hidden');
+    })
+    .catch(() => {
+        msg.className = 'mb-4 p-3 rounded text-sm bg-red-100 text-red-800';
+        msg.textContent = 'Video upload failed.';
+        msg.classList.remove('hidden');
     });
 }
 </script>

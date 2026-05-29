@@ -13,13 +13,16 @@ import android.hardware.usb.UsbManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import com.insapos.v2.db.OfflineDatabase
+import com.insapos.v2.posengine.PosEngine
 import com.insapos.v2.printers.PrinterManager
 import com.insapos.v2.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class PosService : Service() {
@@ -35,13 +38,19 @@ class PosService : Service() {
 
     var printerManager: PrinterManager? = null
         private set
+    private val printerInitLock = Any()
+    private var printerInitScheduled = false
+    private val serverLock = Any()
     var localServer: PosLocalServer? = null
         private set
     var offlineDb: OfflineDatabase? = null
         private set
+    var posEngine: PosEngine? = null
+        private set
     var syncEngine: SyncEngine? = null
         private set
     var hidScannerDriver: HidScannerDriver? = null
+    var customerDisplayManager: CustomerDisplayManager? = null
     var onCameraScanRequested: (() -> Unit)? = null
     /** Request USB permission from the foreground activity (deviceId, callback). */
     var onRequestUsbPermission: ((deviceId: Int, onResult: (Boolean) -> Unit) -> Unit)? = null
@@ -52,7 +61,34 @@ class PosService : Service() {
         fun getService(): PosService = this@PosService
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        ensureOfflineReady()
+        ensureLocalServerStarted()
+        warmUpPrinterStack()
+        return START_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder {
+        ensureOfflineReady()
+        ensureLocalServerStarted()
+        warmUpPrinterStack()
+        return binder
+    }
+
+    /** SQLite + POS engine must exist before NanoHTTPD serves /local/sale. */
+    fun ensureOfflineReady() {
+        if (offlineDb != null && posEngine != null) return
+        synchronized(serverLock) {
+            if (offlineDb != null && posEngine != null) return
+            try {
+                offlineDb = OfflineDatabase(this)
+                posEngine = offlineDb?.let { PosEngine(it) }
+                Log.i(TAG, "Offline database and POS engine ready")
+            } catch (e: Exception) {
+                Log.e(TAG, "Offline DB init failed", e)
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -61,48 +97,124 @@ class PosService : Service() {
 
         registerUsbReceiver()
 
-        scope.launch {
-            try {
-                offlineDb = OfflineDatabase(this@PosService)
-                Log.i(TAG, "Offline database initialized")
-            } catch (e: Exception) {
-                Log.e(TAG, "Offline DB init failed", e)
-            }
+        ensureOfflineReady()
+        ensureLocalServerStarted()
+        warmUpPrinterStack()
+    }
 
-            try {
-                printerManager = PrinterManager(this@PosService)
-                printerManager?.initialize()
-                Log.i(TAG, "PrinterManager initialized")
+    /** Lazily creates [PrinterManager]. Print paths init on a worker thread so deferred startup does not block receipts. */
+    fun ensurePrinterManagerReady(): PrinterManager? {
+        printerManager?.let { return it }
+        synchronized(printerInitLock) {
+            printerManager?.let { return it }
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                if (!printerInitScheduled) {
+                    printerInitScheduled = true
+                    scope.launch { initPrinterBlocking() }
+                }
+                return printerManager
+            }
+            return initPrinterBlocking()
+        }
+    }
+
+    private fun initPrinterBlocking(): PrinterManager? {
+        synchronized(printerInitLock) {
+            printerManager?.let { return it }
+            return try {
+                PrinterManager(this).also {
+                    it.initialize()
+                    printerManager = it
+                    Log.i(TAG, "PrinterManager initialized")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "PrinterManager init failed", e)
+                null
             }
         }
     }
 
-    fun ensureLocalServerStarted() {
-        if (localServer != null) return
+    /** Blocks until [PrinterManager] exists or [timeoutMs] elapses. */
+    fun waitForPrinterManager(timeoutMs: Long = 10_000): PrinterManager? {
+        printerManager?.let { return it }
+        synchronized(printerInitLock) {
+            printerInitScheduled = true
+        }
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            initPrinterBlocking()?.let { return it }
+            try {
+                Thread.sleep(100)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                break
+            }
+        }
+        return printerManager
+    }
+
+    /** Initialize printer stack when settings/print is used (avoids slow BT scan on sale path). */
+    fun requestPrinterManager(): PrinterManager? {
+        synchronized(printerInitLock) {
+            printerInitScheduled = true
+            return initPrinterBlocking()
+        }
+    }
+
+    /** Start printer stack on service bind/start (not only after a fixed delay). */
+    private fun warmUpPrinterStack() {
+        synchronized(printerInitLock) {
+            printerInitScheduled = true
+        }
+        scope.launch { initPrinterBlocking() }
+        scheduleDeferredPrinterInit()
+    }
+
+    private fun scheduleDeferredPrinterInit() {
+        if (printerManager != null) return
         scope.launch {
-            synchronized(this@PosService) {
-                if (localServer != null) return@launch
-                try {
-                    localServer = PosLocalServer(
-                        context = this@PosService,
-                        getPrinterManager = { printerManager },
-                        getHidScanner = { hidScannerDriver },
-                        getDatabase = { offlineDb },
-                        getSyncEngine = { syncEngine },
-                        ioPreferences = ioPreferences,
-                        launchCameraScan = { onCameraScanRequested?.invoke() },
-                        requestUsbPermission = { deviceId, onResult ->
-                            onRequestUsbPermission?.invoke(deviceId, onResult)
-                                ?: onResult(false)
-                        }
-                    )
-                    localServer?.start()
-                    Log.i(TAG, "Local server started on port ${PosLocalServer.PORT}")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to start local server", e)
-                }
+            delay(3_000)
+            if (printerManager == null) initPrinterBlocking()
+        }
+    }
+
+    /** Cashier page is active — warm up printer stack early for faster first receipt. */
+    fun signalCashierPageReady() {
+        synchronized(printerInitLock) {
+            printerInitScheduled = true
+        }
+        scope.launch {
+            delay(500)
+            initPrinterBlocking()
+        }
+    }
+
+    fun ensureLocalServerStarted() {
+        synchronized(serverLock) {
+            if (localServer != null) return
+            val session = SessionManager(this)
+            try {
+                localServer = PosLocalServer(
+                    context = this,
+                    getPrinterManager = { requestPrinterManager() ?: waitForPrinterManager(12_000) },
+                    getHidScanner = { hidScannerDriver },
+                    getDatabase = { offlineDb },
+                    getPosEngine = { posEngine },
+                    getSyncEngine = { syncEngine },
+                    getSessionCashierId = { session.cashierId ?: 0 },
+                    getSessionBranchId = { session.branchId ?: 0 },
+                    ioPreferences = ioPreferences,
+                    launchCameraScan = { onCameraScanRequested?.invoke() },
+                    requestUsbPermission = { deviceId, onResult ->
+                        onRequestUsbPermission?.invoke(deviceId, onResult)
+                            ?: onResult(false)
+                    },
+                    getCustomerDisplayManager = { customerDisplayManager }
+                )
+                localServer?.start()
+                Log.i(TAG, "Local server started on port ${PosLocalServer.PORT}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start local server", e)
             }
         }
     }
@@ -123,6 +235,7 @@ class PosService : Service() {
                     UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
                         Log.i(TAG, "USB device attached — reconnecting printer")
                         scope.launch {
+                            ensurePrinterManagerReady()
                             printerManager?.scanUsbPrinters()?.forEach { /* refresh list */ }
                             printerManager?.reconnect()
                         }

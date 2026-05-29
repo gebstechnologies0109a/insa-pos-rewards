@@ -39,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
+            'audit' => \App\Http\Middleware\AuditLogger::class,
             'epayplus.product' => \App\Http\Middleware\EnsureEpayPlusProduct::class,
             'insa.product' => \App\Http\Middleware\EnsureInsaProduct::class,
         ]);

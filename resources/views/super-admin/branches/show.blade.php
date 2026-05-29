@@ -19,7 +19,7 @@
     <div class="bg-white rounded-xl shadow-sm border p-5">
         <div class="text-sm font-medium text-gray-500">POS Slots</div>
         <div class="text-2xl font-bold mt-1">{{ $branch->license?->pos_slots ?? 1 }}</div>
-        <div class="text-xs text-gray-400 mt-1">{{ $branch->license?->active ? 'Licensed' : 'Default' }}</div>
+        <div class="text-xs text-gray-400 mt-1">{{ ($branch->license && $branch->license->isCurrentlyActive()) ? 'Licensed' : 'Inactive / default' }}</div>
     </div>
     <div class="bg-white rounded-xl shadow-sm border p-5">
         <div class="text-sm font-medium text-gray-500">Open Shifts</div>

@@ -1,5 +1,18 @@
 ﻿# Laravel Forge deployment (INSA POS)
 
+## If deploy fails with `APP_PRODUCT must be 'insa' (found: '<unset>')`
+
+The Forge dashboard still runs the **pasted** deploy script **before** `git pull`. An old script (e.g. commit `be335e4`) exits when `.env` has no `APP_PRODUCT` even if branch `deploy/insa` is fixed.
+
+**Do both (two clicks + one paste):**
+
+1. **Forge → Site → Environment** — add **`APP_PRODUCT=insa`**. Under **Deployment**, enable **Make .env variables available to deployment script**, then save.
+2. **Forge → Site → Deployment** — set **Deploy branch** to **`deploy/insa`**. Replace **Deploy Script** with the full contents of **`scripts/forge-deploy-insa-standalone.sh`** from latest `deploy/insa` (one-box fence below), or paste **`scripts/forge-deploy-insa.sh`** (first executable line is `export APP_PRODUCT=insa`).
+
+Click **Deploy Now**. The log should show a recent commit on `deploy/insa`, not an old SHA like `0d3f086` / `be335e4`.
+
+---
+
 Production sites use **parted deploy branches** — see [DEPLOYMENT_SEPARATION.md](./DEPLOYMENT_SEPARATION.md).
 
 | Site | Branch | Script |
@@ -26,19 +39,13 @@ After the dashboard script is updated, future deploys pick up repo changes via `
 
 ## APP_PRODUCT (INSA sites)
 
-Recommended one-time setup:
+**Required (Forge → Site → Environment):** **`APP_PRODUCT=insa`**
 
-1. Forge → **Server** → **Site** → **Environment**
-2. Add or confirm:
+Also enable **Site → Deployment → Make .env variables available to deployment script** so the deploy hook sees that value before `git pull`.
 
-   ```env
-   APP_PRODUCT=insa
-   ```
+**Deploy script:** paste **`scripts/forge-deploy-insa-standalone.sh`** (self-contained) **or** **`scripts/forge-deploy-insa.sh`** from `deploy/insa`. Both start with `export APP_PRODUCT=insa` before any guard.
 
-3. Under **Site → Deployment**, enable **Make .env variables available to deployment script**.
-4. Save. Redeploy.
-
-`scripts/forge-deploy-insa.sh` also auto-sets `APP_PRODUCT=insa` when the value is missing or `auto` and the Forge site path/name looks like an INSA host (`insapos`, `insa-pos-rewards`, `insa-pos`, etc.). It **only fails** when `APP_PRODUCT` is set to a **wrong** product (e.g. `epayplus` on an INSA site).
+`scripts/forge-deploy-insa.sh` writes `APP_PRODUCT=insa` into `.env` when missing. It **only hard-fails** when `APP_PRODUCT` is explicitly **`epayplus`** on an INSA site. Unset / `auto` / wrong values on INSA-named hosts are corrected to `insa` instead of exiting with `<unset>`.
 
 For ePay Plus sites, use `APP_PRODUCT=epayplus` instead (see [DEPLOYMENT_PRODUCTS.md](./DEPLOYMENT_PRODUCTS.md)).
 
@@ -139,14 +146,10 @@ Then redeploy from Forge → Site → **Deploy Now**.
 
 Connect using one of:
 
-- **Forge dashboard:** Server → your server → **SSH** (opens a browser session as the `forge` user).
-- **Local terminal:** Use the SSH key registered on the server (e.g. `worker@forge.laravel.com` public key in Forge). Example:
+- **Forge dashboard:** Server → **DIYBizRewards** → **SSH** (browser session as `forge`).
+- **Local terminal:** `ssh forge@188.166.230.4` (requires your personal SSH key on the server, separate from the Forge worker key above).
 
-  ```bash
-  ssh forge@YOUR_SERVER_IP
-  ```
-
-Do not commit or share private keys. Only the public key belongs in Forge.
+Do not commit or share private keys. Only public keys belong in `authorized_keys`.
 
 ## Manual commands (if deploy fails)
 

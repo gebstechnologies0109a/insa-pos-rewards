@@ -45,7 +45,7 @@ class DashboardController extends Controller
         $recentSales = PosSale::where('branch_id', $branchId)
             ->orderByDesc('sold_at')
             ->limit(10)
-            ->get();
+            ->get(['sale_number', 'total', 'sold_at']);
 
         $todayShiftsQuery = PosShift::whereDate('opened_at', today());
         if ($branchId) {

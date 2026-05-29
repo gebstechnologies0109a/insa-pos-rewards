@@ -83,7 +83,7 @@ blockquote { border-left: 3px solid #0f3460; margin-left: 0; padding-left: 12px;
 </tr>
 <tr>
 <td><strong>Android apps</strong></td>
-<td>Full-featured <strong>INSAPOSv2</strong>, lightweight <strong>INSAPOSlight</strong>, hardware <strong>INSABuddy</strong></td>
+<td>Full-featured <strong>INSAPOS v3</strong>, lightweight <strong>INSAPOSlight</strong>, hardware <strong>INSABuddy</strong></td>
 </tr>
 <tr>
 <td><strong>Customer / loyalty hooks</strong></td>
@@ -164,7 +164,7 @@ blockquote { border-left: 3px solid #0f3460; margin-left: 0; padding-left: 12px;
 <li><strong>Cafe/Resto:</strong> Category grid; tap products to add to cart</li>
 <li><strong>Retail:</strong> Barcode scan or search; optional preview-before-add</li>
 <li><strong>Offline:</strong> Dexie/IndexedDB (<code>public/js/db.js</code>) caches products, customers, local transactions; <code>public/js/sync-engine.js</code> pings server and pushes/pulls on interval (~15s)</li>
-<li><strong>Hardware:</strong> <code>public/js/insabuddy.js</code> talks to INSABuddy (port <strong>18181</strong>) or INSAPOSv2 built-in server (port <strong>18182</strong>) for print, drawer, scan</li>
+<li><strong>Hardware:</strong> <code>public/js/insabuddy.js</code> talks to INSABuddy (port <strong>18181</strong>) or INSAPOS v3 built-in server (port <strong>18182</strong>) for print, drawer, scan</li>
 <li><strong>Shifts:</strong> Open/close via <code>/api/pos/shift/*</code></li>
 <li><strong>Payments:</strong> Cash, cards, GCash, Maya, PalawanPay, other (validated server-side on sync)</li>
 <li><strong>Readings:</strong> X/Z via <code>/api/pos/x-reading</code> and <code>/api/pos/z-reading</code></li>
@@ -238,7 +238,7 @@ blockquote { border-left: 3px solid #0f3460; margin-left: 0; padding-left: 12px;
 </thead>
 <tbody>
 <tr>
-<td><strong>INSAPOSv2</strong></td>
+<td><strong>INSAPOS v3</strong></td>
 <td><code>com.insapos.v2</code></td>
 <td><strong>2.2r</strong> (versionCode 18)</td>
 <td><strong>Recommended</strong> full POS terminal: WebView + foreground service, NanoHTTPD on <strong>18182</strong>, native offline DB, printer/scanner bridge, barcode events</td>
@@ -263,7 +263,7 @@ blockquote { border-left: 3px solid #0f3460; margin-left: 0; padding-left: 12px;
 </tr>
 </tbody>
 </table>
-<p><strong>Typical setup:</strong> Install <strong>INSAPOSv2</strong> on the cashier tablet <em>or</em> use <strong>INSAPOSlight</strong> + <strong>INSABuddy</strong> on separate devices if you split hardware from display.</p>
+<p><strong>Typical setup:</strong> Install <strong>INSAPOS v3</strong> on the cashier tablet <em>or</em> use <strong>INSAPOSlight</strong> + <strong>INSABuddy</strong> on separate devices if you split hardware from display.</p>
 <h3 id="inventory-system-batches-fefo-expiry">Inventory System (Batches, FEFO, Expiry)</h3>
 <ul>
 <li><strong><code>inventory_batches</code>:</strong> Per-branch lots with optional <code>batch_code</code>, <code>expiry_date</code>, <code>quantity</code>, <code>cost_price</code></li>
@@ -496,7 +496,7 @@ blockquote { border-left: 3px solid #0f3460; margin-left: 0; padding-left: 12px;
 │   ├── web.php                  # All UI routes + role middleware
 │   ├── console.php              # Scheduler: inventory:scan-expiry daily
 │   └── pos/api.php              # /api/pos/* JSON endpoints
-├── INSAPOSv2/                   # Full Android POS (v2.2r)
+├── INSAPOSv2/                   # Full Android POS — INSAPOS v3 (v3.0.x)
 ├── INSAPOSlight/                # Lite WebView (1.0a)
 ├── INSABuddy/                   # Hardware companion (1.3.0)
 ├── INSAPOS/                     # Legacy WebView (1.0.0)
@@ -804,11 +804,11 @@ blockquote { border-left: 3px solid #0f3460; margin-left: 0; padding-left: 12px;
 </tbody>
 </table>
 <h3 id="githubworkflowsbuild-androidyml"><code>.github/workflows/build-android.yml</code></h3>
-<p>On push to <code>main</code> (or manual dispatch), builds debug APKs for INSABuddy, INSAPOS, INSAPOSv2 (debug + release unsigned), and INSAPOSlight; uploads artifacts (90-day retention).</p>
+<p>On push to <code>main</code> (or manual dispatch), builds debug APKs for INSABuddy, INSAPOS, INSAPOS v3 (INSAPOSv2 module; debug + release unsigned), and INSAPOSlight; uploads artifacts (90-day retention).</p>
 <hr />
 <h2 id="part-e-integration-points-for-app-developers">Part E — Integration Points for App Developers</h2>
 <h3 id="webview-web-windowinsapos">WebView ↔ Web (<code>window.INSAPOS</code>)</h3>
-<p><strong>INSAPOSv2</strong> injects on page load (simplified):</p>
+<p><strong>INSAPOS v3</strong> injects on page load (simplified):</p>
 <pre><code class="language-javascript">window.INSAPOS_DEVICE = { /* device JSON */ };
 window.INSAPOS_SERVICE_PORT = 18182;
 window.INSAPOS_OFFLINE_CAPABLE = true;
@@ -877,7 +877,7 @@ window.INSAPOS_ONLINE = true|false;
 </tbody>
 </table>
 <p>CORS: <code>Access-Control-Allow-Origin: *</code> on responses.</p>
-<h3 id="insaposv2-local-server-port-18182">INSAPOSv2 Local Server (port 18182)</h3>
+<h3 id="insapos-v3-local-server-port-18182">INSAPOS v3 Local Server (port 18182)</h3>
 <p>Base: <code>http://127.0.0.1:18182</code> (bound to localhost only)</p>
 <table>
 <thead>
@@ -889,7 +889,7 @@ window.INSAPOS_ONLINE = true|false;
 <tbody>
 <tr>
 <td><code>/ping</code></td>
-<td><code>{ "ok": true, "app": "INSAPOSv2", "port": 18182 }</code></td>
+<td><code>{ "ok": true, "app": "INSA POS v3", "port": 18182 }</code></td>
 </tr>
 <tr>
 <td><code>/device/info</code></td>
@@ -1028,7 +1028,7 @@ window.INSAPOS_ONLINE = true|false;
 <li><strong>Trigger:</strong> Push to <code>main</code> affecting Android folders, or <code>workflow_dispatch</code></li>
 <li><strong>JDK:</strong> 17 (Temurin)</li>
 <li><strong>SDK:</strong> Android 35, build-tools 35.0.0</li>
-<li><strong>Artifacts:</strong> Debug APKs (all apps); INSAPOSv2 also uploads unsigned release APK</li>
+<li><strong>Artifacts:</strong> Debug APKs (all apps); INSAPOS v3 (INSAPOSv2 module) also uploads unsigned release APK</li>
 </ul>
 <h3 id="operational-commands">Operational Commands</h3>
 <pre><code class="language-bash"># Migrations

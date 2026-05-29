@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light">
+    <title>INSAPOS Customer Display</title>
+    <link rel="stylesheet" href="css/display.css">
+</head>
+<body class="orientation-auto">
+    <div id="app" class="cd-app">
+        <header class="cd-header">
+            <img id="brandLogo" class="cd-logo" src="img/logo.png" alt="INSAPOS">
+            <div class="cd-store" id="storeName">INSAPOS</div>
+        </header>
+
+        <section id="mediaPanel" class="cd-media">
+            <div id="mediaStage" class="cd-media-stage">
+                <img id="photoEl" class="cd-photo hidden" alt="">
+                <video id="videoEl" class="cd-video hidden" playsinline muted loop></video>
+                <div id="mediaPlaceholder" class="cd-media-placeholder">
+                    <p>Welcome</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="cartPanel" class="cd-cart">
+            <div class="cd-cart-header">
+                <h2>Your Order</h2>
+            </div>
+            <ul id="cartItems" class="cd-cart-items"></ul>
+            <div class="cd-cart-totals">
+                <div class="cd-row">
+                    <span>Subtotal</span>
+                    <span id="cartSubtotal">₱0.00</span>
+                </div>
+                <div class="cd-row cd-discount hidden" id="discountRow">
+                    <span>Discount</span>
+                    <span id="cartDiscount">₱0.00</span>
+                </div>
+                <div class="cd-row cd-total">
+                    <span>TOTAL</span>
+                    <span id="cartTotal">₱0.00</span>
+                </div>
+            </div>
+        </section>
+    </div>
+    <script src="js/display.js"></script>
+</body>
+</html>

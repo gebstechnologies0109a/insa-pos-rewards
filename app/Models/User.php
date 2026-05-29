@@ -101,6 +101,19 @@ class User extends Authenticatable
         return $this->hasRole(self::ROLE_SUPER_ADMIN, self::ROLE_OWNER, self::ROLE_ADMIN, self::ROLE_MANAGER);
     }
 
+    /**
+     * Whether shift / reading revenue totals may be shown on the cashier POS UI.
+     */
+    public function canViewShiftTotals(): bool
+    {
+        return $this->hasRole(
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_OWNER,
+            self::ROLE_ADMIN,
+            self::ROLE_MANAGER,
+        );
+    }
+
     public function canManageUsers(): bool
     {
         return $this->hasRole(self::ROLE_SUPER_ADMIN, self::ROLE_OWNER, self::ROLE_ADMIN);

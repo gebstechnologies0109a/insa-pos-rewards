@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\POS\Branch;
 use App\Models\POS\PosSale;
+use App\Models\POS\PosShift;
 use App\Models\POS\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -97,5 +98,38 @@ class BackofficeDashboardTest extends TestCase
             ->get(route('backoffice.dashboard'))
             ->assertOk()
             ->assertSee('onchange="this.closest', false);
+    }
+
+    public function test_dashboard_recent_sales_shows_sale_number_not_local_id(): void
+    {
+        $shift = PosShift::create([
+            'branch_id'    => $this->branch1->id,
+            'user_id'      => $this->admin->id,
+            'opening_cash' => 100,
+            'status'       => 'open',
+            'opened_at'    => now(),
+        ]);
+
+        PosSale::create([
+            'branch_id'        => $this->branch1->id,
+            'shift_id'         => $shift->id,
+            'cashier_id'       => $this->admin->id,
+            'sale_number'      => 'S20260528140256VWFS',
+            'local_id'         => 'local-uuid-should-not-show',
+            'payment_method'   => 'cash',
+            'subtotal'         => 50,
+            'discount_total'   => 0,
+            'total'            => 50,
+            'amount_tendered'  => 50,
+            'change_due'       => 0,
+            'status'           => 'completed',
+            'sold_at'          => now(),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('backoffice.dashboard', ['branch_id' => $this->branch1->id]))
+            ->assertOk()
+            ->assertSee('S20260528140256VWFS')
+            ->assertDontSee('local-uuid-should-not-show');
     }
 }

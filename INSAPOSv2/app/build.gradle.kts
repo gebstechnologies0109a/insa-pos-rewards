@@ -11,8 +11,8 @@ android {
         applicationId = "com.insapos.v2"
         minSdk = 23
         targetSdk = 35
-        versionCode = 24
-        versionName = "3.0.1"
+        versionCode = 69
+        versionName = "3.0.47"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
@@ -68,4 +68,6 @@ dependencies {
 
     // JSON
     implementation("org.json:json:20231013")
+
+    testImplementation("junit:junit:4.13.2")
 }

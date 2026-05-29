@@ -113,6 +113,11 @@ fi
 
 ${FORGE_COMPOSER:-composer} install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
+if [ -f package.json ] && command -v npm >/dev/null 2>&1; then
+  npm ci --no-audit --no-fund 2>/dev/null || npm install --no-audit --no-fund
+  npm run build
+fi
+
 php artisan migrate --force
 
 # Optional seeders (run manually when needed; do not enable on every deploy):

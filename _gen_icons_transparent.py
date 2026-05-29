@@ -1,4 +1,4 @@
-"""Generate transparent-background app icons for INSAPOSv2 from the logo."""
+"""Generate transparent-background app icons for INSAPOS v3 (INSAPOSv2 module) from the logo."""
 from PIL import Image
 import os, shutil
 

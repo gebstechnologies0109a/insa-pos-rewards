@@ -8,6 +8,9 @@ import android.content.SharedPreferences
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbManager
 import android.util.Log
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 class PrinterManager(private val context: Context) {
 
@@ -16,7 +19,14 @@ class PrinterManager(private val context: Context) {
         private const val PREFS_NAME = "insaposv2_printers"
         private const val KEY_PRINTER_TYPE = "printer_type"
         private const val KEY_PRINTER_ADDRESS = "printer_address"
+        private const val PRINT_TIMEOUT_MS = 8_000L
     }
+
+    private val printExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "insapos-print").apply { isDaemon = true }
+    }
+
+    private val spooler = PrintSpooler(context)
 
     var currentPrinter: Printer? = null
         private set
@@ -29,22 +39,176 @@ class PrinterManager(private val context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    private val initLock = Any()
+
     val onPrinterChanged: MutableList<(PrinterStatus?) -> Unit> = mutableListOf()
 
-    fun initialize() {
+    fun initialize() = synchronized(initLock) {
+        recoverSpooledJobs()
         restoreSavedPrinter()
+        if (shouldPreferBuiltInOnPosTerminal() &&
+            (currentPrinter == null || currentPrinter?.type == PrinterType.USB)
+        ) {
+            scanBuiltInPrinter()?.let { builtin ->
+                if (selectPrinter(builtin)) {
+                    Log.i(TAG, "POS terminal: using built-in printer (${builtin.name})")
+                    return@synchronized
+                }
+            }
+        }
+        if (currentPrinter == null) {
+            autoSelectBuiltInIfOnlyOption()
+        }
+        if (currentPrinter == null || currentPrinter?.isConnected() != true) {
+            autoSelectPreferredUsb()
+        }
+    }
+
+    /** On all-in-one POS hardware, persist built-in printer when it is the only option. */
+    private fun autoSelectBuiltInIfOnlyOption() {
+        val builtin = scanBuiltInPrinter() ?: return
+        val usbCount = scanUsbPrinters().size
+        if (usbCount > 0) return
+        if (shouldIncludeBluetooth()) return
+        if (selectPrinter(builtin)) {
+            Log.i(TAG, "Auto-selected built-in printer: ${builtin.name}")
+        }
+    }
+
+    /** Prefer USB micro-printer on Rockchip POS when built-in thermal is unavailable. */
+    private fun autoSelectPreferredUsb() {
+        val usb = scanUsbPrinters()
+        if (usb.isEmpty()) return
+        val preferred = usb.find { it.name.contains("micro", ignoreCase = true) }
+            ?: if (usb.size == 1) usb[0] else null
+        if (preferred != null && selectPrinter(preferred)) {
+            Log.i(TAG, "Auto-selected USB printer: ${preferred.name}")
+        }
     }
 
     fun getActivePrinter(): Printer? = currentPrinter
 
-    fun print(data: ByteArray): Boolean {
-        val printer = currentPrinter ?: return false
-        return printer.send(data)
+    fun print(data: ByteArray): Boolean = printRawReliable(data).first
+
+    fun pendingPrintJobs(): Int = spooler.pendingJobCount()
+
+    fun printQueueDirectory(): java.io.File = spooler.queueDirectory()
+
+    fun printText(text: String, layout: PrinterConfig.Layout = PrinterConfig.resolve(null, null)): Boolean {
+        return printTextReliable(text, layout).first
     }
 
-    fun printText(text: String): Boolean {
-        val printer = currentPrinter ?: return false
-        return printer.printText(text)
+    /**
+     * Print with per-printer timeout and automatic fallback (built-in → USB → saved).
+     */
+    fun printTextReliable(
+        text: String,
+        layout: PrinterConfig.Layout = PrinterConfig.resolve(null, null),
+    ): Pair<Boolean, String?> {
+        if (text.isBlank()) return false to "No print data"
+        val job = spooler.enqueueText(text, layout)
+            ?: return false to "Print queue full — try again in a moment"
+        return printSpooledReliable(job.file)
+    }
+
+    /** Spool raw ESC/POS bytes to cache, then print from disk (avoids holding payload in RAM). */
+    fun printRawReliable(data: ByteArray): Pair<Boolean, String?> {
+        if (data.isEmpty()) return false to "No print data"
+        val job = spooler.enqueueRaw(data)
+            ?: return false to "Print queue full — try again in a moment"
+        return printSpooledReliable(job.file)
+    }
+
+    private fun printSpooledReliable(file: java.io.File): Pair<Boolean, String?> {
+        var lastError = "No printer connected"
+        for (candidate in orderedPrintCandidates()) {
+            val (ok, err) = printOnCandidateFile(candidate, file)
+            if (ok) {
+                spooler.deleteJob(file)
+                if (candidate != currentPrinter) selectPrinter(candidate)
+                return true to null
+            }
+            lastError = err ?: lastError
+            Log.w(TAG, "Print fallback from ${candidate.name}: $lastError")
+        }
+        spooler.deleteJob(file)
+        return false to lastError
+    }
+
+    /** Retry jobs left on disk after a low-memory kill. */
+    private fun recoverSpooledJobs() {
+        val orphans = spooler.recoverableJobs()
+        if (orphans.isEmpty()) return
+        Log.i(TAG, "Recovering ${orphans.size} spooled print job(s)")
+        printExecutor.submit {
+            for (file in orphans) {
+                val (ok, err) = printSpooledReliable(file)
+                if (!ok) Log.w(TAG, "Recovered print job failed: $err")
+            }
+        }
+    }
+
+    private fun orderedPrintCandidates(): List<Printer> {
+        val out = mutableListOf<Printer>()
+        currentPrinter?.let { out.add(it) }
+        if (shouldPreferBuiltInOnPosTerminal()) {
+            scanBuiltInPrinter()?.let { if (it !in out) out.add(it) }
+            scanUsbPrinters().forEach { if (it !in out) out.add(it) }
+        } else {
+            scanUsbPrinters().forEach { if (it !in out) out.add(it) }
+            scanBuiltInPrinter()?.let { if (it !in out) out.add(it) }
+        }
+        return out.distinctBy { "${it.type}:${it.name}" }
+    }
+
+    private fun printOnCandidateFile(
+        printer: Printer,
+        spoolFile: java.io.File,
+    ): Pair<Boolean, String?> {
+        val task = java.util.concurrent.Callable {
+            executePrintOnCandidateFile(printer, spoolFile)
+        }
+        if (Thread.currentThread().name == "insapos-print") {
+            return task.call()
+        }
+        val future = printExecutor.submit(task)
+        return try {
+            future.get(PRINT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            future.cancel(true)
+            if (printer is UsbPrinter) printer.disconnect()
+            Log.w(TAG, "Print timed out on ${printer.name}")
+            false to "Print timed out on ${printer.name}"
+        } catch (e: Exception) {
+            false to (e.message ?: "Print error")
+        }
+    }
+
+    private fun executePrintOnCandidateFile(
+        printer: Printer,
+        spoolFile: java.io.File,
+    ): Pair<Boolean, String?> {
+        return try {
+            if (!printer.isConnected() && !printer.connect()) {
+                return false to "Could not connect to ${printer.name}"
+            }
+            val bytes = spoolFile.inputStream().use { it.readBytes() }
+            val ok = printer.printRaw(bytes)
+            if (ok) true to null else false to "Print failed on ${printer.name}"
+        } catch (e: Exception) {
+            Log.e(TAG, "Print on ${printer.name} failed", e)
+            if (printer is UsbPrinter) printer.disconnect()
+            false to (e.message ?: "Print error")
+        }
+    }
+
+    private fun shouldPreferBuiltInOnPosTerminal(): Boolean {
+        if (!BuiltInPrinter.isAvailable(context)) return false
+        val manufacturer = android.os.Build.MANUFACTURER.lowercase()
+        return manufacturer.contains("rockchip")
+            || manufacturer.contains("sunmi")
+            || manufacturer.contains("imin")
+            || manufacturer.contains("newland")
     }
 
     fun openDrawer() {
@@ -71,17 +235,28 @@ class PrinterManager(private val context: Context) {
     }
 
     fun selectByName(name: String): Boolean {
-        val all = scanAll()
-        val match = all.find { it.name == name } ?: return false
+        val all = scanAll(includeBluetooth = true)
+        val match = all.find { PrinterNames.namesMatch(it.name, name) } ?: return false
         return selectPrinter(match)
     }
 
     fun selectByTypeAndName(type: String, name: String): Boolean {
-        val all = scanAll()
-        val match = all.find { it.type == type && it.name == name }
-            ?: all.find { it.name == name }
-            ?: return false
+        val normType = PrinterType.normalize(type)
+        val all = scanForSelection(normType)
+        val match = findPrinterMatch(all, normType, name) ?: return false
         return selectPrinter(match)
+    }
+
+    private fun findPrinterMatch(all: List<Printer>, normType: String, name: String): Printer? {
+        if (name.isBlank()) return null
+        if (normType.isNotBlank()) {
+            all.find { it.type == normType && PrinterNames.namesMatch(it.name, name) }?.let { return it }
+            if (PrinterType.isBuiltin(normType)) {
+                all.find { it.type == PrinterType.BUILTIN && PrinterNames.namesMatch(it.name, name) }
+                    ?.let { return it }
+            }
+        }
+        return all.find { PrinterNames.namesMatch(it.name, name) }
     }
 
     /**
@@ -89,12 +264,9 @@ class PrinterManager(private val context: Context) {
      */
     fun selectByTypeAndNameWithMessage(type: String, name: String): Pair<Boolean, String?> {
         if (name.isBlank()) return false to "Printer name required"
-        val all = scanAll()
-        val match = if (type.isNotBlank()) {
-            all.find { it.type == type && it.name == name } ?: all.find { it.name == name }
-        } else {
-            all.find { it.name == name }
-        }
+        val normType = PrinterType.normalize(type)
+        val all = scanForSelection(normType)
+        val match = findPrinterMatch(all, normType, name)
         if (match == null) {
             return false to "Printer not found: $name"
         }
@@ -103,8 +275,9 @@ class PrinterManager(private val context: Context) {
         }
         if (!selectPrinter(match)) {
             val hint = when (match.type) {
-                "usb" -> "Grant USB permission when prompted, then try again"
-                "bluetooth" -> "Ensure the printer is paired, powered on, and in range"
+                PrinterType.USB -> "Grant USB permission when prompted, then try again"
+                PrinterType.BLUETOOTH -> "Ensure the printer is paired, powered on, and in range"
+                PrinterType.BUILTIN -> "Built-in printer warming up — wait a moment and try again"
                 else -> "Check that the printer is available"
             }
             return false to "Could not connect to ${match.name}. $hint"
@@ -116,8 +289,9 @@ class PrinterManager(private val context: Context) {
      * Ensures a connected printer for printing; optionally re-selects from request body.
      */
     fun ensureActivePrinter(type: String?, name: String?): Pair<Printer?, String?> {
-        if (!type.isNullOrBlank() && !name.isNullOrBlank()) {
-            val (ok, err) = selectByTypeAndNameWithMessage(type, name)
+        val normType = PrinterType.normalize(type)
+        if (normType.isNotBlank() && !name.isNullOrBlank()) {
+            val (ok, err) = selectByTypeAndNameWithMessage(normType, name)
             if (!ok) return null to err
             return currentPrinter to null
         }
@@ -134,13 +308,17 @@ class PrinterManager(private val context: Context) {
         if (!savedName.isNullOrBlank()) {
             val (ok, err) = selectByTypeAndNameWithMessage(savedType ?: "", savedName)
             if (ok) return currentPrinter to null
-            return null to (err ?: "Could not reconnect to $savedName")
+            autoSelectPreferredUsb()
+            if (currentPrinter?.isConnected() == true) return currentPrinter to null
+            return null to (err ?: "Could not reconnect to ${PrinterNames.sanitize(savedName)}")
         }
+        autoSelectPreferredUsb()
+        currentPrinter?.takeIf { it.isConnected() }?.let { return it to null }
         return null to "No printer connected — select a printer first"
     }
 
     fun findUsbPrinterByName(name: String): UsbPrinter? {
-        return scanUsbPrinters().find { it.name == name }
+        return scanUsbPrinters().find { PrinterNames.namesMatch(it.name, name) }
     }
 
     @SuppressLint("MissingPermission")
@@ -149,7 +327,11 @@ class PrinterManager(private val context: Context) {
         try {
             val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
             val adapter = btManager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
-            if (adapter == null || !adapter.isEnabled) return printers
+            if (adapter == null) return printers
+            if (!adapter.isEnabled) {
+                Log.w(TAG, "Bluetooth disabled — skipping printer scan")
+                return printers
+            }
 
             adapter.bondedDevices?.forEach { device ->
                 printers.add(BluetoothPrinter(device))
@@ -182,12 +364,40 @@ class PrinterManager(private val context: Context) {
         return if (BuiltInPrinter.isAvailable(context)) BuiltInPrinter(context) else null
     }
 
-    fun scanAll(): List<Printer> {
+    fun scanAll(includeBluetooth: Boolean? = null): List<Printer> {
+        val includeBt = includeBluetooth ?: shouldIncludeBluetooth()
         val all = mutableListOf<Printer>()
         scanBuiltInPrinter()?.let { all.add(it) }
-        all.addAll(scanAllBluetoothDevices())
         all.addAll(scanUsbPrinters())
+        if (includeBt) {
+            all.addAll(scanAllBluetoothDevices())
+        }
+        Log.d(TAG, "scanAll includeBt=$includeBt → ${all.size} printer(s)")
         return all
+    }
+
+    /** Full discovery for printer settings UI (bonded BT + USB + built-in). */
+    fun scanForUi(): List<Printer> = scanAll(includeBluetooth = true)
+
+    private fun scanForSelection(type: String): List<Printer> {
+        val savedType = prefs.getString(KEY_PRINTER_TYPE, null)
+        val includeBt = PrinterScanPolicy.includeBluetoothForSelection(
+            type,
+            savedType,
+            lastSelectedType,
+            currentPrinter?.type
+        )
+        return scanAll(includeBluetooth = includeBt)
+    }
+
+    private fun shouldIncludeBluetooth(forType: String? = null): Boolean {
+        val savedType = prefs.getString(KEY_PRINTER_TYPE, null)
+        return PrinterScanPolicy.shouldIncludeBluetooth(
+            forType,
+            savedType,
+            lastSelectedType,
+            currentPrinter?.type
+        )
     }
 
     fun reconnect(): Boolean {
@@ -201,9 +411,10 @@ class PrinterManager(private val context: Context) {
     }
 
     private fun savePrinter(printer: Printer) {
+        val cleanName = PrinterNames.sanitize(printer.name)
         prefs.edit()
             .putString(KEY_PRINTER_TYPE, printer.type)
-            .putString(KEY_PRINTER_ADDRESS, printer.name)
+            .putString(KEY_PRINTER_ADDRESS, cleanName)
             .apply()
     }
 
@@ -213,18 +424,21 @@ class PrinterManager(private val context: Context) {
         val savedAddress = prefs.getString(KEY_PRINTER_ADDRESS, null) ?: return
 
         try {
-            when (savedType) {
-                "bluetooth" -> {
-                    scanAllBluetoothDevices().find { it.name == savedAddress }?.let {
-                        if (it.connect()) {
-                            currentPrinter = it
-                            lastSelectedType = it.type
-                            lastSelectedName = it.name
-                            notifyChange(it.getStatus())
+            when (PrinterType.normalize(savedType)) {
+                PrinterType.BLUETOOTH -> {
+                    scanAll(includeBluetooth = true)
+                        .filterIsInstance<BluetoothPrinter>()
+                        .find { it.name == savedAddress }
+                        ?.let {
+                            if (it.connect()) {
+                                currentPrinter = it
+                                lastSelectedType = it.type
+                                lastSelectedName = it.name
+                                notifyChange(it.getStatus())
+                            }
                         }
-                    }
                 }
-                "network" -> {
+                PrinterType.NETWORK -> {
                     val parts = savedAddress.split(":")
                     if (parts.size == 2) {
                         val printer = NetworkPrinter(parts[0], parts[1].toIntOrNull() ?: 9100)
@@ -236,7 +450,7 @@ class PrinterManager(private val context: Context) {
                         }
                     }
                 }
-                "builtin" -> {
+                PrinterType.BUILTIN -> {
                     scanBuiltInPrinter()?.let {
                         if (it.connect()) {
                             currentPrinter = it
@@ -246,8 +460,20 @@ class PrinterManager(private val context: Context) {
                         }
                     }
                 }
-                "usb" -> {
-                    scanUsbPrinters().find { it.name == savedAddress }?.let {
+                PrinterType.USB -> {
+                    if (shouldPreferBuiltInOnPosTerminal()) {
+                        scanBuiltInPrinter()?.let { builtin ->
+                            if (builtin.connect()) {
+                                currentPrinter = builtin
+                                lastSelectedType = builtin.type
+                                lastSelectedName = builtin.name
+                                notifyChange(builtin.getStatus())
+                                Log.i(TAG, "Restored built-in instead of saved USB on POS terminal")
+                                return
+                            }
+                        }
+                    }
+                    scanUsbPrinters().find { PrinterNames.namesMatch(it.name, savedAddress) }?.let {
                         if (it.connect()) {
                             currentPrinter = it
                             lastSelectedType = it.type

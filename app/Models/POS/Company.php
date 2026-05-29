@@ -27,6 +27,11 @@ class Company extends Model
         return $this->hasManyThrough(Device::class, Branch::class);
     }
 
+    public function terminalSessions(): HasManyThrough
+    {
+        return $this->hasManyThrough(PosTerminalSession::class, Branch::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;

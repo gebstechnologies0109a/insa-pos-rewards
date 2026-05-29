@@ -16,6 +16,10 @@ class SessionManager(context: Context) {
         private const val KEY_FIRST_LAUNCH = "first_launch"
         private const val KEY_BRANCH_ID = "branch_id"
         private const val KEY_TERMINAL_SESSION_ID = "terminal_session_id"
+        private const val KEY_CASHIER_ID = "cashier_id"
+        private const val KEY_LICENSE_VALID_UNTIL = "license_valid_until"
+        /** When true, system nav/status bars stay reachable so staff can leave INSAPOS. */
+        private const val KEY_ALLOW_MINIMIZE = "insapos_allow_minimize"
     }
 
     var lastUrl: String?
@@ -51,9 +55,45 @@ class SessionManager(context: Context) {
         get() = prefs.getString(KEY_TERMINAL_SESSION_ID, null)
         set(value) = prefs.edit().putString(KEY_TERMINAL_SESSION_ID, value).apply()
 
+    var cashierId: Int?
+        get() {
+            val v = prefs.getInt(KEY_CASHIER_ID, -1)
+            return if (v > 0) v else null
+        }
+        set(value) = prefs.edit().apply {
+            if (value != null && value > 0) putInt(KEY_CASHIER_ID, value) else remove(KEY_CASHIER_ID)
+        }.apply()
+
+    var licenseValidUntil: Long
+        get() = prefs.getLong(KEY_LICENSE_VALID_UNTIL, 0L)
+        set(value) = prefs.edit().putLong(KEY_LICENSE_VALID_UNTIL, value).apply()
+
+    /** Lets users swipe home/recents; when false (default), sticky immersive kiosk is enforced. */
+    var allowMinimize: Boolean
+        get() = prefs.getBoolean(KEY_ALLOW_MINIMIZE, false)
+        set(value) = prefs.edit().putBoolean(KEY_ALLOW_MINIMIZE, value).apply()
+
+    fun isLicenseCachedValid(): Boolean {
+        val until = licenseValidUntil
+        return until > System.currentTimeMillis()
+    }
+
     fun getBaseUrl(): String {
         val protocol = if (useHttp) "http" else "https"
-        return "$protocol://$serverDomain"
+        val host = lastUrl?.let { url ->
+            Regex("^https?://([^/]+)").find(url)?.groupValues?.getOrNull(1)
+        }?.takeIf { it.isNotBlank() } ?: serverDomain
+        return "$protocol://$host"
+    }
+
+    /** After HTTPS sign-in, keep secure cookies — do not derive protocol from a stale http lastUrl. */
+    fun lockHttps() {
+        useHttp = false
+        lastUrl?.let { url ->
+            if (url.startsWith("http://")) {
+                lastUrl = "https://" + url.removePrefix("http://")
+            }
+        }
     }
 
     fun getPosUrl(): String = "${getBaseUrl()}/pos/cashier"

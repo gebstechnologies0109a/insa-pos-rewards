@@ -8,11 +8,17 @@ case "${_ctx}" in
   *insapos*|*insa-pos-rewards*|*insa_pos_rewards*|*insa-pos*|*insa*)
     export APP_PRODUCT=insa
     ;;
+  *epayplus*)
+    export APP_PRODUCT=epayplus
+    ;;
 esac
 if [ -z "${APP_PRODUCT:-}" ] || [ "${APP_PRODUCT}" = "auto" ]; then
   case "${_ctx}" in
     *insapos*|*insa-pos-rewards*|*insa_pos_rewards*|*insa-pos*|*insa*)
       export APP_PRODUCT=insa
+      ;;
+    *epayplus*)
+      export APP_PRODUCT=epayplus
       ;;
   esac
 fi

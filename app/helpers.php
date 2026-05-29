@@ -53,6 +53,38 @@ if (! function_exists('is_insa_android_app')) {
     }
 }
 
+if (! function_exists('vite_manifest_has')) {
+    /**
+     * True when every Vite entry exists in the production manifest (or Vite dev server is running).
+     *
+     * @param  list<string>  $entries
+     */
+    function vite_manifest_has(array $entries): bool
+    {
+        if (file_exists(public_path('hot'))) {
+            return true;
+        }
+
+        $manifestPath = public_path('build/manifest.json');
+        if (! file_exists($manifestPath)) {
+            return false;
+        }
+
+        $manifest = json_decode((string) file_get_contents($manifestPath), true);
+        if (! is_array($manifest)) {
+            return false;
+        }
+
+        foreach ($entries as $entry) {
+            if (! isset($manifest[$entry])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
+
 if (! function_exists('login_error_message')) {
     /**
      * Human-readable login page message for ?error= codes (WebView-friendly).
@@ -64,6 +96,7 @@ if (! function_exists('login_error_message')) {
         }
 
         return match ($code) {
+            'auth_required' => 'Please sign in to continue.',
             'session_required', 'session_expired', 'session_lost' => 'Your session was not kept after sign-in. This often happens when the app switches between HTTP and HTTPS. Please sign in again. If it keeps happening, ask your administrator to use a stable HTTPS URL.',
             'forbidden_role' => 'This account is not allowed to open the POS cashier screen.',
             'license_inactive' => 'Your branch license is inactive. Contact your administrator before using POS.',
@@ -77,7 +110,7 @@ if (! function_exists('login_redirect_params')) {
     /**
      * @return array<string, string>
      */
-    function login_redirect_params(?Request $request, string $error = 'session_required'): array
+    function login_redirect_params(?Request $request, string $error = 'auth_required'): array
     {
         if ($request !== null && is_insa_android_app($request)) {
             return ['error' => $error];

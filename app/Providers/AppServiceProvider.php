@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\POS\PosSale;
+use App\Observers\PosSaleObserver;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -15,6 +17,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        PosSale::observe(PosSaleObserver::class);
+
         Paginator::useBootstrapFive();
 
         $this->loadMigrationsFrom(database_path('migrations/epayplus'));

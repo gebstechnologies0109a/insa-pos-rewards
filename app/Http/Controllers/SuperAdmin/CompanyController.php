@@ -37,6 +37,16 @@ class CompanyController extends Controller
             ->with('success', 'Company created successfully.');
     }
 
+    public function show(Company $company): View
+    {
+        $company->load([
+            'branches' => fn ($q) => $q->withCount(['users', 'devices', 'openShifts'])->with('license'),
+            'branches.devices',
+        ]);
+
+        return view('super-admin.companies.show', compact('company'));
+    }
+
     public function edit(Company $company): View
     {
         return view('super-admin.companies.edit', compact('company'));

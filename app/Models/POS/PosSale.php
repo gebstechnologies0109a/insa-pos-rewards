@@ -26,12 +26,14 @@ class PosSale extends Model
         'status',
         'is_rebated',
         'sold_at',
+        'synced_at',
     ];
 
     protected function casts(): array
     {
         return [
             'sold_at'    => 'datetime',
+            'synced_at'  => 'datetime',
             'is_rebated' => 'boolean',
         ];
     }

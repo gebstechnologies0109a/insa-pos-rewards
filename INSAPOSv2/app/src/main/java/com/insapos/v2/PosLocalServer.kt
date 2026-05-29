@@ -3,7 +3,11 @@ package com.insapos.v2
 import android.content.Context
 import android.util.Log
 import com.insapos.v2.db.OfflineDatabase
+import com.insapos.v2.posengine.PosEngine
+import com.insapos.v2.printers.PrinterConfig
 import com.insapos.v2.printers.PrinterManager
+import com.insapos.v2.printers.PrinterSettings
+import com.insapos.v2.printers.PrinterType
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import com.insapos.v2.sync.SyncEngine
@@ -16,19 +20,30 @@ class PosLocalServer(
     private val getPrinterManager: () -> PrinterManager?,
     private val getHidScanner: () -> HidScannerDriver?,
     private val getDatabase: () -> OfflineDatabase?,
+    private val getPosEngine: () -> PosEngine?,
     private val getSyncEngine: () -> SyncEngine?,
+    private val getSessionCashierId: () -> Int = { 0 },
+    private val getSessionBranchId: () -> Int = { 0 },
     private val ioPreferences: IoPreferencesStore,
     private val launchCameraScan: (() -> Unit)? = null,
-    private val requestUsbPermission: ((deviceId: Int, onResult: (Boolean) -> Unit) -> Unit)? = null
+    private val requestUsbPermission: ((deviceId: Int, onResult: (Boolean) -> Unit) -> Unit)? = null,
+    private val getCustomerDisplayManager: () -> CustomerDisplayManager? = { null }
 ) : NanoHTTPD("127.0.0.1", PORT) {
 
     companion object {
         const val PORT = 18182
         private const val TAG = "INSAPOSv3Server"
+        private const val IO_SCAN_CACHE_MS = 30_000L
+        private const val OFFLINE_STATS_CACHE_MS = 5_000L
     }
 
     @Volatile
     var lastCameraScanResult: String? = null
+
+    private var cachedIoScan: JSONObject? = null
+    private var cachedIoScanAt: Long = 0
+    private var cachedOfflineStats: JSONObject? = null
+    private var cachedOfflineStatsAt: Long = 0
 
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri.trimEnd('/')
@@ -50,15 +65,23 @@ class PosLocalServer(
                 uri == "/print" && method == Method.POST -> handlePrint(session)
                 uri == "/drawer/open" && method == Method.POST -> handleDrawerOpen()
                 uri == "/printer/status" -> handlePrinterStatus()
-                uri == "/printer/list" -> handlePrinterList()
+                uri == "/printer/list" -> handlePrinterList(session)
                 uri == "/printer/select" && method == Method.POST -> handlePrinterSelect(session)
                 uri == "/printer/test" && method == Method.POST -> handlePrinterTest(session)
+                uri == "/printer/settings" && method == Method.GET -> handlePrinterSettingsGet()
+                uri == "/printer/settings" && method == Method.POST -> handlePrinterSettingsSave(session)
                 uri == "/scan" -> handleCameraScan()
                 uri == "/scan/hid" -> handleHidScan()
                 uri == "/device/io/scan" -> handleIoScan()
                 uri == "/device/io/status" -> handleIoStatus()
                 uri == "/device/io/save" && method == Method.POST -> handleIoSave(session)
                 uri == "/device/io/test" && method == Method.POST -> handleIoTest(session)
+                uri == "/customer-display/status" -> handleCustomerDisplayStatus()
+                uri == "/customer-display/update" && method == Method.POST -> handleCustomerDisplayUpdate(session)
+                uri == "/customer-display/test" && method == Method.POST -> handleCustomerDisplayTest()
+                uri == "/customer-display/settings" && method == Method.GET -> handleCustomerDisplaySettingsGet()
+                uri == "/customer-display/settings" && method == Method.POST -> handleCustomerDisplaySettingsSave(session)
+                uri == "/device/hardware/scan" -> handleHardwareScan()
                 // Offline data endpoints
                 uri == "/offline/products" -> handleGetProducts(session)
                 uri == "/offline/products/barcode" -> handleProductByBarcode(session)
@@ -68,50 +91,105 @@ class PosLocalServer(
                 uri == "/offline/stats" -> handleOfflineStats()
                 uri == "/offline/sync/status" -> handleSyncStatus()
                 uri == "/offline/sync/now" && method == Method.POST -> handleSyncNow()
+                uri == "/offline/catalog/refresh" && method == Method.POST -> handleCatalogRefresh()
+                // Local POS engine endpoints
+                uri == "/local/products" -> handleLocalProducts(session)
+                uri == "/local/categories" -> handleLocalCategories()
+                uri == "/local/inventory" -> handleLocalInventory()
+                uri == "/local/customers" -> handleLocalCustomers()
+                uri == "/local/sale" && method == Method.POST -> handleLocalSale(session)
+                uri == "/local/shift/open" && method == Method.POST -> handleLocalShiftOpen(session)
+                uri == "/local/shift/close" && method == Method.POST -> handleLocalShiftClose(session)
+                uri == "/local/shift/status" -> handleLocalShiftStatus()
+                uri == "/local/receipt" -> handleLocalReceipt(session)
+                uri == "/local/sync/status" -> handleLocalSyncStatus()
+                uri == "/local/sync/now" && method == Method.POST -> handleSyncNow()
                 else -> json404("Unknown endpoint: $uri")
             }
             cors(resp, headers)
-        } catch (e: Exception) {
-            Log.e(TAG, "Server error on $uri", e)
-            cors(jsonError(e.message ?: "Unknown error"), headers)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Server error on $uri", t)
+            cors(jsonError(t.message ?: "Unknown error"), headers)
         }
     }
 
     private fun handlePing(): Response {
-        return jsonOk(JSONObject().put("ok", true).put("app", "INSAPOSv3").put("port", PORT))
+        return jsonOk(JSONObject().put("ok", true).put("app", "INSA POS v3").put("port", PORT))
     }
 
     private fun handleDeviceInfo(): Response {
         return jsonOk(DeviceInfo.toJson(context).put("ok", true))
     }
 
+    private fun requirePrinterManager(): PrinterManager? = getPrinterManager()
+
     private fun handlePrint(session: IHTTPSession): Response {
         val body = readBody(session)
-        val pm = getPrinterManager()
-            ?: return jsonError("Printer service not ready")
+        val pm = requirePrinterManager() ?: return jsonError(
+            "Printer service initializing — please wait a moment and try again",
+            reason = "initializing"
+        )
 
-        val printer = pm.getActivePrinter()
-            ?: return jsonError("No printer connected")
-
-        val json = JSONObject(body)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
         val data = json.optString("data", "")
+        val text = json.optString("text", "")
         val raw = json.optJSONArray("raw")
+        val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
+        val type = PrinterType.normalize(
+            json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        )
+
+        val usbGranted = ensureUsbPermissionIfNeeded(
+            pm,
+            type.ifBlank { pm.lastSelectedType },
+            name.ifBlank { pm.lastSelectedName }
+        )
+        if (usbGranted == false) {
+            return jsonError("USB permission denied — allow access when prompted, then try again")
+        }
+
+        val (printer, ensureErr) = pm.ensureActivePrinter(
+            type.ifBlank { null },
+            name.ifBlank { null }
+        )
+        if (printer == null) {
+            return jsonError(ensureErr ?: "No printer connected — select a printer first")
+        }
+
+        if (!printer.isConnected() && !printer.connect()) {
+            return jsonError("Printer disconnected — could not reconnect to ${printer.name}")
+        }
 
         if (raw != null) {
             val bytes = ByteArray(raw.length()) { raw.getInt(it).toByte() }
-            printer.printRaw(bytes)
-        } else if (data.isNotBlank()) {
-            printer.printText(data)
-        } else {
-            return jsonError("No print data provided")
+            val (ok, printErr) = pm.printRawReliable(bytes)
+            return if (ok) {
+                jsonOk(JSONObject().put("ok", true).put("printed", true))
+            } else {
+                jsonError(printErr ?: "Print failed on ${printer.name} — check paper, power, and connection")
+            }
         }
 
-        return jsonOk(JSONObject().put("ok", true).put("printed", true))
+        val payload = when {
+            text.isNotBlank() -> text
+            data.isNotBlank() -> data
+            else -> return jsonError("No print data provided")
+        }
+
+        val layout = printerSettings().layout()
+        val (ok, printErr) = pm.printTextReliable(payload, layout)
+        return if (ok) {
+            jsonOk(JSONObject().put("ok", true).put("printed", true))
+        } else {
+            jsonError(printErr ?: "Print failed — check paper, power, and connection")
+        }
     }
 
     private fun handleDrawerOpen(): Response {
-        val pm = getPrinterManager()
-            ?: return jsonError("Printer service not ready")
+        val pm = requirePrinterManager() ?: return jsonError(
+            "Printer service initializing — please wait a moment and try again",
+            reason = "initializing"
+        )
         val printer = pm.getActivePrinter()
             ?: return jsonError("No printer connected")
         printer.openDrawer()
@@ -119,32 +197,49 @@ class PosLocalServer(
     }
 
     private fun handlePrinterStatus(): Response {
-        val pm = getPrinterManager() ?: return jsonOk(
-            JSONObject().put("ok", true).put("connected", false).put("reason", "Service starting")
-        )
+        val pm = requirePrinterManager()
+        if (pm == null) {
+            return jsonOk(
+                JSONObject().put("ok", true).put("connected", false).put("reason", "initializing")
+            )
+        }
         val p = pm.getActivePrinter()
+        val live = p?.isConnected() == true
         return jsonOk(JSONObject().apply {
             put("ok", true)
-            put("connected", p != null)
-            put("name", p?.name ?: JSONObject.NULL)
+            put("connected", live)
+            put("name", p?.name?.let { com.insapos.v2.printers.PrinterNames.sanitize(it) } ?: JSONObject.NULL)
             put("type", p?.type ?: JSONObject.NULL)
         })
     }
 
-    private fun handlePrinterList(): Response {
-        val pm = getPrinterManager() ?: return jsonOk(
-            JSONObject().put("ok", true).put("printers", JSONArray())
+    private fun handlePrinterList(session: IHTTPSession): Response {
+        parseQueryParameters(session)
+        val pm = requirePrinterManager()
+        if (pm == null) {
+            return jsonOk(
+                JSONObject().put("ok", true).put("printers", JSONArray())
+                    .put("reason", "initializing")
+            )
+        }
+        val params = session.parms ?: emptyMap()
+        val includeBt = com.insapos.v2.printers.PrinterScanPolicy.includeBluetoothForDiscovery(
+            params["bluetooth"]
         )
-        val list = pm.scanAll()
+        val list = if (includeBt) pm.scanForUi() else pm.scanAll(includeBluetooth = false)
+        Log.i(TAG, "GET /printer/list → ${list.size} printer(s) (bluetooth=$includeBt)")
         val arr = JSONArray()
+        val active = pm.getActivePrinter()
         for (p in list) {
+            val isActive = active != null && p.type == active.type &&
+                com.insapos.v2.printers.PrinterNames.namesMatch(p.name, active.name)
             arr.put(JSONObject().apply {
-                put("name", p.name)
+                put("name", com.insapos.v2.printers.PrinterNames.sanitize(p.name))
                 put("type", p.type)
-                put("connected", p.isConnected())
+                put("connected", p.isConnected() || (isActive && active?.isConnected() == true))
             })
         }
-        return jsonOk(JSONObject().put("ok", true).put("printers", arr))
+        return jsonOk(JSONObject().put("ok", true).put("printers", arr).put("count", list.size))
     }
 
     private fun handlePrinterSelect(session: IHTTPSession): Response {
@@ -153,8 +248,13 @@ class PosLocalServer(
         val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
         if (name.isBlank()) return jsonError("Printer name required")
 
-        val pm = getPrinterManager() ?: return jsonError("Printer service not ready")
-        val type = json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        val pm = requirePrinterManager() ?: return jsonError(
+            "Printer service initializing — please wait a moment and try again",
+            reason = "initializing"
+        )
+        val type = PrinterType.normalize(
+            json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        )
 
         val usbGranted = ensureUsbPermissionIfNeeded(pm, type, name)
         if (usbGranted == false) {
@@ -178,12 +278,17 @@ class PosLocalServer(
     }
 
     private fun handlePrinterTest(session: IHTTPSession): Response {
-        val pm = getPrinterManager() ?: return jsonError("Printer service not ready")
+        val pm = requirePrinterManager() ?: return jsonError(
+            "Printer service initializing — please wait a moment and try again",
+            reason = "initializing"
+        )
 
         val body = readBody(session)
         val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
         val name = json.optString("name", "").ifBlank { json.optString("printer", "") }
-        val type = json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        val type = PrinterType.normalize(
+            json.optString("type", "").ifBlank { json.optString("printer_type", "") }
+        )
 
         val usbGranted = ensureUsbPermissionIfNeeded(
             pm,
@@ -206,30 +311,59 @@ class PosLocalServer(
             return jsonError("Printer disconnected — could not reconnect to ${printer.name}")
         }
 
-        val text = buildTestPrintText()
-        val ok = pm.printText(text)
+        val layout = printerSettings().layout()
+        val text = buildTestPrintText(layout)
+        val (ok, printErr) = pm.printTextReliable(text, layout)
         return if (ok) {
             jsonOk(JSONObject().apply {
                 put("ok", true)
                 put("success", true)
                 put("printed", true)
-                put("name", printer.name)
-                put("type", printer.type)
+                put("name", pm.getActivePrinter()?.name ?: printer.name)
+                put("type", pm.getActivePrinter()?.type ?: printer.type)
             })
         } else {
-            jsonError("Print failed on ${printer.name} — check paper, power, and connection")
+            jsonError(printErr ?: "Print failed on ${printer.name} — check paper, power, and connection")
         }
     }
 
-    private fun buildTestPrintText(): String =
-        "================================\n" +
-            "      INSAPOS v${BuildConfig.VERSION_NAME}      \n" +
-            "         Test Print               \n" +
-            "================================\n" +
+    private fun handlePrinterSettingsGet(): Response {
+        return jsonOk(printerSettings().toJson().put("ok", true))
+    }
+
+    private fun handlePrinterSettingsSave(session: IHTTPSession): Response {
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        val paper = json.optString("paper_size", json.optString("printer_paper_size", ""))
+        val font = json.optString("font_mode", json.optString("printer_font_mode", ""))
+        if (paper.isBlank() && font.isBlank()) {
+            return jsonError("paper_size or font_mode required")
+        }
+        val settings = printerSettings()
+        val current = settings.layout()
+        settings.saveLocal(
+            if (paper.isNotBlank()) paper else current.paperSize,
+            if (font.isNotBlank()) font else current.fontMode,
+        )
+        return jsonOk(settings.toJson().put("ok", true).put("saved", true))
+    }
+
+    private fun printerSettings(): PrinterSettings =
+        PrinterSettings(getDatabase())
+
+    private fun buildTestPrintText(layout: PrinterConfig.Layout): String {
+        val div = PrinterConfig.divider(layout.charWidth)
+        val title = PrinterConfig.centered("INSAPOS v${BuildConfig.VERSION_NAME}", layout.charWidth)
+        val subtitle = PrinterConfig.centered("Test Print", layout.charWidth)
+        val paperLine = "Paper: ${layout.paperSize} · Font: ${layout.fontMode}".take(layout.charWidth)
+        val widthLine = "Width: ${layout.charWidth} chars / ${layout.dotWidth} dots".take(layout.charWidth)
+        return "$div\n$title\n$subtitle\n$div\n" +
             "Printer is working correctly!\n" +
+            "$paperLine\n$widthLine\n" +
             "Date: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\n" +
             "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n" +
-            "================================\n"
+            "$div\n"
+    }
 
     /**
      * @return null if not USB / no request needed, true if granted, false if denied.
@@ -237,8 +371,9 @@ class PosLocalServer(
     private fun ensureUsbPermissionIfNeeded(pm: PrinterManager, type: String?, name: String?): Boolean? {
         val requester = requestUsbPermission ?: return null
         val printerName = name?.takeIf { it.isNotBlank() } ?: return null
+        val normType = PrinterType.normalize(type)
         val usb = pm.findUsbPrinterByName(printerName) ?: return null
-        if (type != null && type.isNotBlank() && type != "usb") return null
+        if (normType.isNotBlank() && normType != PrinterType.USB) return null
         if (usb.hasUsbPermission()) return true
 
         val latch = CountDownLatch(1)
@@ -276,10 +411,16 @@ class PosLocalServer(
     }
 
     private fun handleIoScan(): Response {
-        val scan = HardwareDetector.scanAll(context)
-        scan.put("preferences", ioPreferences.toJson())
-        scan.put("io_api", true)
-        return jsonOk(scan)
+        val now = System.currentTimeMillis()
+        val base = cachedIoScan?.takeIf { now - cachedIoScanAt < IO_SCAN_CACHE_MS }
+            ?: HardwareDetector.scanAll(context).also {
+                cachedIoScan = it
+                cachedIoScanAt = now
+            }
+        return jsonOk(JSONObject(base.toString()).apply {
+            put("preferences", ioPreferences.toJson())
+            put("io_api", true)
+        })
     }
 
     private fun handleIoStatus(): Response {
@@ -351,13 +492,97 @@ class PosLocalServer(
         }
     }
 
+    private fun customerDisplayManager(): CustomerDisplayManager? = getCustomerDisplayManager()
+
+    private fun handleCustomerDisplayStatus(): Response {
+        val mgr = customerDisplayManager()
+            ?: return jsonOk(JSONObject().put("ok", true).put("available", false).put("enabled", false))
+        return jsonOk(mgr.getStatusJson())
+    }
+
+    private fun handleCustomerDisplayUpdate(session: IHTTPSession): Response {
+        val mgr = customerDisplayManager()
+            ?: return jsonError("Customer display not available on this device")
+        val body = readBody(session)
+        return jsonOk(mgr.update(body))
+    }
+
+    private fun handleCustomerDisplayTest(): Response {
+        val mgr = customerDisplayManager()
+            ?: return jsonError("Customer display not available on this device")
+        return jsonOk(mgr.testDisplay())
+    }
+
+    private fun handleCustomerDisplaySettingsGet(): Response {
+        val mgr = customerDisplayManager()
+        val db = getDatabase()
+        val settings = CustomerDisplaySettings.toJson(db)
+        return jsonOk(JSONObject().apply {
+            put("ok", true)
+            put("enabled", mgr?.enabled ?: CustomerDisplaySettings.isEnabled(db))
+            put("welcome_message", mgr?.welcomeMessage ?: "")
+            put("settings", settings)
+            settings.keys().forEach { key -> put(key, settings.get(key)) }
+            if (mgr != null) {
+                val status = mgr.getStatusJson()
+                put("available", status.optBoolean("available"))
+                put("display_name", status.optString("display_name"))
+            }
+        })
+    }
+
+    private fun handleCustomerDisplaySettingsSave(session: IHTTPSession): Response {
+        val mgr = customerDisplayManager()
+            ?: return jsonError("Customer display not available")
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        if (json.has("enabled")) mgr.enabled = json.optBoolean("enabled", true)
+        if (json.has("welcome_message")) mgr.welcomeMessage = json.optString("welcome_message", "")
+        val db = getDatabase()
+        if (db != null) {
+            fun putIfPresent(settingKey: String, jsonKey: String = settingKey.substringAfterLast('.')) {
+                if (json.has(jsonKey)) {
+                    db.setSetting("pos_$settingKey", json.optString(jsonKey, ""))
+                }
+            }
+            putIfPresent(CustomerDisplaySettings.KEY_ORIENTATION, "orientation")
+            putIfPresent(CustomerDisplaySettings.KEY_ROTATION_MODE, "rotation_mode")
+            putIfPresent(CustomerDisplaySettings.KEY_SHOW_CART, "show_cart")
+            putIfPresent(CustomerDisplaySettings.KEY_PHOTO, "photo")
+            putIfPresent(CustomerDisplaySettings.KEY_VIDEO, "video")
+        }
+        mgr.onSettingsSynced()
+        return jsonOk(mgr.getStatusJson().put("saved", true))
+    }
+
+    private fun handleHardwareScan(): Response {
+        return jsonOk(HardwareDetector.scanAll(context))
+    }
+
     // --- Offline data handlers ---
 
     private fun handleGetProducts(session: IHTTPSession): Response {
         val db = getDatabase() ?: return jsonError("Database not ready")
         val query = session.parms?.get("q")
-        val products = if (!query.isNullOrBlank()) db.searchProducts(query) else db.getProducts()
-        return jsonOk(JSONObject().put("ok", true).put("products", products).put("count", products.length()))
+        val limit = session.parms?.get("limit")?.toIntOrNull()
+            ?.coerceIn(1, OfflineDatabase.MAX_PRODUCT_PAGE_SIZE)
+            ?: OfflineDatabase.DEFAULT_PRODUCT_PAGE_SIZE
+        val offset = session.parms?.get("offset")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val total = db.getProductCount()
+        val products = if (!query.isNullOrBlank()) {
+            db.searchProducts(query)
+        } else {
+            db.getProductsPage(offset, limit)
+        }
+        return jsonOk(JSONObject().apply {
+            put("ok", true)
+            put("products", products)
+            put("count", products.length())
+            put("total", total)
+            put("offset", offset)
+            put("limit", limit)
+            put("has_more", offset + products.length() < total)
+        })
     }
 
     private fun handleProductByBarcode(session: IHTTPSession): Response {
@@ -399,9 +624,18 @@ class PosLocalServer(
     }
 
     private fun handleOfflineStats(): Response {
+        val now = System.currentTimeMillis()
+        cachedOfflineStats?.let { cached ->
+            if (now - cachedOfflineStatsAt < OFFLINE_STATS_CACHE_MS) {
+                return jsonOk(JSONObject(cached.toString()).put("ok", true).put("cached", true))
+            }
+        }
+        getSyncEngine()?.suppressCatalogPull(60_000L)
         val db = getDatabase() ?: return jsonError("Database not ready")
         val stats = db.getOfflineStats()
         stats.put("ok", true)
+        cachedOfflineStats = stats
+        cachedOfflineStatsAt = now
         return jsonOk(stats)
     }
 
@@ -413,16 +647,111 @@ class PosLocalServer(
             put("status", sync?.lastSyncStatus?.name ?: "UNKNOWN")
             put("unsynced_count", db?.getUnsyncedCount() ?: 0)
             put("sync_queue_count", db?.getSyncQueueCount() ?: 0)
+            sync?.getCatalogImportJson()?.let { catalog ->
+                put("catalog_import", catalog)
+            }
         })
     }
 
     private fun handleSyncNow(): Response {
         val sync = getSyncEngine() ?: return jsonError("Sync engine not ready")
         sync.syncNow()
-        return jsonOk(JSONObject().put("ok", true).put("triggered", true))
+        return jsonOk(JSONObject().put("ok", true).put("triggered", true).put("full", false))
+    }
+
+    private fun handleCatalogRefresh(): Response {
+        val sync = getSyncEngine() ?: return jsonError("Sync engine not ready")
+        sync.forceCatalogRefresh()
+        return jsonOk(JSONObject().put("ok", true).put("triggered", true).put("catalog", true))
+    }
+
+    // --- Local POS engine handlers ---
+
+    private fun handleLocalProducts(session: IHTTPSession): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val query = session.parms?.get("q")
+        val limit = session.parms?.get("limit")?.toIntOrNull()
+            ?.coerceIn(1, OfflineDatabase.MAX_PRODUCT_PAGE_SIZE)
+            ?: OfflineDatabase.DEFAULT_PRODUCT_PAGE_SIZE
+        val offset = session.parms?.get("offset")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val categoryId = session.parms?.get("category_id")?.toIntOrNull()?.takeIf { it > 0 }
+        return jsonOk(engine.getProducts(query, limit, offset, categoryId))
+    }
+
+    private fun handleLocalCategories(): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        return jsonOk(engine.getCategories())
+    }
+
+    private fun handleLocalInventory(): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        return jsonOk(engine.getInventory())
+    }
+
+    private fun handleLocalCustomers(): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        return jsonOk(engine.getCustomers())
+    }
+
+    private fun handleLocalSale(session: IHTTPSession): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val body = readBody(session)
+        val payload = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        return jsonOk(engine.createSale(payload))
+    }
+
+    private fun handleLocalShiftOpen(session: IHTTPSession): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        val cashierId = json.optInt("cashier_id", 0).takeIf { it > 0 } ?: getSessionCashierId()
+        val branchId = json.optInt("branch_id", 0).takeIf { it > 0 } ?: getSessionBranchId()
+        getSyncEngine()?.suppressCatalogPull(60_000L)
+        return jsonOk(engine.openShift(cashierId, branchId, json.optDouble("opening_cash", 0.0)))
+    }
+
+    private fun handleLocalShiftClose(session: IHTTPSession): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val body = readBody(session)
+        val json = if (body.isNotBlank()) JSONObject(body) else JSONObject()
+        return jsonOk(engine.closeShift(json.optDouble("closing_cash", 0.0)))
+    }
+
+    private fun handleLocalShiftStatus(): Response {
+        getSyncEngine()?.suppressCatalogPull(30_000L)
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        return jsonOk(engine.getShiftStatus())
+    }
+
+    private fun handleLocalReceipt(session: IHTTPSession): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val localId = session.parms?.get("local_id") ?: return jsonError("local_id required")
+        val receipt = engine.getReceipt(localId) ?: return jsonError("Receipt not found")
+        return jsonOk(receipt)
+    }
+
+    private fun handleLocalSyncStatus(): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        val sync = getSyncEngine()
+        val db = getDatabase()
+        val status = sync?.lastSyncStatus?.name ?: "UNKNOWN"
+        return jsonOk(engine.getSyncStatus(
+            db?.getUnsyncedCount() ?: 0,
+            db?.getSyncQueueCount() ?: 0,
+            status
+        ))
     }
 
     // --- Helpers ---
+
+    /** NanoHTTPD populates [IHTTPSession.parms] from the query string only after parseBody. */
+    private fun parseQueryParameters(session: IHTTPSession) {
+        try {
+            session.parseBody(HashMap<String, String>())
+        } catch (e: Exception) {
+            Log.w(TAG, "parseBody for query params failed: ${e.message}")
+        }
+    }
 
     private fun readBody(session: IHTTPSession): String {
         val map = HashMap<String, String>()
@@ -433,10 +762,14 @@ class PosLocalServer(
     private fun jsonOk(obj: JSONObject): Response =
         newFixedLengthResponse(Response.Status.OK, "application/json", obj.toString())
 
-    private fun jsonError(msg: String): Response =
+    private fun jsonError(msg: String, reason: String? = null): Response =
         newFixedLengthResponse(
             Response.Status.INTERNAL_ERROR, "application/json",
-            JSONObject().put("ok", false).put("error", msg).toString()
+            JSONObject().apply {
+                put("ok", false)
+                put("error", msg)
+                if (!reason.isNullOrBlank()) put("reason", reason)
+            }.toString()
         )
 
     private fun json404(msg: String): Response =

@@ -5,6 +5,34 @@
 @section('content')
 <div class="space-y-6">
 
+    @if(session('success'))
+    <div class="bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-sm">{{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+    <div class="bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 text-sm">{{ session('error') }}</div>
+    @endif
+
+    @if(request('branch_id') && ($pendingUntaggedCount ?? 0) > 0)
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="text-sm text-amber-900">
+            <strong>{{ number_format($pendingUntaggedCount) }}</strong> sale(s) for this branch
+            @if(request('date')) on {{ request('date') }}@endif
+            are not yet included in a Z-reading. Generate one to close the business day (BIR).
+        </div>
+        <form method="POST" action="{{ route('readings.z.generate') }}" class="flex items-center gap-2"
+              onsubmit="return confirm('Generate Z-Reading and tag these sales? This cannot be undone.');">
+            @csrf
+            <input type="hidden" name="branch_id" value="{{ request('branch_id') }}">
+            @if(request('date'))
+            <input type="hidden" name="date" value="{{ request('date') }}">
+            @endif
+            <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 whitespace-nowrap">
+                Generate Z-Reading
+            </button>
+        </form>
+    </div>
+    @endif
+
     <!-- Filters -->
     <form method="GET" class="bg-white rounded-lg shadow p-4 flex flex-wrap gap-4 items-end">
         <div>

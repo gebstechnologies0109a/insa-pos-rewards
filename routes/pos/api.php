@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\POS\LicenseValidateController;
 use App\Http\Controllers\POS\CustomerLookupController;
 use App\Http\Controllers\POS\PosTerminalSessionController;
 use App\Http\Controllers\POS\InventoryApiController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\POS\ProductLookupController;
 use App\Http\Controllers\POS\ReadingController;
 use App\Http\Controllers\POS\ShiftController;
 use App\Http\Controllers\POS\StockInController;
+use App\Http\Controllers\POS\LoyaltyController;
 use App\Http\Controllers\POS\SyncController;
 use Illuminate\Support\Facades\Route;
 
@@ -38,7 +40,16 @@ Route::prefix('terminal')->group(function () {
 Route::prefix('sync')->group(function () {
     Route::post('/push', [SyncController::class, 'push'])->name('pos.sync.push');
     Route::get('/pull', [SyncController::class, 'pull'])->name('pos.sync.pull');
+    Route::post('/pull', [SyncController::class, 'pull'])->name('pos.sync.pull.post');
 });
+
+Route::prefix('session')->group(function () {
+    Route::post('/start', [PosTerminalSessionController::class, 'register'])->name('pos.session.start');
+    Route::post('/end', [PosTerminalSessionController::class, 'end'])->name('pos.session.end');
+});
+
+Route::post('/license/validate', [LicenseValidateController::class, 'validate'])
+    ->name('pos.license.validate');
 
 Route::get('/customers/all', [SyncController::class, 'allCustomers'])->name('pos.customers.all');
 
@@ -54,6 +65,9 @@ Route::post('/sales', [PosSaleController::class, 'store'])
 
 Route::get('/sales/recent', [PosSaleController::class, 'recent'])
     ->name('pos.sales.recent');
+
+Route::get('/sales/{sale}/receipt', [PosSaleController::class, 'receipt'])
+    ->name('pos.sales.receipt');
 
 Route::post('/stock-in', [StockInController::class, 'store'])
     ->name('pos.stock-in.store');
@@ -79,6 +93,9 @@ Route::get('/products/all', [ProductLookupController::class, 'all'])
 
 Route::get('/settings', [PosSettingsController::class, 'apiIndex'])
     ->name('pos.settings.api');
+
+Route::post('/loyalty/update', [LoyaltyController::class, 'update'])
+    ->name('pos.loyalty.update');
 
 Route::prefix('shift')->group(function () {
     Route::get('/current', [ShiftController::class, 'current'])->name('pos.shift.current');

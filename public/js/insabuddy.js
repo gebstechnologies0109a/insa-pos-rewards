@@ -1,16 +1,17 @@
 /**
  * INSABuddy — Hardware Bridge Client for INSA POS
  * Communicates with the INSABuddy Android companion app (port 18181)
- * or the built-in INSAPOSv3 service layer (port 18182).
+ * or the built-in INSAPOS v3 service layer (port 18182).
  */
 const INSABuddy = {
     BASE_URL: 'http://127.0.0.1:18181',
     _connected: false,
     _pollingInterval: null,
     _isV2: false,
+    _printerLayoutCache: null,
 
     /**
-     * Detect INSAPOSv3 native bridge and switch to its local port.
+     * Detect INSAPOS v3 native bridge and switch to its local port.
      * Call this early (e.g. on DOMContentLoaded).
      */
     detectV2() {
@@ -70,54 +71,159 @@ const INSABuddy = {
     },
 
     /**
+     * Resolve receipt column width from paper size and font mode.
+     */
+    resolvePrinterLayout(paperSize, fontMode) {
+        const paper = (paperSize === '87mm' || paperSize === '80mm') ? '87mm' : '57mm';
+        const font = fontMode === 'fine_print' ? 'fine_print' : 'paper_size';
+        const dotWidth = paper === '87mm' ? 576 : 384;
+        let charWidth = 32;
+        if (paper === '87mm' && font === 'fine_print') charWidth = 64;
+        else if (paper === '87mm') charWidth = 48;
+        else if (font === 'fine_print') charWidth = 42;
+        return { paper_size: paper, font_mode: font, char_width: charWidth, dot_width: dotWidth };
+    },
+
+    /**
+     * Get printer layout settings from the local Android service.
+     */
+    async getPrinterSettings() {
+        try {
+            const data = await this._get('/printer/settings');
+            if (data && data.ok) {
+                const layout = this.resolvePrinterLayout(data.paper_size, data.font_mode);
+                this._printerLayoutCache = layout;
+                return { ...data, ...layout, layout };
+            }
+        } catch {
+            /* local service unavailable */
+        }
+        const layout = this.resolvePrinterLayout('57mm', 'paper_size');
+        this._printerLayoutCache = layout;
+        return { ok: true, ...layout, layout };
+    },
+
+    /**
+     * Save printer layout settings on the Android device (local override).
+     */
+    async savePrinterSettings(paperSize, fontMode) {
+        const data = await this._post('/printer/settings', {
+            paper_size: paperSize,
+            font_mode: fontMode,
+        });
+        if (data && data.ok) {
+            this._printerLayoutCache = this.resolvePrinterLayout(data.paper_size, data.font_mode);
+        }
+        return data;
+    },
+
+    /**
      * Print a receipt from structured data.
      * Generates ESC/POS commands for a formatted receipt.
      */
-    async printReceipt(receipt) {
+    buildReceiptText(receipt, settings) {
+        const w = settings.char_width || 32;
+        const labelWidth = Math.max(w - 10, Math.floor(w * 0.65));
+        const valueWidth = w - labelWidth;
+        const itemNameWidth = Math.max(w - 13, Math.floor(w * 0.55));
         const lines = [];
-        const divider = '================================';
+        const divider = '='.repeat(w);
 
-        lines.push('\x1B\x61\x01'); // center align
-        lines.push(receipt.storeName || (window.location.hostname.includes('epayplus') ? 'ePay Plus' : 'INSA POS'));
-        lines.push(receipt.branchName || '');
+        lines.push('\x1B\x61\x01');
+        lines.push((receipt.storeName || (window.location.hostname.includes('epayplus') ? 'ePay Plus' : 'INSA POS')).substring(0, w));
+        if (receipt.branchName) lines.push(String(receipt.branchName).substring(0, w));
         lines.push(divider);
-        lines.push('\x1B\x61\x00'); // left align
+        lines.push('\x1B\x61\x00');
 
         if (receipt.saleNumber) {
-            lines.push(`Sale #: ${receipt.saleNumber}`);
+            lines.push(`Sale #: ${receipt.saleNumber}`.substring(0, w));
         }
-        lines.push(`Date: ${receipt.date || new Date().toLocaleString()}`);
-        lines.push(`Cashier: ${receipt.cashier || ''}`);
+        lines.push(`Date: ${receipt.date || new Date().toLocaleString()}`.substring(0, w));
+        lines.push(`Cashier: ${receipt.cashier || ''}`.substring(0, w));
         lines.push(divider);
 
         if (receipt.items && receipt.items.length) {
             for (const item of receipt.items) {
-                const name = item.name.substring(0, 20).padEnd(20);
+                const name = String(item.name).substring(0, itemNameWidth).padEnd(itemNameWidth);
                 const qty = String(item.qty).padStart(3);
-                const total = (item.qty * item.price).toFixed(2).padStart(8);
-                lines.push(`${name} ${qty} ${total}`);
+                const total = (item.qty * item.price).toFixed(2).padStart(Math.min(8, valueWidth));
+                lines.push(`${name} ${qty} ${total}`.substring(0, w));
             }
         }
 
         lines.push(divider);
-        lines.push(`${'Subtotal:'.padEnd(24)}${(receipt.subtotal || 0).toFixed(2).padStart(8)}`);
+        lines.push(`${'Subtotal:'.padEnd(labelWidth)}${(receipt.subtotal || 0).toFixed(2).padStart(valueWidth)}`.substring(0, w));
         if (receipt.discount > 0) {
-            lines.push(`${'Discount:'.padEnd(24)}${receipt.discount.toFixed(2).padStart(8)}`);
+            lines.push(`${'Discount:'.padEnd(labelWidth)}${receipt.discount.toFixed(2).padStart(valueWidth)}`.substring(0, w));
         }
-        lines.push(`${'TOTAL:'.padEnd(24)}${(receipt.total || 0).toFixed(2).padStart(8)}`);
+        lines.push(`${'TOTAL:'.padEnd(labelWidth)}${(receipt.total || 0).toFixed(2).padStart(valueWidth)}`.substring(0, w));
         lines.push(divider);
-        lines.push(`Payment: ${receipt.paymentMethod || 'Cash'}`);
+        lines.push(`Payment: ${receipt.paymentMethod || 'Cash'}`.substring(0, w));
         if (receipt.amountTendered) {
-            lines.push(`${'Tendered:'.padEnd(24)}${receipt.amountTendered.toFixed(2).padStart(8)}`);
-            lines.push(`${'Change:'.padEnd(24)}${(receipt.change || 0).toFixed(2).padStart(8)}`);
+            lines.push(`${'Tendered:'.padEnd(labelWidth)}${receipt.amountTendered.toFixed(2).padStart(valueWidth)}`.substring(0, w));
+            lines.push(`${'Change:'.padEnd(labelWidth)}${(receipt.change || 0).toFixed(2).padStart(valueWidth)}`.substring(0, w));
         }
         lines.push('');
-        lines.push('\x1B\x61\x01'); // center
+        lines.push('\x1B\x61\x01');
         lines.push('Thank you for your purchase!');
         lines.push('');
         lines.push('');
+        return lines.join('\n');
+    },
 
-        return this.printText(lines.join('\n'));
+    async printReceipt(receipt, maxAttempts = 3) {
+        const settings = this._printerLayoutCache || await this.getPrinterSettings();
+        const text = receipt.text || this.buildReceiptText(receipt, settings);
+        let lastResult = null;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const nativeResult = this._tryNativePrint(text);
+            if (nativeResult && this.isPrintSuccess(nativeResult)) return nativeResult;
+            if (nativeResult) lastResult = nativeResult;
+
+            lastResult = await this.printText(text);
+            if (this.isPrintSuccess(lastResult)) return lastResult;
+
+            if (attempt < maxAttempts) {
+                await new Promise((r) => setTimeout(r, 500 * attempt));
+            }
+        }
+        return lastResult;
+    },
+
+    /**
+     * Fire-and-forget friendly native print (sync bridge call with retries).
+     */
+    printReceiptNative(receiptOrText, maxAttempts = 3) {
+        const text = typeof receiptOrText === 'string'
+            ? receiptOrText
+            : (receiptOrText?.text || this.buildReceiptText(
+                receiptOrText,
+                this._printerLayoutCache || this.resolvePrinterLayout('57mm', 'paper_size')
+            ));
+        let lastResult = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            lastResult = this._tryNativePrint(text);
+            if (lastResult && this.isPrintSuccess(lastResult)) return lastResult;
+            if (attempt < maxAttempts) {
+                const start = Date.now();
+                while (Date.now() - start < 500 * attempt) { /* brief backoff */ }
+            }
+        }
+        return lastResult;
+    },
+
+    _tryNativePrint(text) {
+        if (typeof window.INSAPOS === 'undefined' || typeof window.INSAPOS.printReceipt !== 'function') {
+            return null;
+        }
+        try {
+            const raw = window.INSAPOS.printReceipt(JSON.stringify({ text }));
+            return typeof raw === 'string' ? JSON.parse(raw) : raw;
+        } catch (e) {
+            console.warn('[INSABuddy] native printReceipt failed', e);
+            return { ok: false, error: e.message || 'native print failed' };
+        }
     },
 
     /**
@@ -165,16 +271,43 @@ const INSABuddy = {
     },
 
     /**
-     * List all available printers detected by INSABuddy.
+     * List all available printers (bonded Bluetooth, USB, built-in).
+     * Always requests full discovery; omitting bluetooth=1 previously returned no BT printers.
      */
-    async listPrinters() {
-        return this._get('/printer/list');
+    async listPrinters(includeBluetooth = true) {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.listPrinters === 'function') {
+            try {
+                const raw = window.INSAPOS.listPrinters();
+                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (data && data.ok !== false) return data;
+            } catch (e) {
+                console.warn('[INSABuddy] native listPrinters failed, falling back to HTTP', e);
+            }
+        }
+        const q = includeBluetooth ? '?bluetooth=1' : '';
+        return this._get(`/printer/list${q}`);
+    },
+
+    /**
+     * Alias for printer settings search — full device scan.
+     */
+    async scanPrintersForUi() {
+        return this.listPrinters(true);
     },
 
     /**
      * Select a printer by type and name.
      */
     async selectPrinter(type, name) {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.selectPrinter === 'function') {
+            try {
+                const raw = window.INSAPOS.selectPrinter(type || '', name || '');
+                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (data) return data;
+            } catch (e) {
+                console.warn('[INSABuddy] native selectPrinter failed, falling back to HTTP', e);
+            }
+        }
         return this._post('/printer/select', { type, name });
     },
 
@@ -182,6 +315,15 @@ const INSABuddy = {
      * Send a test print to the selected printer (type/name optional but recommended).
      */
     async testPrint(type, name) {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.testPrint === 'function') {
+            try {
+                const raw = window.INSAPOS.testPrint(type || '', name || '');
+                const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (data) return data;
+            } catch (e) {
+                console.warn('[INSABuddy] native testPrint failed, falling back to HTTP', e);
+            }
+        }
         const body = {};
         if (type) body.type = type;
         if (name) body.name = name;
@@ -189,7 +331,7 @@ const INSABuddy = {
     },
 
     /**
-     * Whether the connected bridge exposes full I/O device APIs (INSAPOSv3).
+     * Whether the connected bridge exposes full I/O device APIs (INSAPOS v3).
      */
     hasIoApi() {
         return this._isV2;
@@ -270,11 +412,115 @@ const INSABuddy = {
     },
 
     /**
-     * Normalize printer list response from INSABuddy or INSAPOSv3.
+     * Push cart / welcome / thank-you state to the customer-facing display.
+     */
+    updateCustomerDisplay(payload) {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.updateCustomerDisplay === 'function') {
+            try {
+                const raw = window.INSAPOS.updateCustomerDisplay(JSON.stringify(payload));
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native updateCustomerDisplay failed', e);
+            }
+        }
+        return this._post('/customer-display/update', payload);
+    },
+
+    async testCustomerDisplay() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.testCustomerDisplay === 'function') {
+            try {
+                const raw = window.INSAPOS.testCustomerDisplay();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native testCustomerDisplay failed', e);
+            }
+        }
+        return this._post('/customer-display/test', {});
+    },
+
+    async getCustomerDisplayStatus() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.getCustomerDisplayStatus === 'function') {
+            try {
+                const raw = window.INSAPOS.getCustomerDisplayStatus();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native getCustomerDisplayStatus failed', e);
+            }
+        }
+        return this._get('/customer-display/status');
+    },
+
+    async reloadCustomerDisplaySettings() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.reloadCustomerDisplaySettings === 'function') {
+            try {
+                const raw = window.INSAPOS.reloadCustomerDisplaySettings();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native reloadCustomerDisplaySettings failed', e);
+            }
+        }
+        return { ok: false };
+    },
+
+    async getPosSettingsSummary() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.getPosSettings === 'function') {
+            try {
+                const raw = window.INSAPOS.getPosSettings();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native getPosSettings failed', e);
+            }
+        }
+        const [device, cd, printer] = await Promise.all([
+            this.getDeviceInfo(),
+            this.getCustomerDisplayStatus(),
+            this.getPrinterSettings(),
+        ]);
+        return {
+            ok: true,
+            app_version: device?.version || '',
+            device,
+            customer_display: cd || {},
+            paper_size: printer?.paper_size || '57mm',
+            font_mode: printer?.font_mode || 'paper_size',
+            network_online: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        };
+    },
+
+    async scanHardware() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.scanHardware === 'function') {
+            try {
+                const raw = window.INSAPOS.scanHardware();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native scanHardware failed', e);
+            }
+        }
+        return this._get('/device/hardware/scan');
+    },
+
+    async triggerSync() {
+        if (this._isV2 && typeof window.INSAPOS !== 'undefined' && typeof window.INSAPOS.triggerLocalSync === 'function') {
+            try {
+                const raw = window.INSAPOS.triggerLocalSync();
+                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+            } catch (e) {
+                console.warn('[INSABuddy] native triggerLocalSync failed', e);
+            }
+        }
+        return this._post('/local/sync/now', {});
+    },
+
+    /**
+     * Normalize printer list response from INSABuddy or INSAPOS v3.
      */
     parsePrinterList(data) {
         if (!data) return [];
-        const raw = data.printers || [];
+        if (data.ok === false) {
+            console.warn('[INSABuddy] printer list error:', data.error || data.reason);
+            return [];
+        }
+        const raw = data.printers || data.devices || [];
         if (!Array.isArray(raw)) return [];
         return raw.map(p => ({
             type: p.type || 'unknown',
@@ -314,10 +560,16 @@ const INSABuddy = {
      */
     parseApiError(data, fallback = 'Request failed') {
         if (!data) return 'Local hardware service unavailable';
+        if (data.reason === 'initializing') return 'Initializing printer… please wait and try again';
+        if (data.error === 'fetch_failed') return 'Local hardware service unavailable — retrying…';
         if (data.error) return String(data.error);
         if (data.message) return String(data.message);
         if (data.reason) return String(data.reason);
         return fallback;
+    },
+
+    isInitializingResponse(data) {
+        return !!data && (data.reason === 'initializing' || String(data.error || '').toLowerCase().includes('initializing'));
     },
 
     /**
@@ -355,17 +607,24 @@ const INSABuddy = {
     // --- Internal helpers ---
 
     async _get(path) {
+        this.detectV2();
         try {
             const res = await fetch(`${this.BASE_URL}${path}`, {
-                signal: AbortSignal.timeout(5000),
+                signal: AbortSignal.timeout(15000),
             });
+            if (!res.ok) {
+                console.warn('[INSABuddy] GET', path, res.status);
+                return { ok: false, error: `HTTP ${res.status}` };
+            }
             return await res.json();
-        } catch {
-            return null;
+        } catch (e) {
+            console.warn('[INSABuddy] GET failed', path, e);
+            return { ok: false, error: 'fetch_failed' };
         }
     },
 
     async _post(path, body) {
+        this.detectV2();
         try {
             const res = await fetch(`${this.BASE_URL}${path}`, {
                 method: 'POST',
@@ -373,9 +632,19 @@ const INSABuddy = {
                 body: JSON.stringify(body),
                 signal: AbortSignal.timeout(30000),
             });
-            return await res.json();
+            let data = null;
+            try {
+                data = await res.json();
+            } catch {
+                if (!res.ok) {
+                    return { ok: false, error: `HTTP ${res.status}` };
+                }
+            }
+            if (data) return data;
+            if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+            return { ok: false, error: 'empty_response' };
         } catch {
-            return null;
+            return { ok: false, error: 'fetch_failed' };
         }
     },
 };
@@ -387,7 +656,7 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof window !== 'undefined') {
     window.INSABuddy = INSABuddy;
 
-    // Auto-detect INSAPOSv3 bridge when available
+    // Auto-detect INSAPOS v3 bridge when available
     INSABuddy.detectV2();
     document.addEventListener('insapos:ready', function() {
         INSABuddy.detectV2();

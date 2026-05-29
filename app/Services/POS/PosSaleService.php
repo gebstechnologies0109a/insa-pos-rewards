@@ -14,6 +14,7 @@ class PosSaleService
 {
     public function __construct(
         protected InventoryService $inventory,
+        protected PosSaleTotalsResolver $totals,
     ) {}
 
     public function createSale(array $data): PosSale
@@ -29,19 +30,7 @@ class PosSaleService
                 }
             }
 
-            $subtotal = 0;
-            $itemDiscountTotal = 0;
-
-            foreach ($items as $item) {
-                $lineSubtotal = $item['qty'] * $item['price'];
-                $lineDiscount = $item['discount'] ?? 0;
-                $subtotal += $lineSubtotal;
-                $itemDiscountTotal += $lineDiscount;
-            }
-
-            $orderDiscount = (float) ($data['order_discount'] ?? 0);
-            $discountTotal = $itemDiscountTotal + $orderDiscount;
-            $total = $subtotal - $discountTotal;
+            $resolved = $this->totals->resolve($items, $data);
 
             $sale = PosSale::create([
                 'sale_number'     => $this->generateSaleNumber(),
@@ -49,20 +38,22 @@ class PosSaleService
                 'shift_id'        => $data['shift_id'] ?? null,
                 'cashier_id'      => $data['cashier_id'],
                 'member_id'       => $data['member_id'] ?? null,
-                'subtotal'        => $subtotal,
-                'discount_total'  => $discountTotal,
-                'total'           => $total,
+                'subtotal'        => $resolved['subtotal'],
+                'discount_total'  => $resolved['discount_total'],
+                'total'           => $resolved['total'],
                 'payment_method'  => $data['payment_method'],
                 'amount_tendered' => $data['amount_tendered'],
-                'change_due'      => max(0, $data['amount_tendered'] - $total),
+                'change_due'      => max(0, (float) $data['amount_tendered'] - $resolved['total']),
                 'status'          => 'completed',
-                'sold_at'         => Carbon::now(),
+                'sold_at'         => isset($data['created_at'])
+                    ? Carbon::parse($data['created_at'])
+                    : Carbon::now(),
             ]);
 
             foreach ($items as $item) {
-                $lineSubtotal = $item['qty'] * $item['price'];
-                $lineDiscount = $item['discount'] ?? 0;
-                $lineTotal = $lineSubtotal - $lineDiscount;
+                $lineSubtotal = (float) $item['qty'] * (float) $item['price'];
+                $lineDiscount = (float) ($item['discount'] ?? 0);
+                $lineTotal = round($lineSubtotal - $lineDiscount, 2);
 
                 PosSaleItem::create([
                     'sale_id'      => $sale->id,
@@ -94,6 +85,35 @@ class PosSaleService
 
             return $sale;
         });
+    }
+
+    /**
+     * Align header totals on an already-synced sale when the register re-pushes corrected amounts.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function reconcileHeaderTotals(PosSale $sale, array $data): PosSale
+    {
+        $items = $data['items'] ?? [];
+        if ($items === []) {
+            return $sale;
+        }
+
+        $resolved = $this->totals->resolve($items, $data);
+
+        if (abs((float) $sale->total - $resolved['total']) <= PosSaleTotalsResolver::TOLERANCE
+            && abs((float) $sale->subtotal - $resolved['subtotal']) <= PosSaleTotalsResolver::TOLERANCE) {
+            return $sale;
+        }
+
+        $sale->update([
+            'subtotal'       => $resolved['subtotal'],
+            'discount_total' => $resolved['discount_total'],
+            'total'          => $resolved['total'],
+            'change_due'     => max(0, (float) ($data['amount_tendered'] ?? $sale->amount_tendered) - $resolved['total']),
+        ]);
+
+        return $sale->fresh('items');
     }
 
     protected function generateSaleNumber(): string

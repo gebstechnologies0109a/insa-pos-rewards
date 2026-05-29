@@ -65,6 +65,7 @@
                     <th class="px-4 py-3 text-right">Discounts</th>
                     <th class="px-4 py-3 text-right">Voids</th>
                     <th class="px-4 py-3">Payment Breakdown</th>
+                    <th class="px-4 py-3 text-center">Actions</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -93,10 +94,13 @@
                             <span class="text-gray-400">—</span>
                         @endif
                     </td>
+                    <td class="px-4 py-3 text-center">
+                        <a href="{{ route('readings.x.show', $r) }}" class="inline-block px-3 py-1 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700">View</a>
+                    </td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" class="px-4 py-12 text-center text-gray-400">No X-readings found. Generate one from the POS cashier.</td>
+                    <td colspan="10" class="px-4 py-12 text-center text-gray-400">No X-readings found. Generate one from the POS cashier.</td>
                 </tr>
                 @endforelse
             </tbody>

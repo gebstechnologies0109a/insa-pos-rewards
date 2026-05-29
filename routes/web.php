@@ -14,6 +14,8 @@ use App\Http\Controllers\Backoffice\InventoryAdjustmentController;
 use App\Http\Controllers\Backoffice\InventoryBatchController;
 use App\Http\Controllers\Backoffice\InventoryMovementController;
 use App\Http\Controllers\Backoffice\InventoryReportController;
+use App\Http\Controllers\Backoffice\ReportController as BackofficeReportController;
+use App\Http\Controllers\Owner\OwnerController;
 use App\Http\Controllers\Backoffice\ShiftAuditController;
 use App\Http\Controllers\Backoffice\ShiftDashboardController;
 use App\Http\Controllers\Backoffice\ShiftExportController;
@@ -21,6 +23,7 @@ use App\Http\Controllers\Backoffice\ShiftManagementController;
 use App\Http\Controllers\Backoffice\ShiftVarianceController;
 use App\Http\Controllers\POS\CashierController;
 use App\Http\Controllers\POS\PosSettingsController;
+use App\Http\Controllers\POS\CustomerDisplaySettingsController;
 use App\Http\Controllers\POS\ReadingController;
 use App\Http\Controllers\Admin\PosSessionController;
 use App\Http\Controllers\Stockman\StockmanController;
@@ -59,8 +62,14 @@ Route::middleware(['auth', 'role:stockman,manager,admin,owner,super_admin'])->pr
     Route::get('/products/search', [StockmanController::class, 'productSearch'])->name('stockman.products.search');
 });
 
+// ── Owner console (owner, super_admin) ───────────
+Route::middleware(['auth', 'role:owner,super_admin', 'audit:owner'])->prefix('owner')->name('owner.')->group(function () {
+    Route::get('/', [OwnerController::class, 'dashboard'])->name('dashboard');
+    Route::get('/dashboard', [OwnerController::class, 'dashboard']);
+});
+
 // ── Back-Office (manager, admin, owner) ──────────
-Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
+Route::middleware(['auth', 'role:owner,admin,manager', 'audit:backoffice'])->group(function () {
     Route::get('/backoffice', [DashboardController::class, 'index'])
         ->name('backoffice.dashboard');
 
@@ -70,6 +79,11 @@ Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
         ->name('backoffice.analytics.data');
     Route::get('/backoffice/analytics/product/{product}', [AnalyticsController::class, 'productDetail'])
         ->name('backoffice.analytics.product');
+
+    Route::prefix('backoffice/reports')->name('backoffice.reports.')->group(function () {
+        Route::get('daily-sales', [BackofficeReportController::class, 'dailySales'])->name('daily-sales');
+        Route::get('product-performance', [BackofficeReportController::class, 'productPerformance'])->name('product-performance');
+    });
 
     Route::get('/backoffice/shifts', [ShiftManagementController::class, 'index'])
         ->name('backoffice.shifts');
@@ -101,8 +115,12 @@ Route::middleware(['auth', 'role:owner,admin,manager'])->group(function () {
     // ── X/Z Reading Reports ──
     Route::get('/backoffice/readings/x', [ReadingController::class, 'showXReading'])
         ->name('readings.x');
+    Route::get('/backoffice/readings/x/{xReading}', [ReadingController::class, 'viewXReading'])
+        ->name('readings.x.show');
     Route::get('/backoffice/readings/z', [ReadingController::class, 'showZReading'])
         ->name('readings.z');
+    Route::post('/backoffice/readings/z/generate', [ReadingController::class, 'storeZReading'])
+        ->name('readings.z.generate');
     Route::get('/backoffice/readings/x/export/csv', [ReadingController::class, 'exportXReadingCsv'])
         ->name('readings.x.export.csv');
     Route::get('/backoffice/readings/z/export/csv', [ReadingController::class, 'exportZReadingCsv'])
@@ -181,8 +199,25 @@ Route::middleware(['auth', 'role:owner,admin'])->group(function () {
         ->name('pos.settings.update');
 });
 
+// Customer display — editable from cashier gear on POS device
+Route::middleware(['auth', 'role:cashier,manager,admin,owner,super_admin'])->group(function () {
+    Route::get('/settings/customer-display', [CustomerDisplaySettingsController::class, 'show'])
+        ->name('pos.customer-display.show');
+    Route::post('/settings/customer-display/photo', [CustomerDisplaySettingsController::class, 'uploadPhoto'])
+        ->name('pos.customer-display.photo');
+    Route::post('/settings/customer-display/video', [CustomerDisplaySettingsController::class, 'uploadVideo'])
+        ->name('pos.customer-display.video');
+    Route::post('/settings/customer-display/update', [CustomerDisplaySettingsController::class, 'update'])
+        ->name('pos.customer-display.update');
+});
+
+Route::get('/customer-display/media/{type}/{filename}', [CustomerDisplaySettingsController::class, 'serveMedia'])
+    ->where('type', 'photos|videos')
+    ->where('filename', '[A-Za-z0-9._-]+')
+    ->name('pos.customer-display.media');
+
 // ── Super Admin ──────────────────────────────────
-Route::middleware(['auth', 'role:super_admin'])->prefix('super-admin')->group(function () {
+Route::middleware(['auth', 'role:super_admin', 'audit:super-admin'])->prefix('super-admin')->group(function () {
     Route::get('/', [SuperAdminDashboardController::class, 'index'])
         ->name('super-admin.dashboard');
 
@@ -199,6 +234,7 @@ Route::middleware(['auth', 'role:super_admin'])->prefix('super-admin')->group(fu
         ->name('super-admin.sessions.end');
 
     Route::get('/companies', [CompanyController::class, 'index'])->name('super-admin.companies.index');
+    Route::get('/companies/{company}', [CompanyController::class, 'show'])->name('super-admin.companies.show');
     Route::get('/companies/create', [CompanyController::class, 'create'])->name('super-admin.companies.create');
     Route::post('/companies', [CompanyController::class, 'store'])->name('super-admin.companies.store');
     Route::get('/companies/{company}/edit', [CompanyController::class, 'edit'])->name('super-admin.companies.edit');

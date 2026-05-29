@@ -23,8 +23,9 @@ class HidScannerDriver(private val onBarcode: (String) -> Unit) {
     private val handler = Handler(Looper.getMainLooper())
     private var lastBarcode: String = ""
     private var lastKeyTime: Long = 0
-    private val flushDelay = 100L
-    private val scannerSpeedThreshold = 60L
+    private val flushDelay = 120L
+    /** Scanners burst faster than human typing in a search field (~80ms+ between keys). */
+    private val scannerSpeedThreshold = 45L
 
     private val flushRunnable = Runnable {
         val code = buffer.toString()
@@ -69,9 +70,7 @@ class HidScannerDriver(private val onBarcode: (String) -> Unit) {
 
             handler.removeCallbacks(flushRunnable)
             buffer.clear()
-            buffer.append(ch)
             lastKeyTime = now
-            handler.postDelayed(flushRunnable, flushDelay)
             return false
         }
 

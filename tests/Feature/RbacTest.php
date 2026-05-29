@@ -52,6 +52,39 @@ class RbacTest extends TestCase
         $this->actingAs($this->cashier)->get(route('pos.cashier'))->assertOk();
     }
 
+    public function test_cashier_pos_hides_shift_totals_flag(): void
+    {
+        $this->actingAs($this->cashier)
+            ->get(route('pos.cashier'))
+            ->assertOk()
+            ->assertSee('"canViewShiftTotals":false', false);
+    }
+
+    public function test_manager_pos_shows_shift_totals_flag(): void
+    {
+        $this->actingAs($this->manager)
+            ->get(route('pos.cashier'))
+            ->assertOk()
+            ->assertSee('"canViewShiftTotals":true', false);
+    }
+
+    public function test_admin_pos_shows_shift_totals_flag(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('pos.cashier'))
+            ->assertOk()
+            ->assertSee('"canViewShiftTotals":true', false);
+    }
+
+    public function test_can_view_shift_totals_by_role(): void
+    {
+        $this->assertTrue($this->owner->canViewShiftTotals());
+        $this->assertTrue($this->admin->canViewShiftTotals());
+        $this->assertTrue($this->manager->canViewShiftTotals());
+        $this->assertFalse($this->cashier->canViewShiftTotals());
+        $this->assertFalse($this->stockman->canViewShiftTotals());
+    }
+
     public function test_cashier_cannot_access_backoffice(): void
     {
         $this->actingAs($this->cashier)->get(route('backoffice.dashboard'))->assertForbidden();
