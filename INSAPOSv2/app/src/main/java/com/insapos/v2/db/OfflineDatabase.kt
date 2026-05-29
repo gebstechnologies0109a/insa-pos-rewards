@@ -488,17 +488,45 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         }
     }
 
-    fun getProductsPage(offset: Int, limit: Int): JSONArray = dbOp {
+    fun getProductCountForCategory(categoryId: Int): Int = dbOp {
+        val cursor = readableDatabase.rawQuery(
+            """SELECT COUNT(*) FROM products WHERE is_active = 1
+               AND CAST(json_extract(data_json, '$.category_id') AS INTEGER) = ?""",
+            arrayOf(categoryId.toString())
+        )
+        try {
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        } finally {
+            cursor.close()
+        }
+    }
+
+    fun getProductsPage(
+        offset: Int,
+        limit: Int,
+        categoryId: Int? = null,
+    ): JSONArray = dbOp {
         val safeLimit = limit.coerceIn(1, MAX_PRODUCT_PAGE_SIZE)
         val safeOffset = offset.coerceAtLeast(0)
+        val where = StringBuilder("is_active = 1")
+        val args = mutableListOf<String>()
+        if (categoryId != null && categoryId > 0) {
+            where.append(" AND CAST(json_extract(data_json, '$.category_id') AS INTEGER) = ?")
+            args.add(categoryId.toString())
+        }
+        args.add(safeLimit.toString())
+        args.add(safeOffset.toString())
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
-            "SELECT * FROM products WHERE is_active = 1 ORDER BY name LIMIT ? OFFSET ?",
-            arrayOf(safeLimit.toString(), safeOffset.toString())
+            """SELECT server_id, id, barcode, name, price, stock, category,
+                      json_extract(data_json, '$.sku') AS sku,
+                      json_extract(data_json, '$.category_id') AS category_id
+               FROM products WHERE $where ORDER BY name LIMIT ? OFFSET ?""",
+            args.toTypedArray()
         )
         try {
             while (cursor.moveToNext()) {
-                arr.put(cursorToJson(cursor))
+                arr.put(cursorToListProductJson(cursor))
             }
         } finally {
             cursor.close()
@@ -511,14 +539,39 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     fun searchProducts(query: String, limit: Int = MAX_SEARCH_RESULTS): JSONArray = dbOp {
         val safeLimit = limit.coerceIn(1, MAX_SEARCH_RESULTS)
+        val q = "%$query%"
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
-            "SELECT * FROM products WHERE is_active = 1 AND (name LIKE ? OR barcode LIKE ?) ORDER BY name LIMIT ?",
-            arrayOf("%$query%", "%$query%", safeLimit.toString())
+            """SELECT server_id, id, barcode, name, price, stock, category,
+                      json_extract(data_json, '$.sku') AS sku,
+                      json_extract(data_json, '$.category_id') AS category_id
+               FROM products WHERE is_active = 1
+               AND (name LIKE ? OR barcode LIKE ? OR json_extract(data_json, '$.sku') LIKE ?)
+               ORDER BY name LIMIT ?""",
+            arrayOf(q, q, q, safeLimit.toString())
         )
         try {
             while (cursor.moveToNext()) {
-                arr.put(cursorToJson(cursor))
+                arr.put(cursorToListProductJson(cursor))
+            }
+        } finally {
+            cursor.close()
+        }
+        arr
+    }
+
+    fun getCategories(): JSONArray = dbOp {
+        val arr = JSONArray()
+        val cursor = readableDatabase.rawQuery(
+            "SELECT server_id, name FROM categories ORDER BY name",
+            null
+        )
+        try {
+            while (cursor.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("id", cursor.getInt(0))
+                    put("name", cursor.getString(1))
+                })
             }
         } finally {
             cursor.close()
@@ -939,7 +992,19 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             arrayOf(barcode)
         )
         try {
-            if (cursor.moveToFirst()) cursorToJson(cursor) else null
+            if (cursor.moveToFirst()) cursorToListProductJson(cursor, includeDataJson = true) else null
+        } finally {
+            cursor.close()
+        }
+    }
+
+    fun getProductByServerId(serverId: Int): JSONObject? = dbOp {
+        val cursor = readableDatabase.rawQuery(
+            "SELECT * FROM products WHERE server_id = ? AND is_active = 1 LIMIT 1",
+            arrayOf(serverId.toString())
+        )
+        try {
+            if (cursor.moveToFirst()) cursorToListProductJson(cursor, includeDataJson = true) else null
         } finally {
             cursor.close()
         }
@@ -1538,6 +1603,39 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
                 Cursor.FIELD_TYPE_FLOAT -> obj.put(name, cursor.getDouble(i))
                 Cursor.FIELD_TYPE_STRING -> obj.put(name, cursor.getString(i))
                 Cursor.FIELD_TYPE_BLOB -> obj.put(name, "[blob]")
+            }
+        }
+        return obj
+    }
+
+    /** Slim product row for grid/search — omits data_json unless [includeDataJson]. */
+    private fun cursorToListProductJson(cursor: Cursor, includeDataJson: Boolean = false): JSONObject {
+        if (includeDataJson) return cursorToJson(cursor)
+        fun col(name: String): Int = cursor.getColumnIndex(name)
+        fun str(name: String): String {
+            val idx = col(name)
+            return if (idx >= 0 && !cursor.isNull(idx)) cursor.getString(idx) else ""
+        }
+        fun dbl(name: String): Double {
+            val idx = col(name)
+            return if (idx >= 0 && !cursor.isNull(idx)) cursor.getDouble(idx) else 0.0
+        }
+        fun lng(name: String): Long {
+            val idx = col(name)
+            return if (idx >= 0 && !cursor.isNull(idx)) cursor.getLong(idx) else 0L
+        }
+        val obj = JSONObject().apply {
+            put("server_id", lng("server_id"))
+            put("id", lng("id"))
+            put("barcode", str("barcode"))
+            put("name", str("name"))
+            put("price", dbl("price"))
+            put("stock", dbl("stock"))
+            put("category", str("category"))
+            put("sku", str("sku"))
+            val catIdx = col("category_id")
+            if (catIdx >= 0 && !cursor.isNull(catIdx)) {
+                put("category_id", cursor.getLong(catIdx).toInt())
             }
         }
         return obj

@@ -5,6 +5,7 @@ import android.webkit.JavascriptInterface
 import com.insapos.v2.db.OfflineDatabase
 import com.insapos.v2.printers.PrinterSettings
 import com.insapos.v2.printers.PrinterType
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.Callable
@@ -238,19 +239,70 @@ class AndroidBridge(private val activity: MainActivity) {
 
     @JavascriptInterface
     fun getLocalProducts(query: String?): String =
-        getLocalProductsPage(query, 0, OfflineDatabase.DEFAULT_PRODUCT_PAGE_SIZE)
+        getLocalProductsPage(query, 0, OfflineDatabase.DEFAULT_PRODUCT_PAGE_SIZE, 0)
 
     @JavascriptInterface
-    fun getLocalProductsPage(query: String?, offset: Int, limit: Int): String = safeBridge {
+    fun getLocalProductsPage(query: String?, offset: Int, limit: Int, categoryId: Int): String = safeBridge {
+        activity.posService?.syncEngine?.suppressCatalogPull(30_000L)
         val safeLimit = limit.coerceIn(1, OfflineDatabase.MAX_PRODUCT_PAGE_SIZE)
         val safeOffset = offset.coerceAtLeast(0)
         val base = "/local/products?limit=$safeLimit&offset=$safeOffset"
+        val withCat = if (categoryId > 0) "$base&category_id=$categoryId" else base
         val path = if (!query.isNullOrBlank()) {
-            "$base&q=${java.net.URLEncoder.encode(query, "UTF-8")}"
+            "$withCat&q=${java.net.URLEncoder.encode(query, "UTF-8")}"
         } else {
-            base
+            withCat
         }
         httpGet(path, 5000, 15_000)
+    }
+
+    @JavascriptInterface
+    fun getLocalCategories(): String = safeBridge { httpGet("/local/categories", 3000, 5000) }
+
+    @JavascriptInterface
+    fun searchProducts(query: String?, limit: Int): String = safeBridge {
+        activity.posService?.syncEngine?.suppressCatalogPull(30_000L)
+        val db = activity.posService?.offlineDb
+        if (db == null) {
+            unavailable()
+        } else {
+            val q = query?.trim().orEmpty()
+            if (q.isEmpty()) {
+                JSONObject().put("ok", true).put("products", JSONArray()).put("count", 0).toString()
+            } else {
+                val products = db.searchProducts(q, limit.coerceIn(1, 200))
+                JSONObject().put("ok", true).put("products", products).put("count", products.length()).toString()
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun getProductByBarcode(barcode: String?): String = safeBridge {
+        val db = activity.posService?.offlineDb
+        if (db == null) {
+            unavailable()
+        } else {
+            val code = barcode?.trim().orEmpty()
+            if (code.isEmpty()) {
+                JSONObject().put("ok", false).put("error", "Barcode required").toString()
+            } else {
+                val product = db.getProductByBarcode(code)
+                JSONObject().put("ok", product != null).put("product", product ?: JSONObject.NULL).toString()
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun getProductById(productId: Int): String = safeBridge {
+        val db = activity.posService?.offlineDb
+        if (db == null) {
+            unavailable()
+        } else if (productId <= 0) {
+            JSONObject().put("ok", false).put("error", "Invalid product id").toString()
+        } else {
+            val product = db.getProductByServerId(productId)
+            JSONObject().put("ok", product != null).put("product", product ?: JSONObject.NULL).toString()
+        }
     }
 
     @JavascriptInterface

@@ -17,12 +17,14 @@ class PosEngine(private val db: OfflineDatabase) {
         query: String? = null,
         limit: Int = OfflineDatabase.DEFAULT_PRODUCT_PAGE_SIZE,
         offset: Int = 0,
+        categoryId: Int? = null,
     ): JSONObject {
-        val total = db.getProductCount()
+        val catId = categoryId?.takeIf { it > 0 }
+        val total = if (catId != null) db.getProductCountForCategory(catId) else db.getProductCount()
         val products = if (!query.isNullOrBlank()) {
-            db.searchProducts(query)
+            db.searchProducts(query, limit.coerceIn(1, OfflineDatabase.MAX_SEARCH_RESULTS))
         } else {
-            db.getProductsPage(offset, limit)
+            db.getProductsPage(offset, limit, catId)
         }
         return JSONObject().apply {
             put("ok", true)
@@ -32,6 +34,15 @@ class PosEngine(private val db: OfflineDatabase) {
             put("offset", offset)
             put("limit", limit)
             put("has_more", offset + products.length() < total)
+        }
+    }
+
+    fun getCategories(): JSONObject {
+        val categories = db.getCategories()
+        return JSONObject().apply {
+            put("ok", true)
+            put("categories", categories)
+            put("count", categories.length())
         }
     }
 

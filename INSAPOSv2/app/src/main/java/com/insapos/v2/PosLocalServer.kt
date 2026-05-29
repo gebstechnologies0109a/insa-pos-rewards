@@ -93,6 +93,7 @@ class PosLocalServer(
                 uri == "/offline/sync/now" && method == Method.POST -> handleSyncNow()
                 // Local POS engine endpoints
                 uri == "/local/products" -> handleLocalProducts(session)
+                uri == "/local/categories" -> handleLocalCategories()
                 uri == "/local/inventory" -> handleLocalInventory()
                 uri == "/local/customers" -> handleLocalCustomers()
                 uri == "/local/sale" && method == Method.POST -> handleLocalSale(session)
@@ -653,7 +654,13 @@ class PosLocalServer(
             ?.coerceIn(1, OfflineDatabase.MAX_PRODUCT_PAGE_SIZE)
             ?: OfflineDatabase.DEFAULT_PRODUCT_PAGE_SIZE
         val offset = session.parms?.get("offset")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-        return jsonOk(engine.getProducts(query, limit, offset))
+        val categoryId = session.parms?.get("category_id")?.toIntOrNull()?.takeIf { it > 0 }
+        return jsonOk(engine.getProducts(query, limit, offset, categoryId))
+    }
+
+    private fun handleLocalCategories(): Response {
+        val engine = getPosEngine() ?: return jsonError("POS engine not ready")
+        return jsonOk(engine.getCategories())
     }
 
     private fun handleLocalInventory(): Response {

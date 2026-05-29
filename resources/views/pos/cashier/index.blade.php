@@ -396,7 +396,7 @@
                        class="w-full p-1.5 pl-7 lg:p-2.5 lg:pl-9 border rounded-lg text-xs lg:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                 <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-400 absolute left-2 top-2 lg:left-3 lg:top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             </div>
-            <select x-model="selectedCategory" @change="gridDisplayLimit = 48; filterProducts()" class="p-1.5 lg:p-2.5 border rounded-lg text-xs lg:text-sm bg-white max-w-[120px] lg:max-w-none">
+            <select x-model="selectedCategory" @change="gridDisplayLimit = 48; _nativeGridOffset = 0; filterProducts()" class="p-1.5 lg:p-2.5 border rounded-lg text-xs lg:text-sm bg-white max-w-[120px] lg:max-w-none">
                 <option value="">All Categories</option>
                 <template x-for="cat in categories" :key="cat.id">
                     <option :value="cat.id" x-text="cat.name"></option>
@@ -1633,6 +1633,11 @@ function posApp() {
         _cameraScanInterval: null,
         activeShift: null,
         products: [],
+        productsCatalogMode: '',
+        productCount: 0,
+        _nativeGridOffset: 0,
+        _productLru: {},
+        PRODUCT_LRU_MAX: 32,
         categories: [],
         filteredProducts: [],
         filteredProductsTotal: 0,
@@ -1648,10 +1653,12 @@ function posApp() {
         _syncEngineReady: false,
         _scanInputTimer: null,
         _filterRaf: null,
+        _filterDebounceTimer: null,
         _searchCache: {},
         _productBySku: null,
         _productByBarcode: null,
         _scanSearchDelay: 500,
+        _nativeSearchDelay: 300,
         LARGE_CATALOG_THRESHOLD: 200,
         searchQuery: '',
         selectedCategory: '',
@@ -1933,11 +1940,20 @@ function posApp() {
         },
 
         scheduleFilterProducts() {
-            if (this._filterRaf) cancelAnimationFrame(this._filterRaf);
-            this._filterRaf = requestAnimationFrame(() => {
-                this._filterRaf = null;
-                this.filterProducts();
-            });
+            clearTimeout(this._filterDebounceTimer);
+            const delay = this.isStorageCatalog() ? this._nativeSearchDelay : 0;
+            const run = () => {
+                if (this._filterRaf) cancelAnimationFrame(this._filterRaf);
+                this._filterRaf = requestAnimationFrame(() => {
+                    this._filterRaf = null;
+                    this.filterProducts();
+                });
+            };
+            if (delay > 0) {
+                this._filterDebounceTimer = setTimeout(run, delay);
+            } else {
+                run();
+            }
         },
 
         rememberSearchCache(key, value) {
@@ -1968,10 +1984,13 @@ function posApp() {
             this._productByBarcode = byBarcode;
         },
 
-        /** Local IndexedDB-backed catalog search (no API per keystroke). */
+        /** Exact barcode/SKU — SQLite on native tablets, in-memory map otherwise. */
         findProductExact(code) {
             if (!code) return null;
             const key = String(code);
+            if (this.isStorageCatalog()) {
+                return this.findProductExactNative(key);
+            }
             if (this._productByBarcode) {
                 return this._productByBarcode.get(key) || this._productBySku.get(key) || null;
             }
@@ -1981,6 +2000,9 @@ function posApp() {
         searchProductsLocal(query, limit = 30) {
             const q = query.trim();
             if (q.length < 3) return [];
+            if (this.isStorageCatalog()) {
+                return this.searchNativeProducts(q, limit);
+            }
             const ql = q.toLowerCase();
             const results = [];
             for (let i = 0; i < this.products.length && results.length < limit; i++) {
@@ -2245,55 +2267,166 @@ function posApp() {
         },
 
         mapNativeProductRow(p) {
+            let dj = p.data_json;
+            if (typeof dj === 'string') {
+                try { dj = JSON.parse(dj); } catch { dj = null; }
+            }
             return {
                 id: p.server_id || p.id,
                 name: p.name,
                 barcode: p.barcode || '',
-                sku: p.sku || p.data_json?.sku || '',
+                sku: p.sku || dj?.sku || '',
                 price: parseFloat(p.price || 0),
                 stock: parseFloat(p.stock || 0),
-                category: p.category || '',
-                category_id: p.category_id || null,
+                category: p.category || dj?.category || '',
+                category_id: p.category_id || dj?.category_id || null,
             };
         },
 
-        async loadProductsFromNative() {
-            if (!this.useNativeEngine()) return false;
-            const pageSize = 500;
-            const fetchPage = (offset) => {
-                if (typeof window.INSAPOS.getLocalProductsPage === 'function') {
-                    return window.INSAPOS.getLocalProductsPage('', offset, pageSize);
-                }
-                return window.INSAPOS.getLocalProducts('');
+        isStorageCatalog() {
+            return this.productsCatalogMode === 'storage' && this.useNativeEngine();
+        },
+
+        parseNativeProductsPayload(raw) {
+            const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (!data || !data.ok) return { items: [], total: 0, hasMore: false };
+            const products = Array.isArray(data.products) ? data.products : Object.values(data.products || {});
+            const items = [];
+            for (const p of products) {
+                const row = this.mapNativeProductRow(p);
+                if (row.id) items.push(row);
+            }
+            return {
+                items,
+                total: data.total ?? items.length,
+                hasMore: !!data.has_more,
             };
+        },
+
+        cacheProductLru(product) {
+            if (!product || !product.id) return;
+            const key = String(product.id);
+            this._productLru[key] = product;
+            const keys = Object.keys(this._productLru);
+            if (keys.length > this.PRODUCT_LRU_MAX) delete this._productLru[keys[0]];
+            if (product.barcode) this._productLru[String(product.barcode)] = product;
+            if (product.sku) this._productLru[String(product.sku)] = product;
+        },
+
+        findProductInLru(code) {
+            return this._productLru[String(code)] || null;
+        },
+
+        fetchNativeProductsPage(query, offset, limit, categoryId) {
+            if (!this.useNativeEngine()) return { items: [], total: 0, hasMore: false };
             try {
-                const mapped = [];
-                let offset = 0;
-                let hasMore = true;
-                while (hasMore) {
-                    const raw = fetchPage(offset);
-                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                    if (!data.ok || !data.products) break;
-                    const products = Array.isArray(data.products) ? data.products : Object.values(data.products);
-                    for (const p of products) {
-                        const row = this.mapNativeProductRow(p);
-                        if (row.id) mapped.push(row);
-                    }
-                    hasMore = !!data.has_more && products.length > 0;
-                    offset += products.length;
-                    if (!hasMore || products.length === 0) break;
-                    await new Promise((r) => setTimeout(r, 0));
+                const cat = categoryId ? parseInt(categoryId, 10) : 0;
+                let raw;
+                if (typeof window.INSAPOS.getLocalProductsPage === 'function') {
+                    raw = window.INSAPOS.getLocalProductsPage(query || '', offset, limit, cat);
+                } else {
+                    raw = window.INSAPOS.getLocalProducts(query || '');
                 }
-                if (mapped.length > 0) {
-                    this.products = mapped;
-                    this.invalidateSearchCache();
-                    this.rebuildProductIndex();
-                    this.filterProducts();
-                    this.productsLoading = false;
-                    return true;
+                const parsed = this.parseNativeProductsPayload(raw);
+                parsed.items.forEach((p) => this.cacheProductLru(p));
+                return parsed;
+            } catch (e) {
+                console.warn('[pos] native page fetch failed:', e);
+                return { items: [], total: 0, hasMore: false };
+            }
+        },
+
+        searchNativeProducts(query, limit) {
+            if (!this.useNativeEngine()) return [];
+            try {
+                let raw;
+                if (typeof window.INSAPOS.searchProducts === 'function') {
+                    raw = window.INSAPOS.searchProducts(query, limit);
+                } else {
+                    raw = window.INSAPOS.getLocalProductsPage(query, 0, limit, 0);
+                }
+                const parsed = this.parseNativeProductsPayload(raw);
+                parsed.items.forEach((p) => this.cacheProductLru(p));
+                return parsed.items;
+            } catch (e) {
+                console.warn('[pos] native search failed:', e);
+                return [];
+            }
+        },
+
+        findProductExactNative(code) {
+            const cached = this.findProductInLru(code);
+            if (cached) return cached;
+            try {
+                if (typeof window.INSAPOS.getProductByBarcode === 'function') {
+                    const raw = window.INSAPOS.getProductByBarcode(code);
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (data.ok && data.product) {
+                        const row = this.mapNativeProductRow(data.product);
+                        this.cacheProductLru(row);
+                        return row;
+                    }
+                }
+                const hits = this.searchNativeProducts(code, 8);
+                const key = String(code);
+                return hits.find((p) => p.barcode === key || p.sku === key) || hits[0] || null;
+            } catch (e) {
+                console.warn('[pos] native exact lookup failed:', e);
+                return null;
+            }
+        },
+
+        async refreshNativeProductCount() {
+            if (!this.useNativeEngine()) return 0;
+            try {
+                if (typeof window.INSAPOS.getOfflineStats === 'function') {
+                    const raw = window.INSAPOS.getOfflineStats();
+                    const stats = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    this.productCount = stats.products || 0;
+                    this.posSettings.products_cached = this.productCount;
+                    return this.productCount;
                 }
             } catch (e) {
-                console.warn('[pos] native product load failed:', e);
+                console.warn('[pos] native stats failed:', e);
+            }
+            return this.productCount;
+        },
+
+        loadNativeCategories() {
+            if (!this.useNativeEngine()) return;
+            try {
+                if (typeof window.INSAPOS.getLocalCategories === 'function') {
+                    const raw = window.INSAPOS.getLocalCategories();
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (data.ok && data.categories && data.categories.length) {
+                        this.categories = data.categories;
+                    }
+                }
+            } catch (e) {
+                console.warn('[pos] native categories failed:', e);
+            }
+        },
+
+        async initNativeStorageCatalog() {
+            if (!this.useNativeEngine()) return false;
+            this.productsCatalogMode = 'storage';
+            this.products = [];
+            this.invalidateSearchCache();
+            await this.refreshNativeProductCount();
+            this.loadNativeCategories();
+            if (this.productCount > 0) {
+                this.productsLoading = false;
+                this._nativeGridOffset = 0;
+                this.gridDisplayLimit = 48;
+                this.filterProducts();
+                return true;
+            }
+            const first = this.fetchNativeProductsPage('', 0, 48, this.selectedCategory);
+            if (first.items.length > 0) {
+                this.productCount = first.total || first.items.length;
+                this.productsLoading = false;
+                this.filterProducts();
+                return true;
             }
             return false;
         },
@@ -2337,8 +2470,14 @@ function posApp() {
         async finishStoreDownload(result) {
             this.storeDownload.active = false;
             this.storeDownload.percent = 100;
-            await this.refreshProductsFromDB();
-            const count = this.products.length;
+            if (this.isStorageCatalog()) {
+                await this.refreshNativeProductCount();
+                const count = this.productCount;
+                this.posReady = count > 0 || (result && result.online === false);
+            } else {
+                await this.refreshProductsFromDB();
+            }
+            const count = this.isStorageCatalog() ? this.productCount : this.products.length;
             this.posReady = count > 0 || (result && result.online === false);
             if (!this.posReady) {
                 this.posReady = true;
@@ -2416,18 +2555,17 @@ function posApp() {
                 SyncEngine.on('buddyRecovered', () => { if (!this.silentSync) this.showToast('Recovered offline data from INSABuddy', 'info'); });
                 SyncEngine.on('syncError', (d) => { if (!this.silentSync) this.showToast('Sync error: ' + (d.error || 'Unknown'), 'error'); });
                 if (this.useNativeEngine()) {
-                    const nativeLoaded = await this.loadProductsFromNative();
-                    if (nativeLoaded) {
+                    const nativeReady = await this.initNativeStorageCatalog();
+                    SyncEngine.init({ branchId: this.config.branchId, skipInitialDownload: true });
+                    if (nativeReady) {
                         this.posReady = true;
                         this.syncStatus = 'synced';
-                        SyncEngine.init({ branchId: this.config.branchId, skipInitialDownload: true });
                         if (typeof window.INSAPOS.triggerLocalSync === 'function') {
                             setTimeout(() => {
                                 try { window.INSAPOS.triggerLocalSync(); } catch (e) {}
                             }, 8000);
                         }
                     } else {
-                        SyncEngine.init({ branchId: this.config.branchId, skipInitialDownload: true });
                         await SyncEngine.downloadAll({ force: !hadCache, silent: hadCache });
                     }
                 } else {
@@ -2439,7 +2577,7 @@ function posApp() {
                 this.loadProducts();
             }
 
-            if (this.posReady && this.products.length > 0) {
+            if (this.posReady && (this.productCount > 0 || this.products.length > 0)) {
                 this.productsLoading = false;
             }
         },
@@ -3661,6 +3799,10 @@ function posApp() {
         },
 
         async loadProducts() {
+            if (this.isStorageCatalog()) {
+                this.productsLoading = false;
+                return;
+            }
             const db = window.INSADB;
             const useLocalOnly = this.posReady && this.products.length > 0;
             if (useLocalOnly) {
@@ -3725,6 +3867,12 @@ function posApp() {
         },
 
         async refreshProductsFromDB() {
+            if (this.isStorageCatalog()) {
+                await this.refreshNativeProductCount();
+                this._nativeGridOffset = 0;
+                this.filterProducts();
+                return;
+            }
             const db = window.INSADB;
             if (!db) return;
             let cached = await db.products.getAll();
@@ -3735,6 +3883,24 @@ function posApp() {
         },
 
         loadMoreGrid() {
+            if (this.isStorageCatalog()) {
+                const q = this.searchQuery.trim();
+                const offset = this.filteredProducts.length;
+                const page = this.fetchNativeProductsPage(
+                    q.length >= 3 ? q : '',
+                    offset,
+                    48,
+                    this.selectedCategory
+                );
+                if (page.items.length) {
+                    this.filteredProducts = this.filteredProducts.concat(page.items);
+                    this.filteredProductsTotal = page.total;
+                    this.gridCanLoadMore = page.hasMore;
+                } else {
+                    this.gridCanLoadMore = false;
+                }
+                return;
+            }
             this.gridDisplayLimit += 48;
             const cacheKey = 'c|' + this.selectedCategory + '|' + this.searchQuery.trim() + '|' + this.gridDisplayLimit;
             delete this._searchCache[cacheKey];
@@ -3742,6 +3908,10 @@ function posApp() {
         },
 
         filterProducts() {
+            if (this.isStorageCatalog()) {
+                this.filterProductsStorage();
+                return;
+            }
             if (this.posMode === 'retail') {
                 if (this.filteredProducts.length || this.filteredProductsTotal) {
                     this.filteredProducts = [];
@@ -3798,6 +3968,53 @@ function posApp() {
             this.gridCanLoadMore = total > items.length;
         },
 
+        filterProductsStorage() {
+            if (this.posMode === 'retail') {
+                if (this.filteredProducts.length || this.filteredProductsTotal) {
+                    this.filteredProducts = [];
+                    this.filteredProductsTotal = 0;
+                }
+                this.catalogNeedsCategory = false;
+                this.gridCanLoadMore = false;
+                return;
+            }
+            const q = this.searchQuery.trim();
+            const catalogSize = this.productCount || 0;
+            if (!q && !this.selectedCategory && catalogSize > this.LARGE_CATALOG_THRESHOLD) {
+                this.catalogNeedsCategory = true;
+                this.filteredProducts = [];
+                this.filteredProductsTotal = 0;
+                this.gridCanLoadMore = false;
+                return;
+            }
+            this.catalogNeedsCategory = false;
+            const cacheKey = 's|' + this.selectedCategory + '|' + q + '|' + this.gridDisplayLimit;
+            if (this._searchCache[cacheKey]) {
+                const cached = this._searchCache[cacheKey];
+                this.filteredProductsTotal = cached.total;
+                this.filteredProducts = cached.items;
+                this.gridCanLoadMore = cached.hasMore;
+                return;
+            }
+            const limit = q.length >= 3 ? 80 : this.gridDisplayLimit;
+            const page = this.fetchNativeProductsPage(
+                q.length >= 3 ? q : '',
+                0,
+                limit,
+                this.selectedCategory
+            );
+            this.products = page.items;
+            this.rememberSearchCache(cacheKey, {
+                total: page.total,
+                items: page.items,
+                hasMore: page.hasMore,
+            });
+            this.filteredProductsTotal = page.total;
+            this.filteredProducts = page.items;
+            this.gridCanLoadMore = page.hasMore;
+            this.productsLoading = false;
+        },
+
         async loadRecentSales() {
             this.recentSales = [];
             try {
@@ -3841,7 +4058,21 @@ function posApp() {
         changeQty(idx, delta) {
             const item = this.cart[idx]; const newQty = item.qty + delta;
             if (newQty <= 0) { this.cart.splice(idx, 1); }
-            else { const product = this.products.find(p => p.id === item.product_id); if (product && product.stock > 0 && newQty > product.stock) { this.showToast('Not enough stock. Available: ' + product.stock, 'warning'); return; } item.qty = newQty; }
+            else {
+                let stockCap = null;
+                if (this.isStorageCatalog()) {
+                    const cached = this.findProductInLru(item.product_id);
+                    if (cached) stockCap = cached.stock;
+                } else {
+                    const product = this.products.find(p => p.id === item.product_id);
+                    if (product) stockCap = product.stock;
+                }
+                if (stockCap != null && stockCap > 0 && newQty > stockCap) {
+                    this.showToast('Not enough stock. Available: ' + stockCap, 'warning');
+                    return;
+                }
+                item.qty = newQty;
+            }
             this.scheduleCustomerDisplaySync();
         },
 
