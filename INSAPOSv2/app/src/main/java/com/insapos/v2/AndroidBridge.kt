@@ -413,6 +413,14 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
+    fun setAllowMinimize(enabled: Boolean): String = safeBridge {
+        activity.runOnUiThread {
+            if (activityAlive()) activity.setAllowMinimizeEnabled(enabled)
+        }
+        JSONObject().put("ok", true).put("allow_minimize", enabled).toString()
+    }
+
+    @JavascriptInterface
     fun getPosSettings(): String = safeBridge {
         val mgr = activity.customerDisplayManager
         val cdStatus = mgr.getStatusJson()

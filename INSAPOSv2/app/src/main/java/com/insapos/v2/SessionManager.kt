@@ -18,7 +18,7 @@ class SessionManager(context: Context) {
         private const val KEY_TERMINAL_SESSION_ID = "terminal_session_id"
         private const val KEY_CASHIER_ID = "cashier_id"
         private const val KEY_LICENSE_VALID_UNTIL = "license_valid_until"
-        /** When true (default), system nav/status bars stay reachable so staff can leave INSAPOS. */
+        /** When true, system nav/status bars stay reachable so staff can leave INSAPOS. */
         private const val KEY_ALLOW_MINIMIZE = "insapos_allow_minimize"
     }
 
@@ -68,9 +68,9 @@ class SessionManager(context: Context) {
         get() = prefs.getLong(KEY_LICENSE_VALID_UNTIL, 0L)
         set(value) = prefs.edit().putLong(KEY_LICENSE_VALID_UNTIL, value).apply()
 
-    /** Lets users swipe home/recents; when false, sticky immersive kiosk is enforced. */
+    /** Lets users swipe home/recents; when false (default), sticky immersive kiosk is enforced. */
     var allowMinimize: Boolean
-        get() = prefs.getBoolean(KEY_ALLOW_MINIMIZE, true)
+        get() = prefs.getBoolean(KEY_ALLOW_MINIMIZE, false)
         set(value) = prefs.edit().putBoolean(KEY_ALLOW_MINIMIZE, value).apply()
 
     fun isLicenseCachedValid(): Boolean {

@@ -311,7 +311,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && !isAllowMinimizeEnabled()) {
+        if (hasFocus) {
             applyDisplayMode()
         }
     }
@@ -367,18 +367,35 @@ class MainActivity : AppCompatActivity() {
     // --- Kiosk / immersive fullscreen ---
 
     private fun isAllowMinimizeEnabled(): Boolean =
-        if (::session.isInitialized) session.allowMinimize else true
+        if (::session.isInitialized) session.allowMinimize else false
+
+    /** POS Settings toggle — re-applies kiosk immersive or relaxed system bars. */
+    fun setAllowMinimizeEnabled(enabled: Boolean) {
+        session.allowMinimize = enabled
+        updateKioskWindowBehavior()
+        applyDisplayMode()
+    }
 
     private fun setupKioskDisplay() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
         }
 
+        updateKioskWindowBehavior()
         applyDisplayMode()
+    }
 
+    private fun updateKioskWindowBehavior() {
         if (!isAllowMinimizeEnabled()) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
