@@ -33,8 +33,6 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.net.Uri
-import android.widget.FrameLayout
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -44,11 +42,9 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.core.view.updateLayoutParams
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.insapos.v2.sync.SyncEngine
@@ -73,9 +69,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvOfflineStats: TextView
     private lateinit var fabModeToggle: ExtendedFloatingActionButton
     private lateinit var fabSettings: FloatingActionButton
-    private lateinit var cashierToolbar: LinearLayout
-    private lateinit var btnToolbarPrinter: ImageButton
-    private lateinit var btnToolbarSettings: ImageButton
     private lateinit var session: SessionManager
     private lateinit var connectivity: ConnectivityMonitor
 
@@ -278,13 +271,6 @@ class MainActivity : AppCompatActivity() {
         fabModeToggle.setOnClickListener { onModeToggleClicked() }
         fabSettings = findViewById(R.id.fabSettings)
         fabSettings.setOnClickListener { openPosSettings() }
-        cashierToolbar = findViewById(R.id.cashierToolbar)
-        btnToolbarPrinter = findViewById(R.id.btnToolbarPrinter)
-        btnToolbarSettings = findViewById(R.id.btnToolbarSettings)
-        btnToolbarPrinter.setOnClickListener { openPrinterSettings() }
-        btnToolbarSettings.setOnClickListener { openPosSettings() }
-        setupCashierToolbarInsets()
-        cashierToolbar.bringToFront()
 
         val versionText = findViewById<TextView>(R.id.versionText)
         versionText.text = "v${BuildConfig.VERSION_NAME}"
@@ -641,8 +627,7 @@ class MainActivity : AppCompatActivity() {
                 injectBridgeReady()
                 detectSuperAdminFromPage()
                 updateModeToggleFab(url)
-                updateCashierToolbarVisibility(url)
-                injectCashierToolbarFallbackIfNeeded()
+                updateSettingsFabVisibility(url)
                 posService?.let { onPageReadyForService(it) }
             }
 
@@ -921,7 +906,7 @@ class MainActivity : AppCompatActivity() {
         loadPosUrl()
     }
 
-    /** Opens POS settings in the WebView (native toolbar or JS bridge). */
+    /** Opens POS settings in the WebView (web header gear or JS bridge). */
     fun openPosSettings() {
         if (!isWebViewUsable()) return
         runOnUiThread {
@@ -941,7 +926,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Opens printer settings modal in the WebView (native toolbar or JS bridge). */
+    /** Opens printer settings modal in the WebView (web header or JS bridge). */
     fun openPrinterSettings() {
         if (!isWebViewUsable()) return
         runOnUiThread {
@@ -959,17 +944,6 @@ class MainActivity : AppCompatActivity() {
                 null
             )
         }
-    }
-
-    private fun setupCashierToolbarInsets() {
-        ViewCompat.setOnApplyWindowInsetsListener(cashierToolbar) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.updateLayoutParams<FrameLayout.LayoutParams> {
-                topMargin = (8 * resources.displayMetrics.density).toInt() + bars.top
-            }
-            insets
-        }
-        ViewCompat.requestApplyInsets(cashierToolbar)
     }
 
     fun openSuperAdminPanel() {
@@ -1007,13 +981,13 @@ class MainActivity : AppCompatActivity() {
     private fun updateModeToggleFab(currentUrl: String?) {
         if (!isSuperAdminFromWeb) {
             fabModeToggle.visibility = View.GONE
-            updateCashierToolbarVisibility(currentUrl)
+            updateSettingsFabVisibility(currentUrl)
             return
         }
         fabModeToggle.visibility = View.VISIBLE
         val onSuperAdmin = isSuperAdminPath(currentUrl ?: "")
         fabModeToggle.text = if (onSuperAdmin) "POS Mode" else "Super Admin"
-        updateCashierToolbarVisibility(currentUrl)
+        updateSettingsFabVisibility(currentUrl)
     }
 
     private fun isCashierPath(url: String?): Boolean {
@@ -1025,44 +999,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Cashier: native toolbar on top of WebView; other pages: legacy settings FAB. */
-    private fun updateCashierToolbarVisibility(currentUrl: String?) {
+    /** Hide native settings FAB on cashier — web header has gear beside printer. */
+    private fun updateSettingsFabVisibility(currentUrl: String?) {
         val onCashier = isCashierPath(currentUrl)
-        cashierToolbar.visibility = if (onCashier) View.VISIBLE else View.GONE
         fabSettings.visibility = if (onCashier) View.GONE else View.VISIBLE
-        if (onCashier) {
-            cashierToolbar.bringToFront()
-            cashierToolbar.elevation = 16f * resources.displayMetrics.density
-            cashierToolbar.translationZ = cashierToolbar.elevation
-        }
-    }
-
-    /** Ensure web listeners exist when production HTML lacks deployed header buttons. */
-    private fun injectCashierToolbarFallbackIfNeeded() {
-        if (!isCashierPath(webView.url)) return
-        if (!isWebViewUsable()) return
-        webView.evaluateJavascript(
-            """
-            (function() {
-                if (!window.INSAPOS) return;
-                if (!document.querySelector('[aria-label="POS Settings"]')) {
-                    document.addEventListener('insapos:openSettings', function() {
-                        if (window.posAppInstance && window.posAppInstance.openPosSettings) {
-                            window.posAppInstance.openPosSettings();
-                        }
-                    }, { once: false });
-                }
-                if (!document.querySelector('[aria-label="Printer Settings"]')) {
-                    document.addEventListener('insapos:openPrinter', function() {
-                        if (window.posAppInstance && window.posAppInstance.openPrinterSettings) {
-                            window.posAppInstance.openPrinterSettings();
-                        }
-                    }, { once: false });
-                }
-            })();
-            """.trimIndent(),
-            null
-        )
     }
 
     private fun isSuperAdminPath(url: String): Boolean {

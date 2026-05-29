@@ -78,6 +78,32 @@
         /* Safe area for Android system bars and notch devices */
         body { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
+        /* Fixed bottom action bars — stay above Android system navigation */
+        .pos-fixed-bottom {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            background: #fff;
+            border-top: 1px solid #e5e7eb;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+        }
+        .pos-content-pad-bottom {
+            padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+        }
+        .pos-header-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+            min-height: 44px;
+            flex-shrink: 0;
+        }
+
         /* Prevent modal overflow on small screens */
         .modal-overlay > div { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; }
 
@@ -89,7 +115,7 @@
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/terminal-session.js') }}"></script>
     <script src="{{ asset('js/insabuddy.js') }}"></script>
-    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.34"></script>
+    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.35"></script>
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden insapos-alpine-pending" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
@@ -211,7 +237,7 @@
 <!-- HEADER -->
 <header class="bg-white shadow px-2 py-1 lg:px-4 lg:py-2 flex items-center justify-between flex-shrink-0">
     <h1 class="text-sm lg:text-lg font-bold text-gray-800 whitespace-nowrap">{{ $brandName }}</h1>
-    <div class="flex items-center gap-1.5 lg:gap-3 text-[11px] lg:text-sm text-gray-600 flex-wrap justify-end">
+    <div class="flex items-center gap-1.5 lg:gap-3 text-[11px] lg:text-sm text-gray-600 flex-nowrap justify-end min-w-0 overflow-x-auto">
         <!-- Native dashboard strip -->
         <div x-show="hasNativeBridge && dashboardData" class="hidden lg:flex items-center gap-2 px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-[10px] text-slate-600"
              :title="'Cached products: ' + (dashboardData?.products_cached || 0)">
@@ -256,54 +282,52 @@
             <span class="text-[10px] lg:text-xs font-medium" :class="androidLocalUp ? 'text-green-700' : 'text-amber-700'"
                   x-text="androidLocalUp ? 'Local OK' : 'Local down'"></span>
         </div>
-        <!-- Product QR/Barcode scan -->
-        <button @click="scanProduct()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100 text-blue-600" title="Scan Product QR/Barcode"
-                :disabled="_scanning">
-            <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-        </button>
         <!-- Cash drawer — for INSABuddy or native bridge -->
-        <template x-if="buddyConnected || hasNativeBridge">
-            <button @click="openCashDrawer()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Open Cash Drawer">
-                <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-            </button>
-        </template>
+        <button x-show="buddyConnected || hasNativeBridge" @click="openCashDrawer()" class="pos-header-icon rounded-lg hover:bg-gray-100" title="Open Cash Drawer">
+            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+        </button>
 
         <!-- Customer Rewards Scan -->
-        <button @click="showRewardsModal = true" class="p-1 lg:p-1.5 rounded hover:bg-gray-100 relative" title="Scan Customer Card / QR for DIY Biz Rewards">
-            <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
-            <span x-show="selectedCustomer" class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full"></span>
+        <button @click="showRewardsModal = true" class="pos-header-icon rounded-lg hover:bg-gray-100 relative" title="Scan Customer Card / QR for DIY Biz Rewards">
+            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+            <span x-show="selectedCustomer" class="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></span>
         </button>
 
-        <!-- Printer + POS Settings — INSABuddy or native bridge -->
-        <template x-if="buddyConnected || hasNativeBridge">
-            <div class="flex items-center gap-1 flex-shrink-0">
-                <button @click="openPrinterSettings()" type="button"
-                        class="flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg hover:bg-gray-100 active:bg-gray-200 flex-shrink-0"
-                        title="Printer Settings" aria-label="Printer Settings">
-                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                </button>
-                <button @click="openPosSettings()" type="button"
-                        class="flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg hover:bg-gray-100 active:bg-gray-200 flex-shrink-0"
-                        title="POS Settings" aria-label="POS Settings">
-                    <svg class="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                </button>
-            </div>
-        </template>
+        <!-- Toolbar: clock, printer, scan, gear, I/O, recent -->
+        <div class="flex items-center gap-0.5 lg:gap-1 flex-shrink-0">
+            <span class="font-mono text-xs lg:text-sm text-gray-700 tabular-nums min-w-[5.5rem] text-center px-1 select-none flex-shrink-0"
+                  x-text="headerClock" aria-live="polite"></span>
 
-        <!-- I/O Settings — keyboard, scanner, camera -->
-        <template x-if="buddyConnected || hasNativeBridge">
-            <button @click="openIoSettings()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="I/O Settings">
-                <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            <button x-show="hasNativeBridge || buddyConnected" @click="openPrinterSettings()" type="button"
+                    class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200"
+                    title="Printer Settings" aria-label="Printer Settings">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
             </button>
-        </template>
 
-        <button @click="showHistoryModal = true; loadRecentSales()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="Recent Transactions">
-            <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        </button>
+            <button @click="scanProduct()" type="button"
+                    class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200 text-blue-600"
+                    title="Scan Product QR/Barcode" aria-label="Scan Product QR/Barcode" :disabled="_scanning">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+            </button>
 
-        <!-- Clock -->
-        <span class="font-mono text-xs lg:text-sm text-gray-700 tabular-nums min-w-[5.5rem] text-center px-1 select-none flex-shrink-0"
-              x-text="headerClock" aria-live="polite"></span>
+            <button x-show="hasNativeBridge || buddyConnected" @click="openPosSettings()" type="button"
+                    class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200"
+                    title="POS Settings" aria-label="POS Settings">
+                <svg class="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            </button>
+
+            <button x-show="hasNativeBridge || buddyConnected" @click="openIoSettings()" type="button"
+                    class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200"
+                    title="I/O Settings" aria-label="I/O Settings">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            </button>
+
+            <button @click="showHistoryModal = true; loadRecentSales()" type="button"
+                    class="pos-header-icon rounded-lg hover:bg-gray-100 active:bg-gray-200"
+                    title="Recent Transactions" aria-label="Recent Transactions">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </button>
+        </div>
 
         <!-- Mode Toggle -->
         <button @click="toggleMode()" class="flex items-center gap-1 px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full text-[10px] lg:text-xs font-semibold border transition-colors"
@@ -363,7 +387,7 @@
 </div>
 
 <!-- ═══════════ MAIN POS SCREEN ═══════════ -->
-<div x-show="screen === 'pos'" id="posScreen" class="flex flex-1 overflow-hidden p-2 gap-2 lg:p-4 lg:gap-4" :class="!activeShift && 'opacity-40 pointer-events-none'">
+<div x-show="screen === 'pos'" id="posScreen" class="flex flex-1 overflow-hidden p-2 gap-2 lg:p-4 lg:gap-4 pos-content-pad-bottom" :class="!activeShift && 'opacity-40 pointer-events-none'">
 
     <!-- LEFT: PRODUCTS (Cafe Mode) -->
     <div x-show="posMode === 'cafe'" class="flex-1 flex flex-col min-w-0">
@@ -560,8 +584,8 @@
             </table>
         </div>
 
-        <!-- Retail Mode Footer: Customer + Totals + Pay (single row) -->
-        <div class="border-t bg-white flex-shrink-0 px-2 py-1.5 lg:px-4 lg:py-2">
+        <!-- Retail Mode Footer: Customer + Totals + Pay (fixed above system nav) -->
+        <div x-show="posMode === 'retail'" class="pos-fixed-bottom px-2 py-1.5 lg:px-4 lg:py-2">
             <div class="flex items-center gap-2 lg:gap-3">
                 <!-- Customer -->
                 <div class="relative w-40 lg:w-52 flex-shrink-0">
@@ -672,8 +696,8 @@
             <div x-show="cart.length === 0" class="text-center py-6 lg:py-8 text-gray-300 text-[11px] lg:text-sm" x-text="posMode === 'retail' ? 'Cart is empty. Scan items to add.' : 'Cart is empty. Tap products to add.'"></div>
         </div>
 
-        <!-- Pinned cart footer — always visible -->
-        <div class="p-2 lg:p-4 border-t bg-white flex-shrink-0 space-y-0.5 lg:space-y-2">
+        <!-- Pinned cart footer — fixed above system nav (cafe mode) -->
+        <div x-show="posMode === 'cafe'" class="pos-fixed-bottom p-2 lg:p-4 space-y-0.5 lg:space-y-2">
             <div class="flex justify-between text-[11px] lg:text-sm"><span class="text-gray-500">Subtotal</span><span x-text="'₱' + cartSubtotal.toFixed(2)"></span></div>
             <div class="flex justify-between text-[11px] lg:text-sm">
                 <span class="text-gray-500 cursor-pointer hover:text-blue-600" @click="showOrderDiscountModal = true">Discount <span class="text-[9px] lg:text-xs">(tap)</span></span>
@@ -690,7 +714,7 @@
 </div>
 
 <!-- ═══════════ CHECKOUT SCREEN ═══════════ -->
-<div x-show="screen === 'checkout'" id="checkoutScreen" class="flex flex-1 overflow-hidden p-2 gap-2 lg:p-4 lg:gap-4">
+<div x-show="screen === 'checkout'" id="checkoutScreen" class="flex flex-1 overflow-hidden p-2 gap-2 lg:p-4 lg:gap-4 pos-content-pad-bottom">
 
     <!-- LEFT: ORDER REVIEW -->
     <div class="flex-1 bg-white rounded-lg shadow flex flex-col min-w-0 overflow-hidden">
@@ -808,8 +832,8 @@
             </div>
         </div>
 
-        <!-- Pinned bottom button — always visible -->
-        <div class="p-2 lg:p-4 border-t bg-white flex-shrink-0">
+        <!-- Pinned bottom button — fixed above system nav -->
+        <div class="pos-fixed-bottom p-2 lg:p-4">
             <button @click="completeSale()" :disabled="!canProceed"
                     class="w-full py-2.5 lg:py-4 rounded-lg text-white font-bold text-sm lg:text-xl transition-colors"
                     :class="canProceed ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 cursor-not-allowed'">
