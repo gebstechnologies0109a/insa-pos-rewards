@@ -1006,16 +1006,7 @@ class MainActivity : AppCompatActivity() {
                 val stats = db.getOfflineStats()
                 val products = stats.optInt("products", 0)
                 runOnUiThread {
-                    if (total > 0) {
-                        syncBadge.visibility = View.VISIBLE
-                        tvSyncBadge.text = "$total pending"
-                        val dot = findViewById<View>(R.id.syncDot)
-                        dot.setBackgroundColor(
-                            if (connectivity.isConnected()) 0xFFFF9800.toInt() else 0xFFF44336.toInt()
-                        )
-                    } else {
-                        syncBadge.visibility = View.GONE
-                    }
+                    syncBadge.visibility = View.GONE
                     dispatchDashboardToWeb(products, total)
                 }
             }.start()

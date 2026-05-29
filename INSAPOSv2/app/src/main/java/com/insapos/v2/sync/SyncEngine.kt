@@ -243,13 +243,23 @@ class SyncEngine(
                 val endpoint = when (action) {
                     "push-transaction", "transaction_push" ->
                         "${session.getBaseUrl()}/api/pos/sync/push"
+                    "shift_open" ->
+                        "${session.getBaseUrl()}/api/pos/shift/open"
+                    "shift_close" ->
+                        "${session.getBaseUrl()}/api/pos/shift/close"
                     else -> "${session.getBaseUrl()}/api/pos/sync/$action"
                 }
 
-                val body = if (action == "push-transaction" || action == "transaction_push") {
-                    resolvePushBody(payload)
-                } else {
-                    payload
+                val body = when (action) {
+                    "push-transaction", "transaction_push" -> resolvePushBody(payload)
+                    "shift_open" -> JSONObject().apply {
+                        put("opening_cash", payload.optDouble("opening_cash"))
+                        if (payload.has("local_id")) put("local_id", payload.optString("local_id"))
+                    }
+                    "shift_close" -> JSONObject().apply {
+                        put("closing_cash", payload.optDouble("closing_cash"))
+                    }
+                    else -> payload
                 }
                 if (body == null) {
                     val recordId = item.optString("record_id", payload.optString("local_id", ""))
@@ -261,11 +271,19 @@ class SyncEngine(
                 if (response != null && (response.optBoolean("success") || response.optBoolean("ok"))) {
                     val localId = body.optString("local_id", item.optString("record_id", ""))
                     if (localId.isNotBlank()) {
-                        val serverId = response.optInt(
-                            "server_id",
-                            response.optJSONObject("sale")?.optInt("id", 0) ?: 0
-                        )
-                        db.markTransactionSynced(localId, serverId)
+                        val shiftJson = response.optJSONObject("shift")
+                        val serverId = when {
+                            shiftJson != null -> shiftJson.optInt("id", 0)
+                            else -> response.optInt(
+                                "server_id",
+                                response.optJSONObject("sale")?.optInt("id", 0) ?: 0
+                            )
+                        }
+                        if (action == "shift_open" || action == "shift_close") {
+                            if (serverId > 0) db.markShiftSynced(localId, serverId)
+                        } else if (serverId > 0) {
+                            db.markTransactionSynced(localId, serverId)
+                        }
                     }
                     db.markSyncItemDone(item.getLong("id"))
                     processed++

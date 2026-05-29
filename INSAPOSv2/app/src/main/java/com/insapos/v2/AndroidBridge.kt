@@ -302,13 +302,39 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
-    fun openLocalShift(jsonPayload: String): String = safeBridge { httpPostJson("/local/shift/open", jsonPayload) }
+    fun openLocalShift(jsonPayload: String): String = safeBridge {
+        activity.posService?.ensureOfflineReady()
+        val json = JSONObject(jsonPayload)
+        val cashierId = json.optInt("cashier_id", session.cashierId ?: 0)
+        val branchId = json.optInt("branch_id", session.branchId ?: 0)
+        val openingCash = json.optDouble("opening_cash", 0.0)
+        val result = activity.posService?.posEngine?.openShift(cashierId, branchId, openingCash)
+            ?: JSONObject(httpPostJsonBlocking("/local/shift/open", jsonPayload))
+        activity.posService?.syncEngine?.syncNow()
+        result.toString()
+    }
 
     @JavascriptInterface
-    fun closeLocalShift(jsonPayload: String): String = safeBridge { httpPostJson("/local/shift/close", jsonPayload) }
+    fun closeLocalShift(jsonPayload: String): String = safeBridge {
+        activity.posService?.ensureOfflineReady()
+        val json = JSONObject(jsonPayload)
+        val closingCash = json.optDouble("closing_cash", 0.0)
+        val result = activity.posService?.posEngine?.closeShift(closingCash)
+            ?: JSONObject(httpPostJsonBlocking("/local/shift/close", jsonPayload))
+        activity.posService?.syncEngine?.syncNow()
+        result.toString()
+    }
 
     @JavascriptInterface
-    fun getLocalShiftStatus(): String = safeBridge { httpGet("/local/shift/status", 5000, 15_000) }
+    fun getLocalShiftStatus(): String = safeBridge {
+        activity.posService?.ensureOfflineReady()
+        val engine = activity.posService?.posEngine
+        if (engine != null) {
+            engine.getShiftStatus().toString()
+        } else {
+            httpGetBlocking("/local/shift/status", 2000, 3000)
+        }
+    }
 
     @JavascriptInterface
     fun getLocalReceipt(localId: String): String = safeBridge {

@@ -201,7 +201,7 @@
 </div>
 
 <!-- OFFLINE BANNER -->
-<div id="offline-indicator" x-show="offlineBanner || !browserOnline" x-cloak
+<div id="offline-indicator" x-show="!silentSync && (offlineBanner || !browserOnline)" x-cloak
      class="border-b px-3 py-1.5 text-center text-xs flex-shrink-0"
      :class="browserOnline && !offlineBanner ? 'online border-emerald-200' : 'offline border-amber-200 bg-amber-50 text-amber-900'">
     <span class="font-medium" x-text="browserOnline ? 'Offline mode' : 'No network'"></span>
@@ -220,8 +220,8 @@
             <span x-text="'₱' + parseFloat(dashboardData?.revenue_today || 0).toFixed(0)"></span>
         </div>
 
-        <!-- Sync Status -->
-        <div id="sync-status" class="flex items-center gap-1 lg:gap-1.5 px-1.5 py-0.5 lg:px-2 lg:py-1 rounded-full border cursor-pointer"
+        <!-- Sync Status (hidden on native — background sync is silent) -->
+        <div id="sync-status" x-show="!silentSync" class="flex items-center gap-1 lg:gap-1.5 px-1.5 py-0.5 lg:px-2 lg:py-1 rounded-full border cursor-pointer"
              :class="{
                  'border-green-200 bg-green-50': syncStatus === 'synced',
                  'border-yellow-200 bg-yellow-50': syncStatus === 'syncing' || syncStatus === 'pushing' || syncStatus === 'pulling-products' || syncStatus === 'pulling-customers' || syncStatus === 'pulling-inventory' || syncStatus === 'downloading',
@@ -944,7 +944,7 @@
             <div x-show="lastSale?.payment_method === 'cash' || paymentMethod === 'cash'" class="text-base lg:text-xl mt-0.5 lg:mt-1">
                 Change: <span class="text-green-600 font-bold" x-text="'₱' + parseFloat(lastSale?.change_due || 0).toFixed(2)"></span>
             </div>
-            <div x-show="lastSale?.offline" class="mt-2 text-[10px] lg:text-xs text-yellow-600 bg-yellow-50 border border-yellow-200 rounded px-2 lg:px-3 py-1 inline-block">
+            <div x-show="lastSale?.offline && !silentSync" class="mt-2 text-[10px] lg:text-xs text-yellow-600 bg-yellow-50 border border-yellow-200 rounded px-2 lg:px-3 py-1 inline-block">
                 Saved offline — will sync when connected
             </div>
         </div>
@@ -1003,7 +1003,7 @@
                     <div class="min-w-0 flex-1">
                         <div class="font-medium text-[11px] lg:text-sm font-mono">
                             <span x-text="saleDisplayNumber(sale)"></span>
-                            <span x-show="sale.status === 'pending' || sale.sync_status === 'pending'" class="ml-1 text-[9px] lg:text-xs bg-yellow-100 text-yellow-700 px-1 lg:px-1.5 py-0.5 rounded">Offline</span>
+                            <span x-show="!silentSync && (sale.status === 'pending' || sale.sync_status === 'pending')" class="ml-1 text-[9px] lg:text-xs bg-yellow-100 text-yellow-700 px-1 lg:px-1.5 py-0.5 rounded">Offline</span>
                         </div>
                         <div class="text-[10px] lg:text-xs text-gray-400" x-text="new Date(sale.created_at).toLocaleString()"></div>
                         <div class="text-[10px] lg:text-xs text-gray-500 capitalize" x-text="(sale.payment_method || 'cash').replace('_', ' ')"></div>
@@ -1544,6 +1544,7 @@ function posApp() {
         rewardsResults: [],
         rewardsNoMatch: false,
         hasNativeBridge: false,
+        silentSync: false,
         autoPrintReceipt: true,
         androidLocalUp: true,
         _nativeScanPort: 18182,
@@ -1836,6 +1837,7 @@ function posApp() {
             document.addEventListener('insapos:syncStatus', (e) => this.applyNativeSyncStatus(e.detail || {}));
             document.addEventListener('insapos:dashboardData', (e) => this.applyDashboardData(e.detail || {}));
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
+            this.silentSync = this.hasNativeBridge;
             if (this.hasNativeBridge) {
                 if (typeof INSABuddy !== 'undefined') INSABuddy.detectV2();
                 this.buddyConnected = true;
@@ -1952,6 +1954,7 @@ function posApp() {
 
         applyNativeSyncStatus(detail) {
             this.nativeSyncDetail = detail;
+            if (this.silentSync) return;
             if (typeof detail.unsynced_count === 'number') {
                 this.pendingSyncCount = detail.unsynced_count + (detail.sync_queue_count || 0);
             }
@@ -2113,10 +2116,12 @@ function posApp() {
                 this._syncEngineReady = true;
                 SyncEngine.setBranchId(this.config.branchId);
                 SyncEngine.on('syncStatus', (s) => {
+                    if (this.silentSync) return;
                     if (s !== 'syncing') this.syncStatus = s;
                     if (s === 'offline') this.offlineBanner = true;
                 });
                 SyncEngine.on('connectivity', (o) => {
+                    if (this.silentSync) return;
                     if (!o) {
                         this.syncStatus = 'offline';
                         this.offlineBanner = true;
@@ -2134,12 +2139,19 @@ function posApp() {
                 });
                 SyncEngine.on('downloadProgress', (p) => this.onStoreDownloadProgress(p));
                 SyncEngine.on('downloadComplete', (r) => this.finishStoreDownload(r));
-                SyncEngine.on('transactionSynced', () => { this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1); this.showToast('Transaction synced', 'success'); });
-                SyncEngine.on('syncComplete', async (d) => { this.pendingSyncCount = d.pendingCount; });
+                SyncEngine.on('transactionSynced', () => {
+                    if (!this.silentSync) {
+                        this.pendingSyncCount = Math.max(0, this.pendingSyncCount - 1);
+                        this.showToast('Transaction synced', 'success');
+                    }
+                });
+                SyncEngine.on('syncComplete', async (d) => {
+                    if (!this.silentSync) this.pendingSyncCount = d.pendingCount;
+                });
                 SyncEngine.on('conflict', (d) => { this.conflictItems = d.conflict; this.conflictLocalId = d.local_id; this.showConflictModal = true; });
                 SyncEngine.on('productsUpdated', (c) => { if (c > 0) this.refreshProductsFromDB(); });
-                SyncEngine.on('buddyRecovered', () => { this.showToast('Recovered offline data from INSABuddy', 'info'); });
-                SyncEngine.on('syncError', (d) => { this.showToast('Sync error: ' + (d.error || 'Unknown'), 'error'); });
+                SyncEngine.on('buddyRecovered', () => { if (!this.silentSync) this.showToast('Recovered offline data from INSABuddy', 'info'); });
+                SyncEngine.on('syncError', (d) => { if (!this.silentSync) this.showToast('Sync error: ' + (d.error || 'Unknown'), 'error'); });
                 if (this.useNativeEngine()) {
                     const nativeLoaded = await this.loadProductsFromNative();
                     if (nativeLoaded) {
@@ -3078,7 +3090,37 @@ function posApp() {
 
         csrfHeader() { return { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', 'Accept': 'application/json' }; },
 
-        async loadShift() { try { const res = await fetch('/api/pos/shift/current'); const data = await res.json(); this.activeShift = (data.success && data.shift) ? data.shift : null; } catch { this.activeShift = null; } },
+        mapLocalShift(shift) {
+            return {
+                id: shift.server_id || shift.id,
+                local_id: shift.local_id,
+                opening_cash: shift.opening_cash,
+                opened_at: shift.opened_at || new Date().toISOString(),
+            };
+        },
+
+        async loadShift() {
+            if (this.useNativeEngine() && typeof window.INSAPOS.getLocalShiftStatus === 'function') {
+                try {
+                    const raw = window.INSAPOS.getLocalShiftStatus();
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (data.ok && data.shift && data.shift !== null) {
+                        this.activeShift = this.mapLocalShift(data.shift);
+                    }
+                } catch (e) { console.warn('[pos] local shift status failed:', e); }
+            }
+            try {
+                const res = await fetch('/api/pos/shift/current');
+                const data = await res.json();
+                if (data.success && data.shift) {
+                    this.activeShift = data.shift;
+                } else if (!this.activeShift) {
+                    this.activeShift = null;
+                }
+            } catch {
+                if (!this.activeShift) this.activeShift = null;
+            }
+        },
 
         async loadProductsFromCache() {
             const db = window.INSADB;
@@ -3398,10 +3440,12 @@ function posApp() {
                 }
             }
 
-            if (localSaleOk && !serverSale) {
-                this.syncStatus = this.browserOnline ? 'partial' : 'offline';
-            } else if (!serverSale && !localSaleOk) {
-                this.syncStatus = 'partial';
+            if (!this.silentSync) {
+                if (localSaleOk && !serverSale) {
+                    this.syncStatus = this.browserOnline ? 'partial' : 'offline';
+                } else if (!serverSale && !localSaleOk) {
+                    this.syncStatus = 'partial';
+                }
             }
             this.lastSale = serverSale || { local_id: localId, sale_number: null, total: txData.total, amount_tendered: txData.amount_tendered, change_due: txData.change_due, payment_method: txData.payment_method, offline: !serverSale || localSaleOk, _cart: txData.items };
             this.showReceipt = true;
@@ -3425,22 +3469,30 @@ function posApp() {
         async openShift() {
             const amount = parseFloat(this.shiftCashInput);
             if (isNaN(amount) || amount < 0) { this.showToast('Invalid amount.', 'error'); return; }
-            if (this.useNativeEngine()) {
+            const nativeEngine = this.useNativeEngine();
+            if (nativeEngine) {
                 try {
+                    const t0 = performance.now();
                     const raw = window.INSAPOS.openLocalShift(JSON.stringify({
                         opening_cash: amount,
                         branch_id: this.config.branchId,
                         cashier_id: this.config.cashierId,
                     }));
                     const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    console.log('[pos] openLocalShift', Math.round(performance.now() - t0) + 'ms', data);
                     if (data.ok && data.shift) {
-                        this.activeShift = { id: data.shift.server_id || data.shift.id, local_id: data.shift.local_id, opening_cash: data.shift.opening_cash };
+                        this.activeShift = this.mapLocalShift(data.shift);
                         this.showShiftOpenModal = false;
                         this.shiftCashInput = 0;
                         this.showToast('Shift opened!', 'success');
                         return;
                     }
-                } catch (e) { console.warn('[pos] native shift open failed:', e); }
+                    this.showToast(data.error || 'Failed to open shift locally.', 'error');
+                } catch (e) {
+                    console.warn('[pos] native shift open failed:', e);
+                    this.showToast('Failed to open shift locally.', 'error');
+                }
+                return;
             }
             try {
                 const res = await fetch('/api/pos/shift/open', { method: 'POST', headers: this.csrfHeader(), body: JSON.stringify({ opening_cash: amount }) });

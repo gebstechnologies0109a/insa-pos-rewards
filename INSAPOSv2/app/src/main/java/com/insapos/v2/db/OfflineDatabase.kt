@@ -908,6 +908,14 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         writableDatabase.update("transactions_local", cv, "local_id = ?", arrayOf(localId))
     }
 
+    fun markShiftSynced(localId: String, serverId: Int) = withDb {
+        val cv = ContentValues().apply {
+            put("synced", 1)
+            put("server_id", serverId)
+        }
+        writableDatabase.update("shifts", cv, "local_id = ?", arrayOf(localId))
+    }
+
     fun getTransactionCount(): Int = withDb {
         val cursor = readableDatabase.rawQuery("SELECT COUNT(*) FROM transactions_local", null)
         try {
