@@ -3383,18 +3383,40 @@ function posApp() {
             });
         },
 
-        printReceiptAfterSale(saleResult, txData, receiptData) {
+        async printReceiptAfterSale(saleResult, txData, receiptData) {
             if (!this.canUsePrinter() || !this.autoPrintReceipt) return;
-            if (saleResult && saleResult.printed === true) {
+            const alreadyPrinted = saleResult && (saleResult.already_printed === true || saleResult.printed === true);
+            if (alreadyPrinted) {
                 console.info('[pos] receipt auto-printed by native sale handler');
                 return;
             }
+            const printOpts = { silent: false, maxAttempts: 3 };
             const receiptObj = saleResult && saleResult.receipt;
             if (receiptObj && receiptObj.text) {
-                this.sendReceiptToPrinter({ text: receiptObj.text }, { silent: false });
+                await this.sendReceiptToPrinter({ text: receiptObj.text }, printOpts);
                 return;
             }
-            this.buddyPrintReceipt();
+            if (receiptData && receiptData.receipt_text) {
+                await this.sendReceiptToPrinter({ text: receiptData.receipt_text }, printOpts);
+                return;
+            }
+            const payload = this.receiptPrintPayloadFromData({
+                sale_number: (saleResult && saleResult.sale && saleResult.sale.sale_number) || null,
+                local_id: txData.local_id,
+                items: txData.items,
+                subtotal: txData.subtotal,
+                discount_total: txData.discount_total,
+                total: txData.total,
+                payment_method: txData.payment_method,
+                amount_tendered: txData.amount_tendered,
+                change_due: txData.change_due,
+                customer: this.selectedCustomer?.name || null,
+                store_name: receiptData.store_name,
+                branch_name: receiptData.branch_name,
+                cashier: receiptData.cashier,
+                created_at: txData.created_at,
+            });
+            await this.sendReceiptToPrinter(payload, printOpts);
         },
 
         async buddyPrintReceipt() {
@@ -3883,6 +3905,7 @@ function posApp() {
                         store_name: '{{ $brandName }}',
                         created_at: txData.created_at,
                         auto_print: this.autoPrintReceipt !== false,
+                        async: true,
                     });
                     const data = await this.createLocalSaleWithTimeout(payload);
                     nativeSaleResult = data;
@@ -3953,9 +3976,9 @@ function posApp() {
             });
             if (this.canUsePrinter()) {
                 if (nativeEngine && localSaleOk) {
-                    this.printReceiptAfterSale(nativeSaleResult, txData, receiptData);
+                    await this.printReceiptAfterSale(nativeSaleResult, txData, receiptData);
                 } else {
-                    this.buddyPrintReceipt();
+                    await this.buddyPrintReceipt();
                 }
                 if (typeof INSABuddy !== 'undefined' && SyncEngine) SyncEngine.pushToBuddy(txData, receiptData);
             }

@@ -7,6 +7,7 @@ import com.insapos.v2.printers.PrinterSettings
 import com.insapos.v2.printers.PrinterType
 import org.json.JSONObject
 import java.util.UUID
+import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -261,25 +262,46 @@ class AndroidBridge(private val activity: MainActivity) {
     @JavascriptInterface
     fun createLocalSale(jsonPayload: String): String {
         if (!activityAlive()) return unavailable()
+        val async = try {
+            JSONObject(jsonPayload).optBoolean("async", false)
+        } catch (_: Exception) {
+            false
+        }
+        if (!async) {
+            return safeBridge { runSaleBlocking(jsonPayload) }
+        }
         val requestId = UUID.randomUUID().toString()
         saleExecutor.execute {
-            val syncEngine = activity.posService?.syncEngine
-            syncEngine?.saleInProgress = true
-            val result = try {
-                executeCreateLocalSale(jsonPayload)
-            } catch (t: Throwable) {
-                Log.e(TAG, "createLocalSale failed", t)
-                JSONObject().put("ok", false).put("error", t.message ?: "error").toString()
-            } finally {
-                syncEngine?.saleInProgress = false
-            }
-            activity.dispatchLocalSaleResult(requestId, result)
+            activity.dispatchLocalSaleResult(requestId, runSaleBlocking(jsonPayload))
         }
         return JSONObject()
             .put("ok", true)
             .put("pending", true)
             .put("request_id", requestId)
             .toString()
+    }
+
+    /** Runs sale + optional auto-print on [saleExecutor]; safe to call from bridge or async callback. */
+    private fun runSaleBlocking(jsonPayload: String): String {
+        val syncEngine = activity.posService?.syncEngine
+        syncEngine?.saleInProgress = true
+        return try {
+            if (Thread.currentThread().name.startsWith("insapos-bridge-sale")) {
+                executeCreateLocalSale(jsonPayload)
+            } else {
+                saleExecutor.submit(Callable { executeCreateLocalSale(jsonPayload) })
+                    .get(SALE_HTTP_TIMEOUT_SEC, TimeUnit.SECONDS)
+                    ?: JSONObject().put("ok", false).put("error", "No sale result").toString()
+            }
+        } catch (e: TimeoutException) {
+            Log.e(TAG, "createLocalSale timed out", e)
+            JSONObject().put("ok", false).put("error", "Sale timed out").toString()
+        } catch (t: Throwable) {
+            Log.e(TAG, "createLocalSale failed", t)
+            JSONObject().put("ok", false).put("error", t.message ?: "error").toString()
+        } finally {
+            syncEngine?.saleInProgress = false
+        }
     }
 
     private fun executeCreateLocalSale(jsonPayload: String): String {
@@ -301,20 +323,52 @@ class AndroidBridge(private val activity: MainActivity) {
         return try {
             val result = JSONObject(resultJson)
             if (!result.optBoolean("ok", false)) return resultJson
-            val receipt = result.optJSONObject("receipt") ?: return resultJson
-            val text = receipt.optString("text", "")
-            if (text.isBlank()) return resultJson
-            val svc = activity.posService ?: return resultJson
-            val pm = svc.waitForPrinterManager(15_000) ?: return resultJson
+            val receipt = result.optJSONObject("receipt")
+            val text = receipt?.optString("text", "").orEmpty()
+            if (text.isBlank()) {
+                Log.w(TAG, "auto_print skipped: empty receipt text")
+                return markSalePrintFlags(result, printed = false)
+            }
+            val svc = activity.posService ?: return markSalePrintFlags(result, printed = false)
+            svc.requestPrinterManager()
             val layout = PrinterSettings(svc.offlineDb).layout()
-            val (printed, err) = pm.printTextReliable(text, layout)
-            result.put("printed", printed)
-            if (!printed && !err.isNullOrBlank()) result.put("print_error", err)
-            result.toString()
+            var printed = false
+            var lastErr: String? = "Printer not ready"
+            for (attempt in 1..3) {
+                val pm = svc.waitForPrinterManager(15_000)
+                if (pm == null) {
+                    Log.w(TAG, "auto_print attempt $attempt: PrinterManager not ready")
+                    Thread.sleep(400L * attempt)
+                    continue
+                }
+                val (ok, err) = pm.printTextReliable(text, layout)
+                if (ok) {
+                    printed = true
+                    lastErr = null
+                    Log.i(TAG, "auto_print succeeded on attempt $attempt")
+                    break
+                }
+                lastErr = err
+                Log.w(TAG, "auto_print attempt $attempt failed: $err")
+                Thread.sleep(400L * attempt)
+            }
+            if (!printed) Log.e(TAG, "auto_print failed after retries: $lastErr")
+            markSalePrintFlags(result, printed, lastErr)
         } catch (t: Throwable) {
             Log.w(TAG, "Auto-print after sale failed", t)
             resultJson
         }
+    }
+
+    private fun markSalePrintFlags(
+        result: JSONObject,
+        printed: Boolean,
+        printError: String? = null,
+    ): String {
+        result.put("printed", printed)
+        result.put("already_printed", printed)
+        if (!printed && !printError.isNullOrBlank()) result.put("print_error", printError)
+        return result.toString()
     }
 
     @JavascriptInterface
