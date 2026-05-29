@@ -74,6 +74,14 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
+    fun openPosSettings() {
+        if (!activityAlive()) return
+        activity.runOnUiThread {
+            if (activityAlive()) activity.openPosSettings()
+        }
+    }
+
+    @JavascriptInterface
     fun getAppVersion(): String = BuildConfig.VERSION_NAME
 
     @JavascriptInterface
@@ -310,7 +318,7 @@ class AndroidBridge(private val activity: MainActivity) {
         val openingCash = json.optDouble("opening_cash", 0.0)
         val result = activity.posService?.posEngine?.openShift(cashierId, branchId, openingCash)
             ?: JSONObject(httpPostJsonBlocking("/local/shift/open", jsonPayload))
-        activity.posService?.syncEngine?.syncNow()
+        activity.posService?.syncEngine?.suppressCatalogPull(60_000L)
         result.toString()
     }
 
@@ -321,7 +329,6 @@ class AndroidBridge(private val activity: MainActivity) {
         val closingCash = json.optDouble("closing_cash", 0.0)
         val result = activity.posService?.posEngine?.closeShift(closingCash)
             ?: JSONObject(httpPostJsonBlocking("/local/shift/close", jsonPayload))
-        activity.posService?.syncEngine?.syncNow()
         result.toString()
     }
 

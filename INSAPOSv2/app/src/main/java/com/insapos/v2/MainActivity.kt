@@ -37,6 +37,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import androidx.activity.result.ActivityResultLauncher
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -67,6 +68,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvSyncBadge: TextView
     private lateinit var tvOfflineStats: TextView
     private lateinit var fabModeToggle: ExtendedFloatingActionButton
+    private lateinit var fabSettings: FloatingActionButton
     private lateinit var session: SessionManager
     private lateinit var connectivity: ConnectivityMonitor
 
@@ -268,6 +270,8 @@ class MainActivity : AppCompatActivity() {
         tvOfflineStats = findViewById(R.id.tvOfflineStats)
         fabModeToggle = findViewById(R.id.fabModeToggle)
         fabModeToggle.setOnClickListener { onModeToggleClicked() }
+        fabSettings = findViewById(R.id.fabSettings)
+        fabSettings.setOnClickListener { openPosSettings() }
 
         val versionText = findViewById<TextView>(R.id.versionText)
         versionText.text = "v${BuildConfig.VERSION_NAME}"
@@ -863,6 +867,26 @@ class MainActivity : AppCompatActivity() {
     fun openPosMode() {
         allowSuperAdminPanel = false
         loadPosUrl()
+    }
+
+    /** Opens POS settings in the WebView (native gear FAB or JS bridge). */
+    fun openPosSettings() {
+        if (!isWebViewUsable()) return
+        runOnUiThread {
+            if (!isWebViewUsable()) return@runOnUiThread
+            webView.evaluateJavascript(
+                """
+                (function() {
+                    if (window.posAppInstance && window.posAppInstance.openPosSettings) {
+                        window.posAppInstance.openPosSettings();
+                    } else {
+                        document.dispatchEvent(new CustomEvent('insapos:openSettings'));
+                    }
+                })();
+                """.trimIndent(),
+                null
+            )
+        }
     }
 
     fun openSuperAdminPanel() {

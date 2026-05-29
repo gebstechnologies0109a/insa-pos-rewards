@@ -37,7 +37,7 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
         }
 
     var welcomeMessage: String
-        get() = prefs.getString(KEY_WELCOME, "Welcome — your order will appear here") ?: ""
+        get() = prefs.getString(KEY_WELCOME, "Welcome to INSAPOS — your order will appear here") ?: ""
         set(value) = prefs.edit().putString(KEY_WELCOME, value).apply()
 
     fun refreshDisplays() {
@@ -82,7 +82,7 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
     fun testDisplay(): JSONObject {
         val sample = JSONObject().apply {
             put("mode", "cart")
-            put("store_name", "INSA POS")
+            put("store_name", "INSAPOS")
             put("subtitle", "Customer display test")
             put("items", JSONArray().apply {
                 put(JSONObject().apply {
@@ -130,7 +130,7 @@ class CustomerDisplayManager(private val activity: AppCompatActivity) {
     private fun welcomePayload(): JSONObject {
         return JSONObject().apply {
             put("mode", "welcome")
-            put("store_name", "INSA POS")
+            put("store_name", "INSAPOS")
             put("message", welcomeMessage)
         }
     }

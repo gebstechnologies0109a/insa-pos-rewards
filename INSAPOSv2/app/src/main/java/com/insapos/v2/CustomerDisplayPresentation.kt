@@ -62,15 +62,15 @@ class CustomerDisplayPresentation(
     }
 
     private fun renderWelcome(payload: JSONObject = JSONObject()) {
-        titleView.text = payload.optString("store_name", "INSA POS")
-        subtitleView.text = payload.optString("message", "Welcome — your order will appear here")
+        titleView.text = payload.optString("store_name", "INSAPOS")
+        subtitleView.text = payload.optString("message", "Welcome to INSAPOS — your order will appear here")
         scrollItems.visibility = View.GONE
         totalsPanel.visibility = View.GONE
         footerMessageView.visibility = View.GONE
     }
 
     private fun renderCart(payload: JSONObject) {
-        titleView.text = payload.optString("store_name", "INSA POS")
+        titleView.text = payload.optString("store_name", "INSAPOS")
         subtitleView.text = payload.optString("subtitle", "Your order")
         scrollItems.visibility = View.VISIBLE
         totalsPanel.visibility = View.VISIBLE
@@ -102,12 +102,12 @@ class CustomerDisplayPresentation(
     }
 
     private fun renderThankYou(payload: JSONObject) {
-        titleView.text = payload.optString("store_name", "INSA POS")
+        titleView.text = payload.optString("store_name", "INSAPOS")
         subtitleView.text = payload.optString("subtitle", "Payment complete")
         scrollItems.visibility = View.GONE
         totalsPanel.visibility = View.VISIBLE
         footerMessageView.visibility = View.VISIBLE
-        footerMessageView.text = payload.optString("message", "Thank you for your purchase!")
+        footerMessageView.text = payload.optString("message", "Thank you — see you again at INSAPOS!")
 
         val total = payload.optDouble("total", 0.0)
         val change = payload.optDouble("change", 0.0)

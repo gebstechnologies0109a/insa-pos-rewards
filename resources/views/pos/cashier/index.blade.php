@@ -89,7 +89,7 @@
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/terminal-session.js') }}"></script>
     <script src="{{ asset('js/insabuddy.js') }}"></script>
-    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.28"></script>
+    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.30"></script>
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden insapos-alpine-pending" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
@@ -292,10 +292,16 @@
             <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         </button>
 
-        <!-- POS Settings -->
-        <button @click="openPosSettings()" class="p-1 lg:p-1.5 rounded hover:bg-gray-100" title="POS Settings">
-            <svg class="w-3.5 h-3.5 lg:w-4 lg:h-4 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-        </button>
+        <!-- Settings + Clock (gear immediately left of clock, 44px touch targets) -->
+        <div class="flex items-center flex-shrink-0 ml-1">
+            <button @click="openPosSettings()" type="button"
+                    class="flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg hover:bg-gray-100 active:bg-gray-200 order-1"
+                    title="POS Settings" aria-label="POS Settings">
+                <svg class="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            </button>
+            <span class="order-2 font-mono text-xs lg:text-sm text-gray-700 tabular-nums min-w-[5.5rem] text-center px-1 select-none"
+                  x-text="headerClock" aria-live="polite"></span>
+        </div>
 
         <!-- Mode Toggle -->
         <button @click="toggleMode()" class="flex items-center gap-1 px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full text-[10px] lg:text-xs font-semibold border transition-colors"
@@ -1710,6 +1716,8 @@ function posApp() {
 
         _barcodeBuffer: '',
         _barcodeTimer: null,
+        headerClock: '',
+        _clockTimer: null,
 
         config: {
             cashierId: {{ auth()->id() ?? 'null' }},
@@ -1720,6 +1728,10 @@ function posApp() {
 
         canViewShiftTotals() {
             return !!this.config.canViewShiftTotals;
+        },
+
+        updateHeaderClock() {
+            this.headerClock = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         },
 
         paymentMethods: [
@@ -1977,6 +1989,9 @@ function posApp() {
             window.addEventListener('offline', () => { this.browserOnline = false; this.updateOfflineBanner(); });
             document.addEventListener('insapos:syncStatus', (e) => this.applyNativeSyncStatus(e.detail || {}));
             document.addEventListener('insapos:dashboardData', (e) => this.applyDashboardData(e.detail || {}));
+            document.addEventListener('insapos:openSettings', () => this.openPosSettings());
+            this.updateHeaderClock();
+            this._clockTimer = setInterval(() => this.updateHeaderClock(), 1000);
             this.hasNativeBridge = typeof window.INSAPOS !== 'undefined';
             this.silentSync = this.hasNativeBridge;
             if (this.hasNativeBridge) {

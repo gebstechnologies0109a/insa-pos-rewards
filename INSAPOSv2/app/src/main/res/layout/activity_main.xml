@@ -63,6 +63,20 @@
 
     </LinearLayout>
 
+    <!-- POS Settings — always visible (native fallback when WebView toolbar lags) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabSettings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="36dp"
+        android:layout_marginEnd="12dp"
+        android:contentDescription="POS Settings"
+        app:backgroundTint="@color/white"
+        app:fabSize="mini"
+        app:srcCompat="@drawable/ic_settings"
+        app:tint="@null" />
+
     <!-- Super Admin mode toggle (visible only for super_admin on device) -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fabModeToggle"

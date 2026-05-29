@@ -7,6 +7,8 @@ import com.insapos.v2.ConnectivityMonitor
 import com.insapos.v2.SessionManager
 import com.insapos.v2.db.OfflineDatabase
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -40,8 +42,17 @@ class SyncEngine(
 
     private val catalogPullLock = Any()
 
+    /** Single-flight guard — only one pull/sync cycle at a time (prevents parallel inventory merges). */
+    private val syncFlightMutex = Mutex()
+
     @Volatile
     private var catalogPullRunning = false
+
+    @Volatile
+    private var lastCacheReadyLogBranch = -1
+
+    @Volatile
+    private var lastCacheReadyLogAt = 0L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pushJob: Job? = null
@@ -130,20 +141,24 @@ class SyncEngine(
     /** Full catalog download — manual refresh or first login only. */
     fun syncNowFull() {
         scope.launch {
-            emitDownloadProgress("products", 5, "Downloading products…")
-            pushTransactions()
-            pushSyncQueue()
-            pullData(fullSync = true, forceCatalog = true)
-            emitDownloadProgress("done", 100, "Store data ready")
+            syncFlightMutex.withLock {
+                emitDownloadProgress("products", 5, "Downloading products…")
+                pushTransactions()
+                pushSyncQueue()
+                pullData(fullSync = true, forceCatalog = true)
+                emitDownloadProgress("done", 100, "Store data ready")
+            }
         }
     }
 
     /** Push queued sales + delta inventory only (routine / startup). */
     fun syncNowIncremental() {
         scope.launch {
-            pushTransactions()
-            pushSyncQueue()
-            pullData(fullSync = false, forceCatalog = false)
+            syncFlightMutex.withLock {
+                pushTransactions()
+                pushSyncQueue()
+                pullData(fullSync = false, forceCatalog = false)
+            }
         }
     }
 
@@ -174,7 +189,11 @@ class SyncEngine(
             delay(STARTUP_PULL_DELAY_MS)
             while (isActive) {
                 if (connectivity.isConnected()) {
-                    pullData(fullSync = false, forceCatalog = false)
+                    syncFlightMutex.withLock {
+                        pushTransactions()
+                        pushSyncQueue()
+                        pullData(fullSync = false, forceCatalog = false)
+                    }
                 }
                 delay(PULL_INTERVAL_MS)
             }
@@ -601,7 +620,12 @@ class SyncEngine(
             if (db.getSetting(KEY_CATALOG_LAST_SYNC).isNullOrBlank()) {
                 db.setSetting(KEY_CATALOG_LAST_SYNC, now())
             }
-            Log.i(TAG, "Offline cache ready ($count products)")
+            val nowMs = System.currentTimeMillis()
+            if (lastCacheReadyLogBranch != branchId || nowMs - lastCacheReadyLogAt > 60_000L) {
+                Log.i(TAG, "Offline cache ready ($count products)")
+                lastCacheReadyLogBranch = branchId
+                lastCacheReadyLogAt = nowMs
+            }
         }
     }
 

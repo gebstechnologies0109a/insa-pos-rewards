@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:text="INSA POS"
+        android:text="INSAPOS"
         android:textColor="#065F46"
         android:textSize="28sp"
         android:textStyle="bold" />
@@ -144,7 +144,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
         android:gravity="center"
-        android:text="Thank you for your purchase!"
+        android:text="Thank you — see you again at INSAPOS!"
         android:textColor="#047857"
         android:textSize="20sp"
         android:textStyle="bold"
