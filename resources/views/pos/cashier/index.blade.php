@@ -216,8 +216,12 @@
         <div x-show="hasNativeBridge && dashboardData" class="hidden lg:flex items-center gap-2 px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-[10px] text-slate-600"
              :title="'Cached products: ' + (dashboardData?.products_cached || 0)">
             <span x-text="'Today: ' + (dashboardData?.sales_today ?? '—') + ' sales'"></span>
-            <span class="text-slate-300">|</span>
-            <span x-text="'₱' + parseFloat(dashboardData?.revenue_today || 0).toFixed(0)"></span>
+            <template x-if="canViewShiftTotals()">
+                <span class="contents">
+                    <span class="text-slate-300">|</span>
+                    <span x-text="'₱' + parseFloat(dashboardData?.revenue_today || 0).toFixed(0)"></span>
+                </span>
+            </template>
         </div>
 
         <!-- Sync Status (hidden on native — background sync is silent) -->
@@ -329,8 +333,10 @@
             <div class="font-semibold text-green-800 text-[11px] lg:text-base">Shift Active</div>
             <div class="text-[10px] lg:text-sm text-green-600 truncate">
                 Opened: <span x-text="activeShift ? new Date(activeShift.opened_at).toLocaleTimeString() : ''"></span> &middot;
-                Opening Cash: &#8369;<span x-text="activeShift ? parseFloat(activeShift.opening_cash).toFixed(2) : '0.00'"></span> &middot;
-                Total Sales: &#8369;<span x-text="parseFloat(shiftSalesTotal || 0).toFixed(2)"></span>
+                Opening Cash: &#8369;<span x-text="activeShift ? parseFloat(activeShift.opening_cash).toFixed(2) : '0.00'"></span>
+                <template x-if="canViewShiftTotals()">
+                    <span> &middot; Total Sales: &#8369;<span x-text="parseFloat(shiftSalesTotal || 0).toFixed(2)"></span></span>
+                </template>
             </div>
         </div>
         <div class="flex items-center gap-1 lg:gap-2 flex-shrink-0">
@@ -857,9 +863,13 @@
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[320px] lg:max-w-sm p-4 lg:p-6 text-center">
         <h2 class="text-base lg:text-xl font-bold text-gray-800 mb-3 lg:mb-4">Shift Closed</h2>
         <div class="space-y-2 lg:space-y-3 text-[11px] lg:text-sm text-left">
+            @if(auth()->user()?->canViewShiftTotals())
             <div class="flex justify-between py-1.5 lg:py-2 border-b"><span class="text-gray-600">Total Sales</span><span class="font-bold" x-text="'₱' + parseFloat(shiftResultData?.system_sales_total || 0).toFixed(2)"></span></div>
+            @endif
             <div class="flex justify-between py-1.5 lg:py-2 border-b"><span class="text-gray-600">Opening Cash</span><span class="font-bold" x-text="'₱' + parseFloat(shiftResultData?.opening_cash || 0).toFixed(2)"></span></div>
+            @if(auth()->user()?->canViewShiftTotals())
             <div class="flex justify-between py-1.5 lg:py-2 border-b"><span class="text-gray-600">Expected in Drawer</span><span class="font-bold" x-text="'₱' + (parseFloat(shiftResultData?.opening_cash || 0) + parseFloat(shiftResultData?.system_sales_total || 0)).toFixed(2)"></span></div>
+            @endif
             <div class="flex justify-between py-1.5 lg:py-2 border-b"><span class="text-gray-600">Closing Cash</span><span class="font-bold" x-text="'₱' + parseFloat(shiftResultData?.closing_cash || 0).toFixed(2)"></span></div>
             <div class="flex justify-between py-1.5 lg:py-2" :class="parseFloat(shiftResultData?.cash_variance || 0) >= 0 ? 'text-green-700' : 'text-red-700'">
                 <span class="font-bold">Variance</span>
@@ -1042,7 +1052,9 @@
         <p class="text-[10px] lg:text-xs text-gray-500 mb-3 lg:mb-4" x-text="readingData?.generated_at"></p>
 
         <div class="space-y-1.5 lg:space-y-2 text-[11px] lg:text-sm">
+            @if(auth()->user()?->canViewShiftTotals())
             <div class="flex justify-between py-1.5 lg:py-2 border-b"><span class="text-gray-600">Total Sales</span><span class="font-bold text-sm lg:text-lg" x-text="'₱' + parseFloat(readingData?.total_sales || 0).toFixed(2)"></span></div>
+            @endif
             <div class="flex justify-between py-1 border-b"><span class="text-gray-600">Transactions</span><span class="font-semibold" x-text="readingData?.transaction_count || 0"></span></div>
             <div class="flex justify-between py-1 border-b"><span class="text-gray-600">Discounts</span><span class="font-semibold" x-text="'₱' + parseFloat(readingData?.discount_total || 0).toFixed(2)"></span></div>
             <div class="flex justify-between py-1 border-b"><span class="text-gray-600">Voids</span><span class="font-semibold" x-text="'₱' + parseFloat(readingData?.void_total || 0).toFixed(2)"></span></div>
@@ -1582,6 +1594,12 @@ function posApp() {
         config: {
             cashierId: {{ auth()->id() ?? 'null' }},
             branchId: {{ auth()->user()?->branch_id ?? 'null' }},
+            role: @json(auth()->user()?->role),
+            canViewShiftTotals: @json(auth()->user()?->canViewShiftTotals() ?? false),
+        },
+
+        canViewShiftTotals() {
+            return !!this.config.canViewShiftTotals;
         },
 
         paymentMethods: [
@@ -3619,7 +3637,9 @@ function posApp() {
             lines.push('\x1B\x61\x01'); lines.push(r.type === 'z' ? 'Z - R E A D I N G' : 'X - R E A D I N G');
             lines.push(r.type === 'z' ? 'Z-Count: #' + r.z_count : 'Cashier Snapshot'); lines.push(div); lines.push('\x1B\x61\x00');
             lines.push('Date: ' + r.generated_at); lines.push(div);
-            lines.push('Total Sales:     ' + parseFloat(r.total_sales).toFixed(2).padStart(14));
+            if (this.canViewShiftTotals()) {
+                lines.push('Total Sales:     ' + parseFloat(r.total_sales).toFixed(2).padStart(14));
+            }
             lines.push('Transactions:    ' + String(r.transaction_count).padStart(14));
             lines.push('Discounts:       ' + parseFloat(r.discount_total).toFixed(2).padStart(14));
             lines.push('Voids:           ' + parseFloat(r.void_total).toFixed(2).padStart(14));
