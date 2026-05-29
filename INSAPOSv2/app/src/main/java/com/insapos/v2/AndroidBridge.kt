@@ -337,6 +337,26 @@ class AndroidBridge(private val activity: MainActivity) {
     }
 
     @JavascriptInterface
+    fun getShiftSalesTotal(): String = safeBridge {
+        activity.posService?.ensureOfflineReady()
+        val engine = activity.posService?.posEngine
+            ?: return@safeBridge JSONObject().put("ok", false).put("error", "POS engine not ready").toString()
+        engine.getShiftSalesTotal().toString()
+    }
+
+    @JavascriptInterface
+    fun getLocalXReading(): String = safeBridge {
+        activity.posService?.ensureOfflineReady()
+        val engine = activity.posService?.posEngine
+            ?: return@safeBridge JSONObject().put("ok", false).put("error", "POS engine not ready").toString()
+        val cashierId = session.cashierId
+            ?: activity.posService?.offlineDb?.getSetting("cashier_id")?.toIntOrNull()
+            ?: activity.posService?.offlineDb?.getActiveShift()?.optInt("cashier_id", 0)
+            ?: 0
+        engine.getLocalXReading(cashierId).toString()
+    }
+
+    @JavascriptInterface
     fun getLocalReceipt(localId: String): String = safeBridge {
         httpGet(
             "/local/receipt?local_id=${java.net.URLEncoder.encode(localId, "UTF-8")}",

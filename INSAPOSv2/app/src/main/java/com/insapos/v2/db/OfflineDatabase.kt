@@ -675,6 +675,18 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
     }
 
     fun closeLocalShift(localId: String, closingCash: Double): JSONObject = withDb {
+        val openCursor = readableDatabase.rawQuery(
+            "SELECT * FROM shifts WHERE local_id = ? AND status = 'open' LIMIT 1",
+            arrayOf(localId),
+        )
+        val openShift = try {
+            if (openCursor.moveToFirst()) cursorToJson(openCursor) else null
+        } finally {
+            openCursor.close()
+        }
+        val totals = openShift?.let { aggregateShiftSales(it) }
+            ?: JSONObject().put("total_sales", 0.0).put("transaction_count", 0)
+
         val cv = ContentValues().apply {
             put("closing_cash", closingCash)
             put("status", "closed")
@@ -686,9 +698,172 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             "SELECT * FROM shifts WHERE local_id = ? LIMIT 1", arrayOf(localId)
         )
         try {
-            if (cursor.moveToFirst()) cursorToJson(cursor) else JSONObject()
+            val closed = if (cursor.moveToFirst()) cursorToJson(cursor) else JSONObject()
+            closed.put("system_sales_total", totals.optDouble("total_sales", 0.0))
+            closed.put("transaction_count", totals.optInt("transaction_count", 0))
+            closed
         } finally {
             cursor.close()
+        }
+    }
+
+    /** Map local SQLite shift row id or server shift id to server shift id for sync. */
+    fun resolveServerShiftId(shiftIdOrRowId: Int): Int {
+        if (shiftIdOrRowId <= 0) {
+            return getActiveShift()?.optInt("server_id", 0)?.takeIf { it > 0 } ?: 0
+        }
+        return withDb {
+            val cursor = readableDatabase.rawQuery(
+                "SELECT server_id, id FROM shifts WHERE id = ? OR server_id = ? ORDER BY id DESC LIMIT 1",
+                arrayOf(shiftIdOrRowId.toString(), shiftIdOrRowId.toString()),
+            )
+            try {
+                if (cursor.moveToFirst()) {
+                    val serverId = cursor.getInt(cursor.getColumnIndexOrThrow("server_id"))
+                    if (serverId > 0) serverId else cursor.getInt(cursor.getColumnIndexOrThrow("id"))
+                } else {
+                    shiftIdOrRowId
+                }
+            } finally {
+                cursor.close()
+            }
+        }
+    }
+
+    fun aggregateShiftSales(shift: JSONObject): JSONObject = withDb {
+        val rowId = shift.optLong("id", 0L)
+        val serverId = shift.optInt("server_id", 0)
+        val cashierId = shift.optInt("cashier_id", 0)
+        val openedAt = shift.optString("opened_at", "")
+        aggregateShiftSales(rowId, serverId, cashierId, openedAt)
+    }
+
+    fun aggregateShiftSales(
+        shiftRowId: Long,
+        serverShiftId: Int,
+        cashierId: Int,
+        openedAt: String?,
+    ): JSONObject = withDb {
+        val shiftIds = mutableListOf<Long>()
+        if (shiftRowId > 0L) shiftIds.add(shiftRowId)
+        if (serverShiftId > 0 && serverShiftId.toLong() !in shiftIds) shiftIds.add(serverShiftId.toLong())
+
+        var totalSales = 0.0
+        var txnCount = 0
+        var discountTotal = 0.0
+        var voidTotal = 0.0
+
+        if (shiftIds.isNotEmpty()) {
+            val placeholders = shiftIds.joinToString(",") { "?" }
+            val args = shiftIds.map { it.toString() }.toTypedArray()
+            val cursor = readableDatabase.rawQuery(
+                """SELECT COALESCE(SUM(total), 0), COUNT(*), COALESCE(SUM(discount), 0)
+                   FROM pos_sales WHERE status = 'completed' AND shift_id IN ($placeholders)""",
+                args,
+            )
+            try {
+                if (cursor.moveToFirst()) {
+                    totalSales = cursor.getDouble(0)
+                    txnCount = cursor.getInt(1)
+                    discountTotal = cursor.getDouble(2)
+                }
+            } finally {
+                cursor.close()
+            }
+
+            val voidCursor = readableDatabase.rawQuery(
+                """SELECT COALESCE(SUM(total), 0)
+                   FROM pos_sales WHERE status = 'voided' AND shift_id IN ($placeholders)""",
+                args,
+            )
+            try {
+                if (voidCursor.moveToFirst()) voidTotal = voidCursor.getDouble(0)
+            } finally {
+                voidCursor.close()
+            }
+        }
+
+        if (cashierId > 0 && !openedAt.isNullOrBlank()) {
+            val orphanCursor = readableDatabase.rawQuery(
+                """SELECT COALESCE(SUM(total), 0), COUNT(*), COALESCE(SUM(discount), 0)
+                   FROM pos_sales
+                   WHERE status = 'completed' AND shift_id = 0 AND cashier_id = ?
+                     AND created_at >= ?""",
+                arrayOf(cashierId.toString(), openedAt),
+            )
+            try {
+                if (orphanCursor.moveToFirst()) {
+                    totalSales += orphanCursor.getDouble(0)
+                    txnCount += orphanCursor.getInt(1)
+                    discountTotal += orphanCursor.getDouble(2)
+                }
+            } finally {
+                orphanCursor.close()
+            }
+        }
+
+        JSONObject().apply {
+            put("total_sales", totalSales)
+            put("transaction_count", txnCount)
+            put("discount_total", discountTotal)
+            put("void_total", voidTotal)
+        }
+    }
+
+    fun getCashierTodaySalesStats(cashierId: Int): JSONObject = withDb {
+        val cursor = readableDatabase.rawQuery(
+            """SELECT COALESCE(SUM(total), 0), COUNT(*)
+               FROM pos_sales
+               WHERE status = 'completed' AND cashier_id = ?
+                 AND date(created_at) = date('now', 'localtime')""",
+            arrayOf(cashierId.toString()),
+        )
+        try {
+            JSONObject().apply {
+                if (cursor.moveToFirst()) {
+                    put("total_sales", cursor.getDouble(0))
+                    put("transaction_count", cursor.getInt(1))
+                } else {
+                    put("total_sales", 0.0)
+                    put("transaction_count", 0)
+                }
+            }
+        } finally {
+            cursor.close()
+        }
+    }
+
+    fun getCashierTodayReadingStats(cashierId: Int): JSONObject = withDb {
+        val completed = readableDatabase.rawQuery(
+            """SELECT COALESCE(SUM(total), 0), COUNT(*), COALESCE(SUM(discount), 0)
+               FROM pos_sales
+               WHERE status = 'completed' AND cashier_id = ?
+                 AND date(created_at) = date('now', 'localtime')""",
+            arrayOf(cashierId.toString()),
+        )
+        val voided = readableDatabase.rawQuery(
+            """SELECT COALESCE(SUM(total), 0)
+               FROM pos_sales
+               WHERE status = 'voided' AND cashier_id = ?
+                 AND date(created_at) = date('now', 'localtime')""",
+            arrayOf(cashierId.toString()),
+        )
+        try {
+            val totals = JSONObject()
+            if (completed.moveToFirst()) {
+                totals.put("total_sales", completed.getDouble(0))
+                totals.put("transaction_count", completed.getInt(1))
+                totals.put("discount_total", completed.getDouble(2))
+            } else {
+                totals.put("total_sales", 0.0)
+                totals.put("transaction_count", 0)
+                totals.put("discount_total", 0.0)
+            }
+            totals.put("void_total", if (voided.moveToFirst()) voided.getDouble(0) else 0.0)
+            totals
+        } finally {
+            completed.close()
+            voided.close()
         }
     }
 
@@ -1083,6 +1258,8 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
     // --- Stats ---
 
     fun getOfflineStats(): JSONObject = dbOp {
+        val active = getActiveShift()
+        val shiftTotals = active?.let { aggregateShiftSales(it) }
         JSONObject().apply {
             put("products", countTable("products"))
             put("customers", countTable("customers"))
@@ -1090,6 +1267,11 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             put("unsynced_transactions", getUnsyncedCount())
             put("sync_queue", getSyncQueueCount())
             put("receipts", countTable("receipts"))
+            put("pos_sales", countTable("pos_sales"))
+            if (shiftTotals != null) {
+                put("shift_total_sales", shiftTotals.optDouble("total_sales", 0.0))
+                put("shift_transaction_count", shiftTotals.optInt("transaction_count", 0))
+            }
         }
     }
 

@@ -1015,8 +1015,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun dispatchDashboardToWeb(productsCached: Int, pendingSync: Int) {
         if (!pageLoaded) return
+        val db = posService?.offlineDb
+        val cashierId = session.cashierId
+            ?: db?.getActiveShift()?.optInt("cashier_id", 0)
+            ?: 0
+        val today = if (cashierId > 0 && db != null) {
+            db.getCashierTodaySalesStats(cashierId)
+        } else {
+            org.json.JSONObject().put("total_sales", 0.0).put("transaction_count", 0)
+        }
+        val shiftOpen = db?.getActiveShift() != null
         val payload = DashboardScreen.buildPayload(
+            salesToday = today.optInt("transaction_count", 0),
+            revenueToday = today.optDouble("total_sales", 0.0),
             pendingSync = pendingSync,
+            shiftOpen = shiftOpen,
             productsCached = productsCached,
         )
         DashboardScreen.dispatchDashboardData(this, webView, payload)

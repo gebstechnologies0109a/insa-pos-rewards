@@ -59,10 +59,56 @@ class PosEngine(private val db: OfflineDatabase) {
 
     fun getShiftStatus(): JSONObject {
         val shift = shifts.getStatus()
+        val enriched = shift?.let { s ->
+            val totals = db.aggregateShiftSales(s)
+            JSONObject(s.toString()).apply {
+                put("total_sales", totals.optDouble("total_sales", 0.0))
+                put("transaction_count", totals.optInt("transaction_count", 0))
+                put("discount_total", totals.optDouble("discount_total", 0.0))
+                put("void_total", totals.optDouble("void_total", 0.0))
+            }
+        }
         return JSONObject().apply {
             put("ok", true)
-            put("shift", shift ?: JSONObject.NULL)
+            put("shift", enriched ?: JSONObject.NULL)
             put("active", shift != null)
+        }
+    }
+
+    fun getShiftSalesTotal(): JSONObject {
+        val shift = shifts.getStatus()
+            ?: return JSONObject().apply {
+                put("ok", false)
+                put("error", "No active shift")
+            }
+        val totals = db.aggregateShiftSales(shift)
+        return JSONObject().apply {
+            put("ok", true)
+            put("total_sales", totals.optDouble("total_sales", 0.0))
+            put("transaction_count", totals.optInt("transaction_count", 0))
+            put("discount_total", totals.optDouble("discount_total", 0.0))
+            put("void_total", totals.optDouble("void_total", 0.0))
+        }
+    }
+
+    fun getLocalXReading(cashierId: Int): JSONObject {
+        val totals = db.getCashierTodayReadingStats(cashierId)
+        return JSONObject().apply {
+            put("ok", true)
+            put("reading", JSONObject().apply {
+                put("total_sales", totals.optDouble("total_sales", 0.0))
+                put("transaction_count", totals.optInt("transaction_count", 0))
+                put("discount_total", totals.optDouble("discount_total", 0.0))
+                put("void_total", totals.optDouble("void_total", 0.0))
+                put("generated_at", java.text.SimpleDateFormat(
+                    "yyyy-MM-dd HH:mm:ss",
+                    java.util.Locale.US,
+                ).apply {
+                    timeZone = java.util.TimeZone.getDefault()
+                }.format(java.util.Date()))
+                put("payment_breakdown", JSONObject())
+                put("source", "local")
+            })
         }
     }
 

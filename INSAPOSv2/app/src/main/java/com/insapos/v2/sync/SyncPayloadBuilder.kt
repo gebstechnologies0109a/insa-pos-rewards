@@ -52,7 +52,7 @@ class SyncPayloadBuilder(
             discountTotal = discountTotal,
             orderDiscount = orderDiscount,
             total = total,
-            shiftId = enriched.optInt("shift_id", 0).takeIf { it > 0 },
+            shiftId = resolveServerShiftId(enriched.optInt("shift_id", 0)).takeIf { it > 0 },
             memberId = enriched.optInt("member_id", enriched.optInt("customer_id", 0)).takeIf { it > 0 },
             createdAt = enriched.optString("created_at", null),
         )
@@ -90,6 +90,11 @@ class SyncPayloadBuilder(
         db.getSyncQueuePayloadForLocalId(localId)
             ?.optInt("cashier_id", 0)
             ?.takeIf { it > 0 }
+
+    private fun resolveServerShiftId(shiftId: Int): Int {
+        val resolved = db.resolveServerShiftId(shiftId)
+        return resolved.takeIf { it > 0 } ?: 0
+    }
 
     private fun mergeContext(target: JSONObject, source: JSONObject) {
         if (target.optInt("branch_id", 0) <= 0) {

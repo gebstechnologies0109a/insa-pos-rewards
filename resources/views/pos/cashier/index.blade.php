@@ -329,7 +329,8 @@
             <div class="font-semibold text-green-800 text-[11px] lg:text-base">Shift Active</div>
             <div class="text-[10px] lg:text-sm text-green-600 truncate">
                 Opened: <span x-text="activeShift ? new Date(activeShift.opened_at).toLocaleTimeString() : ''"></span> &middot;
-                Opening Cash: &#8369;<span x-text="activeShift ? parseFloat(activeShift.opening_cash).toFixed(2) : '0.00'"></span>
+                Opening Cash: &#8369;<span x-text="activeShift ? parseFloat(activeShift.opening_cash).toFixed(2) : '0.00'"></span> &middot;
+                Total Sales: &#8369;<span x-text="parseFloat(shiftSalesTotal || 0).toFixed(2)"></span>
             </div>
         </div>
         <div class="flex items-center gap-1 lg:gap-2 flex-shrink-0">
@@ -1459,6 +1460,8 @@ function posApp() {
         browserOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
         nativeSyncDetail: null,
         dashboardData: null,
+        shiftSalesTotal: 0,
+        shiftTransactionCount: 0,
         productsLoading: true,
         _syncEngineReady: false,
         _scanInputTimer: null,
@@ -3091,12 +3094,48 @@ function posApp() {
         csrfHeader() { return { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '', 'Accept': 'application/json' }; },
 
         mapLocalShift(shift) {
+            const rowId = shift.id;
+            const serverId = shift.server_id || 0;
             return {
-                id: shift.server_id || shift.id,
+                id: serverId > 0 ? serverId : rowId,
+                local_shift_id: rowId,
+                server_shift_id: serverId > 0 ? serverId : null,
                 local_id: shift.local_id,
                 opening_cash: shift.opening_cash,
                 opened_at: shift.opened_at || new Date().toISOString(),
+                total_sales: shift.total_sales,
+                transaction_count: shift.transaction_count,
             };
+        },
+
+        shiftIdForNativeSale() {
+            if (!this.activeShift) return 0;
+            return this.activeShift.local_shift_id || this.activeShift.id || 0;
+        },
+
+        applyShiftTotals(shift) {
+            if (!shift) return;
+            const total = parseFloat(shift.total_sales);
+            if (!isNaN(total)) this.shiftSalesTotal = total;
+            if (shift.transaction_count != null) this.shiftTransactionCount = shift.transaction_count;
+        },
+
+        async refreshShiftSalesTotal() {
+            if (!this.activeShift) {
+                this.shiftSalesTotal = 0;
+                this.shiftTransactionCount = 0;
+                return;
+            }
+            if (this.useNativeEngine() && typeof window.INSAPOS.getShiftSalesTotal === 'function') {
+                try {
+                    const raw = window.INSAPOS.getShiftSalesTotal();
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (data.ok) {
+                        this.shiftSalesTotal = parseFloat(data.total_sales || 0);
+                        this.shiftTransactionCount = data.transaction_count || 0;
+                    }
+                } catch (e) { console.warn('[pos] native shift sales total failed:', e); }
+            }
         },
 
         async loadShift() {
@@ -3106,6 +3145,7 @@ function posApp() {
                     const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
                     if (data.ok && data.shift && data.shift !== null) {
                         this.activeShift = this.mapLocalShift(data.shift);
+                        this.applyShiftTotals(data.shift);
                     }
                 } catch (e) { console.warn('[pos] local shift status failed:', e); }
             }
@@ -3119,6 +3159,11 @@ function posApp() {
                 }
             } catch {
                 if (!this.activeShift) this.activeShift = null;
+            }
+            if (this.activeShift) await this.refreshShiftSalesTotal();
+            else {
+                this.shiftSalesTotal = 0;
+                this.shiftTransactionCount = 0;
             }
         },
 
@@ -3342,7 +3387,7 @@ function posApp() {
             const tendered = this.paymentMethod === 'cash' ? this.amountTendered : this.cartTotal;
             const localId = db ? db.generateUUID() : crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
             const txData = {
-                local_id: localId, branch_id: this.config.branchId, shift_id: this.activeShift.id, cashier_id: this.config.cashierId,
+                local_id: localId, branch_id: this.config.branchId, shift_id: nativeEngine ? this.shiftIdForNativeSale() : this.activeShift.id, cashier_id: this.config.cashierId,
                 member_id: this.selectedCustomer?.id || null, payment_method: this.paymentMethod, payment_ref: this.paymentRef || null,
                 amount_tendered: tendered, items: JSON.parse(JSON.stringify(this.cart)),
                 subtotal: this.cartSubtotal, discount_total: this.cartDiscount, order_discount: this.orderDiscountApplied,
@@ -3396,6 +3441,7 @@ function posApp() {
                         serverSale = data.sale;
                         if (data.receipt) receiptData.receipt_text = data.receipt.text;
                         queueBackgroundSync();
+                        this.refreshShiftSalesTotal();
                     } else {
                         this.showToast(data.error || 'Local sale failed', 'error');
                         return;
@@ -3482,6 +3528,9 @@ function posApp() {
                     console.log('[pos] openLocalShift', Math.round(performance.now() - t0) + 'ms', data);
                     if (data.ok && data.shift) {
                         this.activeShift = this.mapLocalShift(data.shift);
+                        this.applyShiftTotals(data.shift);
+                        this.shiftSalesTotal = 0;
+                        this.shiftTransactionCount = 0;
                         this.showShiftOpenModal = false;
                         this.shiftCashInput = 0;
                         this.showToast('Shift opened!', 'success');
@@ -3510,7 +3559,12 @@ function posApp() {
                     const raw = window.INSAPOS.closeLocalShift(JSON.stringify({ closing_cash: amount }));
                     const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
                     if (data.ok) {
-                        this.shiftResultData = data.shift || { closing_cash: amount };
+                        const closed = data.shift || { closing_cash: amount };
+                        this.shiftResultData = {
+                            ...closed,
+                            opening_cash: closed.opening_cash ?? this.activeShift?.opening_cash ?? 0,
+                            system_sales_total: closed.system_sales_total ?? closed.total_sales ?? this.shiftSalesTotal ?? 0,
+                        };
                         this.showShiftCloseModal = false;
                         this.shiftCashInput = 0;
                         this.showShiftResult = true;
@@ -3531,6 +3585,18 @@ function posApp() {
 
         async generateXReading() {
             this.showToast('Generating X-Reading...', 'info');
+            if (this.useNativeEngine() && typeof window.INSAPOS.getLocalXReading === 'function') {
+                try {
+                    const raw = window.INSAPOS.getLocalXReading();
+                    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (data.ok && data.reading) {
+                        this.readingData = { ...data.reading, type: 'x' };
+                        this.showReadingModal = true;
+                        this.showToast('X-Reading generated (local)', 'success');
+                        return;
+                    }
+                } catch (e) { console.warn('[pos] local X-Reading failed:', e); }
+            }
             try { const res = await fetch('/api/pos/x-reading', { method: 'POST', headers: this.csrfHeader() }); const data = await res.json();
                 if (data.success) { this.readingData = { ...data.reading, type: 'x' }; this.showReadingModal = true; this.showToast('X-Reading generated', 'success'); }
                 else this.showToast(data.message || 'Failed to generate X-Reading', 'error');
