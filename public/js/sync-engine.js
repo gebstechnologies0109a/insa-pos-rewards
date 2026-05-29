@@ -9,6 +9,7 @@
     const SYNC_INTERVAL_IDLE_MS = 90000;
     const SYNC_INTERVAL_ACTIVE_MS = 30000;
     const FULL_PULL_INTERVAL_MS = 300000;
+    const CATALOG_TTL_MS = 1800000;
     const PING_TIMEOUT_MS = 3000;
 
     let _scheduleTimer = null;
@@ -289,12 +290,16 @@
         if (_branchId != null) {
             const branch = await db.settings.get('cache_ready_branch_id', null);
             if (branch != null && String(branch) !== String(_branchId)) return true;
+            const session = await db.settings.get('catalog_synced_session', null);
+            if (session != null && String(session) === String(_branchId)) return false;
         }
         const syncedAt = await db.settings.get('catalog_synced_at', null)
             || await db.settings.get('catalog_last_sync', null)
             || await db.settings.get('products_last_sync', null)
             || await db.settings.get('cache_ready_at', null);
-        return !syncedAt;
+        if (!syncedAt) return true;
+        const ageMs = Date.now() - Date.parse(syncedAt);
+        return !Number.isFinite(ageMs) || ageMs >= CATALOG_TTL_MS;
     }
 
     // ── Pull from INSABuddy backup ────────────────────────────
@@ -399,8 +404,8 @@
     async function downloadAll(options = {}) {
         if (_downloading) return { skipped: true };
         _downloading = true;
-        const force = options.force !== false;
-        const silent = options.silent === true;
+        const force = options.force === true;
+        const silent = options.silent !== false;
 
         if (!silent) emit('downloadStart', { force });
 
@@ -431,33 +436,39 @@
             }
 
             const catalogStale = force || await isCatalogStale();
+            const db = window.INSADB;
             if (catalogStale) {
-                emit('downloadProgress', { phase: 'products', percent: 5, message: 'Downloading products…' });
+                if (!silent) emit('downloadProgress', { phase: 'products', percent: 5, message: 'Downloading products…' });
                 const catalog = await pullCatalog(force);
                 result.products = catalog.products;
                 result.categories = catalog.categories;
-                emit('downloadProgress', { phase: 'products', percent: 40, message: 'Products saved locally' });
-            } else {
+                if (db && _branchId != null) {
+                    await db.settings.set('catalog_synced_session', _branchId);
+                }
+                if (!silent) emit('downloadProgress', { phase: 'products', percent: 40, message: 'Products saved locally' });
+            } else if (!silent) {
                 emit('downloadProgress', { phase: 'products', percent: 35, message: 'Using cached products' });
             }
 
-            emit('downloadProgress', { phase: 'inventory', percent: 50, message: 'Downloading stock levels…' });
+            if (!silent) emit('downloadProgress', { phase: 'inventory', percent: 50, message: 'Downloading stock levels…' });
             result.stock = await pullInventory(force);
-            emit('downloadProgress', { phase: 'inventory', percent: 75, message: 'Stock levels updated' });
+            if (!silent) emit('downloadProgress', { phase: 'inventory', percent: 75, message: 'Stock levels updated' });
 
-            emit('downloadProgress', { phase: 'customers', percent: 82, message: 'Downloading customers…' });
-            result.customers = await pullCustomers();
-            emit('downloadProgress', { phase: 'customers', percent: 90, message: 'Customers saved locally' });
+            if (catalogStale) {
+                if (!silent) emit('downloadProgress', { phase: 'customers', percent: 82, message: 'Downloading customers…' });
+                result.customers = await pullCustomers();
+                if (!silent) emit('downloadProgress', { phase: 'customers', percent: 90, message: 'Customers saved locally' });
 
-            emit('downloadProgress', { phase: 'settings', percent: 93, message: 'Downloading settings…' });
-            result.settings = await pullSettings();
-            emit('downloadProgress', { phase: 'settings', percent: 96, message: 'Settings saved locally' });
+                if (!silent) emit('downloadProgress', { phase: 'settings', percent: 93, message: 'Downloading settings…' });
+                result.settings = await pullSettings();
+                if (!silent) emit('downloadProgress', { phase: 'settings', percent: 96, message: 'Settings saved locally' });
+            }
 
             result.cacheReady = await markCacheReady();
             _lastFullPullAt = Date.now();
-            emit('downloadProgress', { phase: 'done', percent: 100, message: 'Store data ready' });
+            if (!silent) emit('downloadProgress', { phase: 'done', percent: 100, message: 'Store data ready' });
             emit('syncStatus', 'synced');
-            emit('downloadComplete', result);
+            if (!silent) emit('downloadComplete', result);
             return result;
         } catch (e) {
             console.error('[sync] downloadAll failed:', e);

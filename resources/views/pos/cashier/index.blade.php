@@ -114,8 +114,8 @@
     <script src="https://unpkg.com/dexie@4/dist/dexie.min.js"></script>
     <script src="{{ asset('js/db.js') }}"></script>
     <script src="{{ asset('js/terminal-session.js') }}"></script>
-    <script src="{{ asset('js/insabuddy.js') }}?v=3.0.37"></script>
-    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.37"></script>
+    <script src="{{ asset('js/insabuddy.js') }}?v=3.0.40"></script>
+    <script src="{{ asset('js/sync-engine.js') }}?v=3.0.40"></script>
 </head>
 <body class="bg-gray-100 flex flex-col overflow-hidden insapos-alpine-pending" style="height:100vh;height:100dvh" x-data="posApp()" x-init="init()" x-cloak
       @keydown.window="handleBarcodeKey($event)">
@@ -142,7 +142,7 @@
 </div>
 
 <!-- STORE DATA DOWNLOAD -->
-<div x-show="storeDownload.active" class="fixed inset-0 bg-slate-900/92 z-[205] flex items-center justify-center p-6" x-cloak>
+<div x-show="storeDownload.active && !silentSync" class="fixed inset-0 bg-slate-900/92 z-[205] flex items-center justify-center p-6" x-cloak>
     <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
         <h2 class="text-xl font-bold text-gray-900 mb-2" x-text="storeDownload.title">Preparing POS…</h2>
         <p class="text-gray-600 text-sm mb-5" x-text="storeDownload.message">Downloading catalog…</p>
@@ -2319,6 +2319,7 @@ function posApp() {
         },
 
         onStoreDownloadProgress(p) {
+            if (this.silentSync || this.posReady) return;
             if (!p) return;
             if (p.phase === 'offline') {
                 this.offlineBanner = true;
@@ -2393,12 +2394,11 @@ function posApp() {
                     }
                 });
                 SyncEngine.on('downloadStart', () => {
-                    if (!this.posReady) {
-                        this.storeDownload.active = true;
-                        this.storeDownload.title = 'Preparing POS…';
-                        this.storeDownload.percent = 0;
-                        this.storeDownload.message = 'Downloading store data…';
-                    }
+                    if (this.silentSync || this.posReady) return;
+                    this.storeDownload.active = true;
+                    this.storeDownload.title = 'Preparing POS…';
+                    this.storeDownload.percent = 0;
+                    this.storeDownload.message = 'Downloading store data…';
                 });
                 SyncEngine.on('downloadProgress', (p) => this.onStoreDownloadProgress(p));
                 SyncEngine.on('downloadComplete', (r) => this.finishStoreDownload(r));

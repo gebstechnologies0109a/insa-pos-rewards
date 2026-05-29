@@ -153,12 +153,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
         engine.onDownloadProgress = { progress ->
-            runOnUiThread {
-                if (!pageLoaded) {
-                    statusText.text = progress.message
-                }
-                updateSyncBadge()
-            }
+            // Catalog/inventory sync is background-only — never block cashier UI.
+            runOnUiThread { updateSyncBadge() }
         }
     }
 
@@ -188,10 +184,22 @@ class MainActivity : AppCompatActivity() {
         if (db.getProductCount() == 0) return true
         val readyBranch = db.getSetting("cache_ready_branch_id")?.toIntOrNull()
         if (readyBranch != branchId) return true
+        if (db.getSetting("catalog_synced_session") == branchId.toString()) return false
         val syncedAt = db.getSetting("catalog_synced_at")
             ?: db.getSetting("catalog_last_sync")
             ?: db.getSetting("cache_ready_at")
-        return syncedAt.isNullOrBlank()
+        if (syncedAt.isNullOrBlank()) return true
+        return catalogAgeMs(syncedAt) >= 1_800_000L
+    }
+
+    private fun catalogAgeMs(isoTimestamp: String): Long {
+        return try {
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+            fmt.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            System.currentTimeMillis() - (fmt.parse(isoTimestamp)?.time ?: return Long.MAX_VALUE)
+        } catch (_: Exception) {
+            Long.MAX_VALUE
+        }
     }
 
     private val usbPermissionReceiver = object : BroadcastReceiver() {
@@ -865,7 +873,7 @@ class MainActivity : AppCompatActivity() {
         // Defer until after first paint + idle so WebView/Alpine init is not competing with SQLite.
         webView.post {
             webView.post {
-                handler.postDelayed(startSync, 5_000)
+                handler.postDelayed(startSync, 15_000)
             }
         }
     }
