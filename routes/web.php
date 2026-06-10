@@ -217,7 +217,7 @@ Route::get('/customer-display/media/{type}/{filename}', [CustomerDisplaySettings
     ->name('pos.customer-display.media');
 
 // ── Super Admin ──────────────────────────────────
-Route::middleware(['auth', 'role:super_admin', 'audit:super-admin'])->prefix('super-admin')->group(function () {
+Route::middleware(['auth', 'role:super_admin,owner', 'audit:super-admin'])->prefix('super-admin')->group(function () {
     Route::get('/', [SuperAdminDashboardController::class, 'index'])
         ->name('super-admin.dashboard');
 

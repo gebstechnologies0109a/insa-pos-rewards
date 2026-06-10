@@ -66,6 +66,12 @@ class User extends Authenticatable
         return $this->role === self::ROLE_SUPER_ADMIN;
     }
 
+    /** Platform / store owners who manage licenses, branches, and devices. */
+    public function canAccessSuperAdminPanel(): bool
+    {
+        return $this->hasRole(self::ROLE_SUPER_ADMIN, self::ROLE_OWNER);
+    }
+
     public function isOwner(): bool
     {
         return $this->role === self::ROLE_OWNER;

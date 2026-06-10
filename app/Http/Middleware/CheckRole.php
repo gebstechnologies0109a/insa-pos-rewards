@@ -19,7 +19,18 @@ class CheckRole
         }
 
         if (! empty($roles) && ! in_array($request->user()->role, $roles)) {
-            abort(403, 'Unauthorized.');
+            if ($request->expectsJson()) {
+                abort(403, 'Unauthorized.');
+            }
+
+            $fallback = $request->user()->canAccessBackoffice()
+                ? route('backoffice.dashboard')
+                : route('login', login_redirect_params($request));
+
+            return redirect($fallback)->with(
+                'error',
+                'You do not have permission to access that area. Super Admin and Owner accounts only.'
+            );
         }
 
         return $next($request);

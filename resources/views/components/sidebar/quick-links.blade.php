@@ -11,7 +11,7 @@
 <div class="bg-white rounded-lg shadow p-6">
     <h3 class="font-semibold text-lg mb-4">Quick Links</h3>
     <div class="grid grid-cols-2 gap-3">
-        @if($user->isSuperAdmin())
+        @if($user->canAccessSuperAdminPanel())
         <a href="{{ route('super-admin.dashboard') }}" class="p-4 bg-indigo-50 rounded hover:bg-indigo-100 text-center col-span-2 border border-indigo-200">
             <div class="font-semibold text-indigo-900">Super Admin Panel</div>
             <div class="text-xs text-indigo-600 mt-1">Licenses, branches &amp; POS sessions</div>

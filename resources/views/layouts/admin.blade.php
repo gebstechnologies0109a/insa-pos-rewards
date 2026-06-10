@@ -23,7 +23,7 @@
                     <a href="{{ route('pos.settings') }}" class="hover:text-blue-300 {{ request()->routeIs('pos.settings') ? 'text-blue-400' : '' }}">Settings</a>
                     <span class="text-gray-600">|</span>
                     <a href="{{ route('pos.cashier') }}" class="hover:text-green-300 text-green-400">Open Cashier</a>
-                    @if(auth()->user()->isSuperAdmin())
+                    @if(auth()->user()->canAccessSuperAdminPanel())
                     <span class="text-gray-600">|</span>
                     <a href="{{ route('super-admin.dashboard') }}" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">Super Admin Panel</a>
                     <a href="{{ route('backoffice.dashboard') }}" class="hover:text-blue-300">Back Office</a>

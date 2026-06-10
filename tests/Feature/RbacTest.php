@@ -282,6 +282,16 @@ class RbacTest extends TestCase
         $this->actingAs($this->owner)->get(route('pos.settings'))->assertOk();
         $this->actingAs($this->owner)->get(route('pos.cashier'))->assertOk();
         $this->actingAs($this->owner)->get(route('stockman.inventory'))->assertOk();
+        $this->actingAs($this->owner)->get(route('super-admin.dashboard'))->assertOk();
+        $this->actingAs($this->owner)->get(route('super-admin.licenses.index'))->assertOk();
+    }
+
+    public function test_admin_cannot_access_super_admin_panel(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('super-admin.dashboard'))
+            ->assertRedirect(route('backoffice.dashboard'))
+            ->assertSessionHas('error');
     }
 
     public function test_owner_can_modify_admin(): void
