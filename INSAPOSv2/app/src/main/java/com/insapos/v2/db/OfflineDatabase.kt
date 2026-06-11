@@ -491,10 +491,11 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
     fun getCategoryCount(): Int = dbOp { countTable("categories") }
 
     fun getProductCountForCategory(categoryId: Int): Int = dbOp {
+        val patterns = categoryIdJsonLikePatterns(categoryId)
         val cursor = readableDatabase.rawQuery(
             """SELECT COUNT(*) FROM products WHERE is_active = 1
-               AND CAST(json_extract(data_json, '$.category_id') AS INTEGER) = ?""",
-            arrayOf(categoryId.toString())
+               AND (data_json LIKE ? OR data_json LIKE ? OR data_json LIKE ?)""",
+            patterns
         )
         try {
             if (cursor.moveToFirst()) cursor.getInt(0) else 0
@@ -513,16 +514,13 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         val where = StringBuilder("is_active = 1")
         val args = mutableListOf<String>()
         if (categoryId != null && categoryId > 0) {
-            where.append(" AND CAST(json_extract(data_json, '$.category_id') AS INTEGER) = ?")
-            args.add(categoryId.toString())
+            appendCategoryIdFilter(where, args, categoryId)
         }
         args.add(safeLimit.toString())
         args.add(safeOffset.toString())
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
-            """SELECT server_id, id, barcode, name, price, stock, category,
-                      json_extract(data_json, '$.sku') AS sku,
-                      json_extract(data_json, '$.category_id') AS category_id
+            """SELECT server_id, id, barcode, name, price, stock, category, data_json
                FROM products WHERE $where ORDER BY name LIMIT ? OFFSET ?""",
             args.toTypedArray()
         )
@@ -544,11 +542,9 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         val q = "%$query%"
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
-            """SELECT server_id, id, barcode, name, price, stock, category,
-                      json_extract(data_json, '$.sku') AS sku,
-                      json_extract(data_json, '$.category_id') AS category_id
+            """SELECT server_id, id, barcode, name, price, stock, category, data_json
                FROM products WHERE is_active = 1
-               AND (name LIKE ? OR barcode LIKE ? OR json_extract(data_json, '$.sku') LIKE ?)
+               AND (name LIKE ? OR barcode LIKE ? OR data_json LIKE ?)
                ORDER BY name LIMIT ?""",
             arrayOf(q, q, q, safeLimit.toString())
         )
@@ -1611,6 +1607,28 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         return obj
     }
 
+    /** JSON1 ([json_extract]) is unavailable on some Android SQLite builds — use LIKE + parse instead. */
+    private fun categoryIdJsonLikePatterns(categoryId: Int): Array<String> = arrayOf(
+        "%\"category_id\":$categoryId%",
+        "%\"category_id\": $categoryId%",
+        "%\"category_id\":\"$categoryId\"%",
+    )
+
+    private fun appendCategoryIdFilter(where: StringBuilder, args: MutableList<String>, categoryId: Int) {
+        where.append(" AND (data_json LIKE ? OR data_json LIKE ? OR data_json LIKE ?)")
+        categoryIdJsonLikePatterns(categoryId).forEach { args.add(it) }
+    }
+
+    private fun parseSkuAndCategoryFromDataJson(dataJson: String): Pair<String, Int> {
+        if (dataJson.isBlank()) return "" to 0
+        return try {
+            val dj = JSONObject(dataJson)
+            dj.optString("sku", "") to dj.optInt("category_id", 0)
+        } catch (_: Exception) {
+            "" to 0
+        }
+    }
+
     /** Slim product row for grid/search — omits data_json unless [includeDataJson]. */
     private fun cursorToListProductJson(cursor: Cursor, includeDataJson: Boolean = false): JSONObject {
         if (includeDataJson) return cursorToJson(cursor)
@@ -1627,6 +1645,9 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             val idx = col(name)
             return if (idx >= 0 && !cursor.isNull(idx)) cursor.getLong(idx) else 0L
         }
+        val skuCol = str("sku")
+        val dataJson = str("data_json")
+        val (parsedSku, parsedCategoryId) = parseSkuAndCategoryFromDataJson(dataJson)
         val obj = JSONObject().apply {
             put("server_id", lng("server_id"))
             put("id", lng("id"))
@@ -1635,10 +1656,12 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             put("price", dbl("price"))
             put("stock", dbl("stock"))
             put("category", str("category"))
-            put("sku", str("sku"))
+            put("sku", skuCol.ifBlank { parsedSku })
             val catIdx = col("category_id")
             if (catIdx >= 0 && !cursor.isNull(catIdx)) {
                 put("category_id", cursor.getLong(catIdx).toInt())
+            } else if (parsedCategoryId > 0) {
+                put("category_id", parsedCategoryId)
             }
         }
         return obj
