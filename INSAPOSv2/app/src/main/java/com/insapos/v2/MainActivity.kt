@@ -895,10 +895,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             webView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
         }
-        if (shouldStartAtLogin()) {
-            loadLoginUrl()
-            return
-        }
         if (protocolLocked && session.useHttp) {
             Log.i(TAG, "Authenticated session — forcing HTTPS for cashier")
             usingHttp = false
@@ -907,19 +903,6 @@ class MainActivity : AppCompatActivity() {
         val url = session.getPosUrl()
         Log.i(TAG, "Loading: $url (useHttp=$usingHttp protocolLocked=$protocolLocked)")
         webView.loadUrl(url)
-    }
-
-    private fun loadLoginUrl() {
-        val url = "${session.getBaseUrl()}/login"
-        Log.i(TAG, "Loading login: $url")
-        webView.loadUrl(url)
-    }
-
-    /** Skip cashier redirect when the last visit was login or we have no authenticated POS URL saved. */
-    private fun shouldStartAtLogin(): Boolean {
-        val last = session.lastUrl ?: return true
-        if (isLoginPath(last)) return true
-        return !isAuthenticatedPosPath(last) && !isStockmanPath(last)
     }
 
     private fun isStockmanPath(url: String): Boolean {
@@ -1147,7 +1130,11 @@ class MainActivity : AppCompatActivity() {
                         toolbar.appendChild(gear);
                     }
                 }
-                gear.onclick = function(e) { e.preventDefault(); openSettings(); };
+                gear.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openSettings();
+                };
 
                 if (window.posAppInstance) {
                     window.posAppInstance.hasNativeBridge = true;

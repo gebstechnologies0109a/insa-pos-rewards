@@ -15,7 +15,7 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
     companion object {
         private const val TAG = "OfflineDB"
         private const val DB_NAME = "insapos_offline.db"
-        private const val DB_VERSION = 4
+        private const val DB_VERSION = 6
         const val DEFAULT_PRODUCT_PAGE_SIZE = 500
         const val MAX_PRODUCT_PAGE_SIZE = 2000
         const val MAX_SEARCH_RESULTS = 500
@@ -58,10 +58,12 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY,
                 server_id INTEGER,
+                sku TEXT,
                 barcode TEXT,
                 name TEXT NOT NULL,
                 price REAL NOT NULL DEFAULT 0,
                 cost REAL DEFAULT 0,
+                category_id INTEGER DEFAULT 0,
                 category TEXT,
                 unit TEXT,
                 stock REAL DEFAULT 0,
@@ -73,8 +75,10 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_server_id ON products(server_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id)")
 
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS customers (
@@ -307,6 +311,38 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         if (oldVersion < 4) {
             migrateToV4(db)
         }
+        if (oldVersion < 5) {
+            migrateToV5(db)
+        }
+        if (oldVersion < 6) {
+            migrateToV6(db)
+        }
+    }
+
+    private fun migrateToV5(db: SQLiteDatabase) {
+        if (!hasColumn(db, "products", "sku")) {
+            db.execSQL("ALTER TABLE products ADD COLUMN sku TEXT")
+        }
+        if (!hasColumn(db, "products", "category_id")) {
+            db.execSQL("ALTER TABLE products ADD COLUMN category_id INTEGER DEFAULT 0")
+        }
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id)")
+        backfillProductCategoryIdsFromCategoryNames(db)
+        Log.i(TAG, "Migrated to v5: product sku/category_id columns")
+    }
+
+    private fun migrateToV6(db: SQLiteDatabase) {
+        if (!hasColumn(db, "products", "sku")) {
+            db.execSQL("ALTER TABLE products ADD COLUMN sku TEXT")
+        }
+        if (!hasColumn(db, "products", "category_id")) {
+            db.execSQL("ALTER TABLE products ADD COLUMN category_id INTEGER DEFAULT 0")
+        }
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id)")
+        backfillProductCategoryIdsFromCategoryNames(db)
+        Log.i(TAG, "Migrated to v6: slim product query columns")
     }
 
     private fun migrateToV4(db: SQLiteDatabase) {
@@ -411,10 +447,12 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
             val p = products.getJSONObject(j)
             val cv = ContentValues().apply {
                 put("server_id", p.optInt("id"))
+                put("sku", p.optString("sku", ""))
                 put("barcode", p.optString("barcode", ""))
                 put("name", p.optString("name"))
                 put("price", p.optDouble("price", 0.0))
                 put("cost", p.optDouble("cost", 0.0))
+                put("category_id", parseCategoryId(p))
                 put("category", p.optString("category", ""))
                 put("unit", p.optString("unit", "pc"))
                 put("stock", p.optDouble("stock", 0.0))
@@ -494,8 +532,8 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         val patterns = categoryIdJsonLikePatterns(categoryId)
         val cursor = readableDatabase.rawQuery(
             """SELECT COUNT(*) FROM products WHERE is_active = 1
-               AND (data_json LIKE ? OR data_json LIKE ? OR data_json LIKE ?)""",
-            patterns
+               AND (category_id = ? OR data_json LIKE ? OR data_json LIKE ? OR data_json LIKE ?)""",
+            arrayOf(categoryId.toString(), *patterns)
         )
         try {
             if (cursor.moveToFirst()) cursor.getInt(0) else 0
@@ -520,7 +558,7 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         args.add(safeOffset.toString())
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
-            """SELECT server_id, id, barcode, name, price, stock, category, data_json
+            """SELECT server_id, id, sku, barcode, name, price, stock, category_id, category
                FROM products WHERE $where ORDER BY name LIMIT ? OFFSET ?""",
             args.toTypedArray()
         )
@@ -542,9 +580,9 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         val q = "%$query%"
         val arr = JSONArray()
         val cursor = readableDatabase.rawQuery(
-            """SELECT server_id, id, barcode, name, price, stock, category, data_json
+            """SELECT server_id, id, sku, barcode, name, price, stock, category_id, category
                FROM products WHERE is_active = 1
-               AND (name LIKE ? OR barcode LIKE ? OR data_json LIKE ?)
+               AND (name LIKE ? OR barcode LIKE ? OR sku LIKE ?)
                ORDER BY name LIMIT ?""",
             arrayOf(q, q, q, safeLimit.toString())
         )
@@ -986,11 +1024,12 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     fun getProductByBarcode(barcode: String): JSONObject? = dbOp {
         val cursor = readableDatabase.rawQuery(
-            "SELECT * FROM products WHERE barcode = ? AND is_active = 1 LIMIT 1",
+            """SELECT server_id, id, sku, barcode, name, price, stock, category_id, category
+               FROM products WHERE barcode = ? AND is_active = 1 LIMIT 1""",
             arrayOf(barcode)
         )
         try {
-            if (cursor.moveToFirst()) cursorToListProductJson(cursor, includeDataJson = true) else null
+            if (cursor.moveToFirst()) cursorToListProductJson(cursor) else null
         } finally {
             cursor.close()
         }
@@ -998,11 +1037,12 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
 
     fun getProductByServerId(serverId: Int): JSONObject? = dbOp {
         val cursor = readableDatabase.rawQuery(
-            "SELECT * FROM products WHERE server_id = ? AND is_active = 1 LIMIT 1",
+            """SELECT server_id, id, sku, barcode, name, price, stock, category_id, category
+               FROM products WHERE server_id = ? AND is_active = 1 LIMIT 1""",
             arrayOf(serverId.toString())
         )
         try {
-            if (cursor.moveToFirst()) cursorToListProductJson(cursor, includeDataJson = true) else null
+            if (cursor.moveToFirst()) cursorToListProductJson(cursor) else null
         } finally {
             cursor.close()
         }
@@ -1607,6 +1647,39 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
         return obj
     }
 
+    private fun hasColumn(db: SQLiteDatabase, table: String, column: String): Boolean {
+        val cursor = db.rawQuery("PRAGMA table_info($table)", null)
+        return try {
+            while (cursor.moveToNext()) {
+                if (cursor.getString(cursor.getColumnIndexOrThrow("name")) == column) return true
+            }
+            false
+        } finally {
+            cursor.close()
+        }
+    }
+
+    private fun parseCategoryId(product: JSONObject): Int {
+        val direct = product.optInt("category_id", 0)
+        if (direct > 0) return direct
+        val nested = product.optJSONObject("category")?.optInt("id", 0) ?: 0
+        return if (nested > 0) nested else 0
+    }
+
+    private fun backfillProductCategoryIdsFromCategoryNames(db: SQLiteDatabase) {
+        db.execSQL(
+            """UPDATE products
+               SET category_id = COALESCE((
+                   SELECT c.server_id FROM categories c
+                   WHERE c.name = products.category
+                   ORDER BY c.id DESC LIMIT 1
+               ), category_id)
+               WHERE COALESCE(category_id, 0) = 0
+                 AND category IS NOT NULL
+                 AND category != ''"""
+        )
+    }
+
     /** JSON1 ([json_extract]) is unavailable on some Android SQLite builds — use LIKE + parse instead. */
     private fun categoryIdJsonLikePatterns(categoryId: Int): Array<String> = arrayOf(
         "%\"category_id\":$categoryId%",
@@ -1615,7 +1688,8 @@ class OfflineDatabase(context: Context) : SQLiteOpenHelper(
     )
 
     private fun appendCategoryIdFilter(where: StringBuilder, args: MutableList<String>, categoryId: Int) {
-        where.append(" AND (data_json LIKE ? OR data_json LIKE ? OR data_json LIKE ?)")
+        where.append(" AND (category_id = ? OR data_json LIKE ? OR data_json LIKE ? OR data_json LIKE ?)")
+        args.add(categoryId.toString())
         categoryIdJsonLikePatterns(categoryId).forEach { args.add(it) }
     }
 
