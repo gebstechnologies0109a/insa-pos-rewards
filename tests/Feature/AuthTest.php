@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -136,5 +137,24 @@ class AuthTest extends TestCase
         $this->withHeader('User-Agent', 'INSAPOSv3/1.0 Android/14')
             ->post('/login', ['email' => 'android-cashier@test.com', 'password' => 'password'])
             ->assertRedirectContains('/pos/cashier');
+    }
+
+    public function test_android_cashier_login_is_remembered_without_checkbox(): void
+    {
+        User::create([
+            'name' => 'Cashier', 'email' => 'android-remember@test.com',
+            'password' => bcrypt('password'), 'role' => 'cashier',
+        ]);
+
+        $response = $this->withHeader('User-Agent', 'INSAPOSv3/3.0.49 Android/14')
+            ->post('/login', ['email' => 'android-remember@test.com', 'password' => 'password']);
+
+        $response->assertRedirectContains('/pos/cashier');
+
+        $recaller = collect($response->headers->getCookies())
+            ->first(fn ($cookie) => $cookie->getName() === Auth::getRecallerName());
+
+        $this->assertNotNull($recaller, 'Android login should issue a remember-me cookie.');
+        $this->assertGreaterThan(now()->addDays(29)->timestamp, $recaller->getExpiresTime());
     }
 }

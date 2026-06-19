@@ -44,6 +44,10 @@ class AppServiceProvider extends ServiceProvider
             return;
         }
 
+        if (is_insa_android_app($request)) {
+            config(['session.lifetime' => max((int) config('session.lifetime'), 60 * 24 * 30)]);
+        }
+
         if (env('SESSION_SECURE_COOKIE') === null) {
             config(['session.secure' => $request->isSecure()]);
         }
